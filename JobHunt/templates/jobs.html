@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Job Search{% endblock %}
+
+{% block content %}
+<h1>Job Search</h1>
+
+<form method="get">
+  <input
+    type="text"
+    name="q"
+    placeholder="Search jobs..."
+    value="{{ query }}"
+  />
+  <button type="submit">Search</button>
+</form>
+
+<hr>
+
+{% if jobs %}
+  <ul>
+    {% for job in jobs %}
+      <li>
+        <strong>{{ job.title }}</strong><br>
+        {{ job.company }} — {{ job.location }}
+        <p>{{ job.description|truncatewords:25 }}</p>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>No jobs found.</p>
+{% endif %}
+
+{% endblock %}

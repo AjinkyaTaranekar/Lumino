@@ -36,3 +36,18 @@ def roadmap(request):
     return render(request, "roadmap.html", {
         "steps": steps
     })
+
+from .models import Job
+
+def job_list(request):
+    query = request.GET.get("q", "")
+
+    jobs = Job.objects.all()
+
+    if query:
+        jobs = jobs.filter(title__icontains=query)
+
+    return render(request, "jobs.html", {
+        "jobs": jobs,
+        "query": query
+    })
