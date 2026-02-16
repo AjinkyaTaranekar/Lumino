@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Home{% endblock %}
 {% block content %}
-  <h1>Welcome to Job Roadmap</h1>
+
+  <h1 class="animate__animated animate__fadeInDown">Welcome to Job Roadmap</h1>
 
   {% if user.is_authenticated %}
     <p>You are logged in as <b>{{ user.username }}</b>.</p>
