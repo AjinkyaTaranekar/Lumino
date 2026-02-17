@@ -1,27 +1,165 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>{% block title %}Job Roadmap{% endblock %}</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Job Roadmap{% endblock %}</title>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap"
+          rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+          rel="stylesheet"/>
+
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
-  <nav>
-    <a href="{% url 'home' %}">Home</a>
-    {% if user.is_authenticated %}
-      <a href="{% url 'profile' %}">Profile</a>
-        <a href="{% url 'roadmap' %}">Roadmap</a>
-        <a href="{% url 'jobs' %}">Jobs</a>
-      <form action="{% url 'logout' %}" method="post" style="display:inline;">
-        {% csrf_token %}
-        <button type="submit">Logout</button>
-      </form>
 
-    {% else %}
-      <a href="{% url 'login' %}">Login</a>
-      <a href="{% url 'signup' %}">Sign Up</a>
-    {% endif %}
-  </nav>
-  <hr>
-  {% block content %}{% endblock %}
+<nav class="sticky top-0 z-50 bg-surface-light dark:bg-surface-dark border-b border-gray-200 dark:border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <div class="flex">
+                <a href="{% url 'home' %}"
+                   class="flex-shrink-0 flex items-center gap-2">
+                    <div class="flex-shrink-0 flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white">
+                            <span class="material-icons text-xl">auto_graph</span>
+                        </div>
+                        <span class="font-bold text-xl tracking-tight text-gray-900 dark:text-white">Lumino</span>
+                    </div>
+                </a>
+                <div class="hidden sm:ml-8 sm:flex sm:space-x-8">
+                    <!-- Home -->
+                    <a href="{% url 'home' %}"
+                       class="{% if request.resolver_match.url_name == 'home' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                                 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        Home
+                    </a>
+
+                    {% if user.is_authenticated %}
+                        <!-- Profile -->
+                        <a href="{% url 'profile' %}"
+                           class="{% if request.resolver_match.url_name == 'profile' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                              inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Profile
+                        </a>
+
+                        <!-- Roadmap -->
+                        <a href="{% url 'roadmap' %}"
+                           class="{% if request.resolver_match.url_name == 'roadmap' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                              inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Roadmap
+                        </a>
+
+                        <!-- Jobs -->
+                        <a href="{% url 'jobs' %}"
+                           class="{% if request.resolver_match.url_name == 'jobs' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                              inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Jobs
+                        </a>
+
+                        <!-- Logout -->
+                        <form id="logout-form" action="{% url 'logout' %}" method="post" class="hidden">
+                            {% csrf_token %}
+                        </form>
+
+                        <a href="#"
+                           onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
+                           class="border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors">
+                            Logout
+                        </a>
+
+                    {% else %}
+                        <!-- Login -->
+                        <a href="{% url 'login' %}"
+                           class="{% if request.resolver_match.url_name == 'login' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                              inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Log In
+                        </a>
+
+                        <!-- Signup -->
+                        <a href="{% url 'signup' %}"
+                           class="{% if request.resolver_match.url_name == 'signup' %}
+                                 border-primary text-primary dark:text-primary
+                              {% else %}
+                                 border-transparent text-text-secondary-light dark:text-text-secondary-dark hover:text-primary hover:border-primary transition-colors
+                              {% endif %}
+                              inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            Sign Up
+                        </a>
+                    {% endif %}
+
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="p-2 rounded-full text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                    <span class="material-icons">notifications_none</span>
+                </button>
+                <div class="flex items-center gap-2">
+                    <img alt="User Profile" class="h-8 w-8 rounded-full ring-2 ring-primary/20"
+                         data-alt="Close up portrait of a smiling man"
+                         src="https://lh3.googleusercontent.com/aida-public/AB6AXuBa9z_2gTBHng0-eDG76_FpT7w_m14233-RhL0jBhjmXuqxujZ3w1h9hWf46T7fnzitNZWjjkImpbAFB3a92F_A6BwUjXRN92W1hateJOLeh8DtqHEn63gMR84Wxc9j88tyAR2c-QCFCE7OTBLg3eit95fSly2DtE6kxfW-7-FS33WkDdxIXLbwPJNKJU36heUAH6MIHVmUZqnTzoDSKSu_bdNYDn7O3SMtuTXbHNSgJgOvILonAOxpAs_A2CBvFm3YGOh3ZgckUtU"/>
+                </div>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<div class="container mt-4">
+    {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    "primary": "#137fec",
+                    "primary-dark": "#0e62b8",
+                    "background-light": "#f6f7f8",
+                    "background-dark": "#101922",
+                    "surface-light": "#ffffff",
+                    "surface-dark": "#1a2634",
+                    "text-primary-light": "#1f2937",
+                    "text-secondary-light": "#6b7280",
+                    "text-primary-dark": "#f3f4f6",
+                    "text-secondary-dark": "#9ca3af",
+                },
+                fontFamily: {
+                    "display": ["Inter", "sans-serif"]
+                },
+                borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+            },
+        },
+    }
+</script>
+
+{% block extra_js %}{% endblock %}
 </body>
 </html>
