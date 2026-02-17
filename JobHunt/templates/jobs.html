@@ -36,17 +36,19 @@
 {% endblock %}
 
 {% block content %}
+
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Job</h1>
+            <p class="mt-2 text-text-secondary-light dark:text-text-secondary-dark">See what jobs are recommended to you.</p>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {% if jobs %}
-                {% for job in jobs %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% if page_obj %}
+                {% for job in page_obj %}
                     <article
                             class="bg-surface-light dark:bg-surface-dark rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md transition-all group flex flex-col h-full">
-                        <div class="p-5 flex-1">
+                        <div class="p-4 flex-1">
                             <div class="flex justify-between items-start mb-4">
                                 <div class="flex gap-3">
                                     <img alt="Tech Company Logo" class="w-10 h-10 rounded-lg object-cover"
@@ -59,8 +61,8 @@
                                     </div>
                                 </div>
                                 <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                            {{ job.location }}
-                        </span>
+                                    {{ job.location }}
+                                </span>
                             </div>
                             <div class="mb-4">
                                 <div class="flex items-center gap-2 mb-2">
@@ -90,20 +92,83 @@
                     Currently no job found.</p>
             {% endif %}
         </div>
+
+        <!-- turn page -->
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="mt-10 flex justify-center items-center gap-2">
+
+                <!-- Previous -->
+                {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}"
+                       class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                        Previous
+                    </a>
+                {% else %}
+                    <span class="px-4 py-2 rounded-lg border border-gray-200 text-gray-400 cursor-not-allowed">
+                        Previous
+                    </span>
+                {% endif %}
+
+                <!-- Page Numbers -->
+                {% for num in page_obj.paginator.page_range %}
+                    {% if page_obj.number == num %}
+                        <span class="px-4 py-2 rounded-lg bg-primary text-white font-medium">
+                            {{ num }}
+                        </span>
+                    {% else %}
+                        <a href="?page={{ num }}"
+                           class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            {{ num }}
+                        </a>
+                    {% endif %}
+                {% endfor %}
+
+                <!-- Next -->
+                {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}"
+                       class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                        Next
+                    </a>
+                {% else %}
+                    <span class="px-4 py-2 rounded-lg border border-gray-200 text-gray-400 cursor-not-allowed">
+                        Next
+                    </span>
+                {% endif %}
+
+            </div>
+        {% endif %}
     </main>
+{% endblock %}
 
-    {#    <form method="get">#}
-    {#        <input#}
-    {#                type="text"#}
-    {#                name="q"#}
-    {#                placeholder="Search jobs..."#}
-    {#                value="{{ query }}"#}
-    {#        />#}
-    {#        <button type="submit">Search</button>#}
-    {#    </form>#}
-    {##}
-    {#    <hr>#}
-
-
-
+{% block extra_js %}
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "primary-dark": "#0e62b8",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1a2634",
+                        "text-primary-light": "#1f2937",
+                        "text-secondary-light": "#6b7280",
+                        "text-primary-dark": "#f3f4f6",
+                        "text-secondary-dark": "#9ca3af",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
 {% endblock %}
