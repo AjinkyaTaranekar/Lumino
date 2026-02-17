@@ -52,15 +52,28 @@ def roadmap(request):
 
 from .models import Job
 
+# def job_list(request):
+#     query = request.GET.get("q", "")
+#
+#     jobs = Job.objects.all()
+#
+#     if query:
+#         jobs = jobs.filter(title__icontains=query)
+#
+#     return render(request, "jobs.html", {
+#         "jobs": jobs,
+#         "query": query
+#     })
+
+from django.core.paginator import Paginator
 def job_list(request):
-    query = request.GET.get("q", "")
+    # query = request.GET.get("q", "")
+    job_list = Job.objects.all().order_by('id')
+    paginator = Paginator(job_list, 6)  # 每页 6 个（2x3）
 
-    jobs = Job.objects.all()
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
-    if query:
-        jobs = jobs.filter(title__icontains=query)
-
-    return render(request, "jobs.html", {
-        "jobs": jobs,
-        "query": query
+    return render(request, 'jobs.html', {
+        'page_obj': page_obj
     })
