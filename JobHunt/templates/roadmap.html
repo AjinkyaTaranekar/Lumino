@@ -2,23 +2,101 @@
 {% block title %}Career Roadmap{% endblock %}
 
 {% block content %}
-<h1>Your Career Roadmap</h1>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Career Trajectory Map</h1>
+            <p class="mt-2 text-text-secondary-light dark:text-text-secondary-dark">Based on your current skills as a
+                Senior Frontend Developer, Lumino AI has identified three high-probability paths.</p>
+        </div>
+        <section class="mb-12 relative">
+            <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-gray-200 dark:border-gray-800 p-8 overflow-x-auto">
+                <div class="min-w-[800px] flex justify-between items-center relative py-10">
+                    <svg class="absolute top-0 left-0 w-full h-full pointer-events-none" style="z-index: 0;">
+                        <path class="opacity-30 dark:opacity-40" d="M150,150 C300,150 400,60 600,60" fill="none"
+                              stroke="#137fec" stroke-dasharray="4 4" stroke-width="2"></path>
+                        <path class="opacity-80" d="M150,150 C300,150 400,150 600,150" fill="none" stroke="#137fec"
+                              stroke-width="4"></path>
+                        <path class="opacity-30 dark:opacity-40" d="M150,150 C300,150 400,240 600,240" fill="none"
+                              stroke="#137fec" stroke-dasharray="4 4" stroke-width="2"></path>
+                    </svg>
+                    <div class="relative z-10 flex flex-col items-center">
+                        <div class="w-16 h-16 rounded-full bg-white dark:bg-surface-dark border-4 border-primary flex items-center justify-center shadow-lg">
+                            <span class="material-icons text-primary">person</span>
+                        </div>
+                        <div class="mt-4 text-center">
+                            <div class="font-bold text-gray-900 dark:text-white">Current Role</div>
+                            <div class="text-sm text-text-secondary-light dark:text-text-secondary-dark">Senior Frontend
+                                Dev
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-12 relative z-10 pl-32">
+                        <div class="group cursor-pointer">
+                            <div class="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary rounded-xl p-5 shadow-sm hover:shadow-md transition-all w-72 flex items-center gap-4 relative">
+                                <div class="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary/30 rounded-full"></div>
+                                <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                                    <span class="material-icons text-xl">architecture</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-primary transition-colors">
+                                        Staff Engineer</h3>
+                                    <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark">Technical
+                                        Leadership Track</p>
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full">3-5 Years</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="group cursor-pointer scale-105 transform transition-transform">
+                            <div class="bg-white dark:bg-surface-dark border-2 border-primary rounded-xl p-5 shadow-lg w-72 flex items-center gap-4 relative">
+                                <div class="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full ring-4 ring-primary/20"></div>
+                                <div class="w-10 h-10 rounded-lg bg-primary text-white flex items-center justify-center">
+                                    <span class="material-icons text-xl">groups</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-900 dark:text-white">Engineering Manager</h3>
+                                    <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark">People
+                                        Management Track</p>
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full">High Affinity Match</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="group cursor-pointer">
+                            <div class="bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 hover:border-primary dark:hover:border-primary rounded-xl p-5 shadow-sm hover:shadow-md transition-all w-72 flex items-center gap-4 relative">
+                                <div class="absolute -left-3 top-1/2 -translate-y-1/2 w-3 h-3 bg-primary/30 rounded-full"></div>
+                                <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                                    <span class="material-icons text-xl">rocket_launch</span>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-primary transition-colors">
+                                        Founding Engineer</h3>
+                                    <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark">Startup
+                                        Track</p>
+                                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded-full">1-2 Years</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-{% if steps %}
-  <ul>
-    {% for step in steps %}
-      <li>
-        <strong>{{ step.title }}</strong>
-        — {{ step.get_status_display }}
-        {% if step.description %}
-          <p>{{ step.description }}</p>
-        {% endif %}
-      </li>
-    {% endfor %}
-  </ul>
-{% else %}
-  <p>No roadmap steps yet.</p>
-  <p>Start by adding your first step!</p>
-{% endif %}
+    </main>
+
+{#    {% if steps %}#}
+{#        <ul>#}
+{#            {% for step in steps %}#}
+{#                <li>#}
+{#                    <strong>{{ step.title }}</strong>#}
+{#                    — {{ step.get_status_display }}#}
+{#                    {% if step.description %}#}
+{#                        <p>{{ step.description }}</p>#}
+{#                    {% endif %}#}
+{#                </li>#}
+{#            {% endfor %}#}
+{#        </ul>#}
+{#    {% else %}#}
+{#        <p>No roadmap steps yet.</p>#}
+{#        <p>Start by adding your first step!</p>#}
+{#    {% endif %}#}
 
 {% endblock %}
