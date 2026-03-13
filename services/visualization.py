@@ -204,7 +204,8 @@ class VisualizationService:
         """)
 
         filepath = os.path.join(self.output_dir, f"graph_{user_id}.html")
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
 
         logger.info(
             f"Generated graph for user {user_id}: "
@@ -303,7 +304,8 @@ class VisualizationService:
         """)
 
         filepath = os.path.join(self.output_dir, f"graph_job_{job_id}.html")
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
 
         logger.info(
             f"Generated graph for job {job_id}: "
@@ -431,7 +433,8 @@ class VisualizationService:
         )
 
         # Inject legend before writing
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
         self._inject_legend(filepath)
 
         total_nodes = len(user_nodes) + len(job_nodes)
