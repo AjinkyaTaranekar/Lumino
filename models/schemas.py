@@ -240,6 +240,63 @@ class IngestionStats(BaseModel):
     experiences_extracted: int = 0
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# EDIT SESSION SCHEMAS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class GraphMutation(BaseModel):
+    """Structured set of graph mutations proposed by the LLM."""
+    add_nodes: List[dict] = Field(default_factory=list)
+    update_nodes: List[dict] = Field(default_factory=list)
+    remove_nodes: List[str] = Field(default_factory=list, description="Node names to remove (e.g. 'GraphQL' or 'Skill:GraphQL')")
+    add_edges: List[dict] = Field(default_factory=list, description="Each dict: {from: 'Type:name', rel: 'REL_TYPE', to: 'Type:name'}")
+
+
+class GraphMutationProposal(BaseModel):
+    """LLM response: reasoning, proposed mutations, and next First Principles question."""
+    reasoning: str = Field(description="LLM's reasoning visible to the user")
+    mutations: GraphMutation
+    follow_up_question: str = Field(description="Next First Principles question to ask")
+
+
+class EditSessionMessage(BaseModel):
+    role: str = Field(description="'user' | 'assistant' | 'system'")
+    content: str
+    proposal: Optional[GraphMutationProposal] = None
+
+
+class EditSessionResponse(BaseModel):
+    session_id: str
+    opening_question: str
+    graph_summary: dict
+
+
+class StartEditRequest(BaseModel):
+    recruiter_id: Optional[str] = Field(default=None, description="Required for job edit sessions")
+
+
+class SendMessageRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class ApplyMutationsRequest(BaseModel):
+    session_id: str
+    mutations: GraphMutation
+
+
+class RejectMutationsRequest(BaseModel):
+    session_id: str
+
+
+class ApplyMutationsResponse(BaseModel):
+    auto_checkpoint_version_id: str
+    nodes_added: int
+    nodes_updated: int
+    nodes_removed: int
+    edges_added: int
+
+
 class GraphVersion(BaseModel):
     version_id: str
     entity_type: str   # 'user' | 'job'

@@ -10,6 +10,8 @@ import JobModel from './pages/recruiter/JobModel'
 import CandidatesBrowser from './pages/recruiter/CandidatesBrowser'
 import Candidates from './pages/recruiter/Candidates'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import EditGraph from './pages/user/EditGraph'
+import EditJobGraph from './pages/recruiter/EditJobGraph'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -23,12 +25,14 @@ export default function App() {
       <Route path="/user/model"         element={<ProtectedRoute role="seeker"><UserModel /></ProtectedRoute>} />
       <Route path="/user/dashboard"     element={<ProtectedRoute role="seeker"><Dashboard /></ProtectedRoute>} />
       <Route path="/user/match/:jobId"  element={<ProtectedRoute role={['seeker', 'recruiter']}><MatchExplorer /></ProtectedRoute>} />
+      <Route path="/user/edit-graph"    element={<ProtectedRoute role="seeker"><EditGraph /></ProtectedRoute>} />
 
       {/* Recruiter routes — parameterless path BEFORE parameterized */}
       <Route path="/recruiter/post"               element={<ProtectedRoute role="recruiter"><PostJob /></ProtectedRoute>} />
       <Route path="/recruiter/model/:jobId"        element={<ProtectedRoute role="recruiter"><JobModel /></ProtectedRoute>} />
       <Route path="/recruiter/candidates"          element={<ProtectedRoute role="recruiter"><CandidatesBrowser /></ProtectedRoute>} />
       <Route path="/recruiter/candidates/:jobId"   element={<ProtectedRoute role="recruiter"><Candidates /></ProtectedRoute>} />
+      <Route path="/recruiter/edit-job/:jobId"     element={<ProtectedRoute role="recruiter"><EditJobGraph /></ProtectedRoute>} />
 
       {/* Admin routes */}
       <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />

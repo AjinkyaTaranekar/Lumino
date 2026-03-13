@@ -90,4 +90,40 @@ export const api = {
   // Admin — delete
   deleteUser: (userId) => del(`/users/${userId}`),
   deleteJob:  (jobId)  => del(`/jobs/${jobId}`),
+
+  // Graph editing — sessions
+  startEditSession: (entityType, entityId, recruiterId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/start`, recruiterId ? { recruiter_id: recruiterId } : {})
+  },
+  sendEditMessage: (entityType, entityId, sessionId, message) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/message`, { session_id: sessionId, message })
+  },
+  applyMutations: (entityType, entityId, sessionId, mutations) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/apply`, { session_id: sessionId, mutations })
+  },
+  rejectMutations: (entityType, entityId, sessionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/reject`, { session_id: sessionId })
+  },
+  getEditHistory: (entityType, entityId, sessionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return get(`${base}/graph/edit/history?session_id=${sessionId}`)
+  },
+
+  // Graph versioning
+  listVersions: (entityType, entityId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return get(`${base}/graph/versions`)
+  },
+  rollback: (entityType, entityId, versionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/rollback/${versionId}`, {})
+  },
+  saveCheckpoint: (entityType, entityId, label) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/checkpoint`, { label: label || 'manual' })
+  },
 }

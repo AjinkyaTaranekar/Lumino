@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
 import GraphViewer from '../../components/GraphViewer'
-import { ArrowLeft, RefreshCw, Users } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Users, Edit3 } from 'lucide-react'
 import { useState } from 'react'
 
 export default function JobModel() {
@@ -39,6 +39,14 @@ export default function JobModel() {
               onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
               onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
               <Users size={12} /> Find Candidates
+            </button>
+            <button
+              onClick={() => navigate(`/recruiter/edit-job/${jobId}`)}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
+              style={{ background: '#e94560', color: '#fff' }}
+              onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
+              onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
+              <Edit3 size={12} /> Edit Graph
             </button>
             <button
               onClick={() => setKey(k => k + 1)}

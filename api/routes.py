@@ -27,16 +27,25 @@ from fastapi.responses import FileResponse
 from database.neo4j_client import Neo4jClient, get_client
 from database.sqlite_client import SQLiteClient, get_sqlite
 from models.schemas import (
+    ApplyMutationsResponse,
+    ApplyMutationsRequest,
     BatchCandidateResponse,
     BatchMatchResponse,
     CheckpointRequest,
+    EditSessionMessage,
+    EditSessionResponse,
+    GraphMutationProposal,
     GraphVersion,
     IngestJobRequest,
     IngestUserRequest,
     MatchResult,
+    RejectMutationsRequest,
     RollbackResponse,
+    SendMessageRequest,
+    StartEditRequest,
 )
 from services.checkpoint_service import CheckpointService
+from services.graph_edit_service import GraphEditService
 from services.ingestion import IngestionService
 from services.llm_extraction import LLMExtractionService
 from services.matching_engine import MatchingEngine
@@ -721,6 +730,215 @@ async def rollback_job_graph(
         logger.exception(f"Job rollback failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     return RollbackResponse(version_id=version_id, entity_type="job", entity_id=job_id)
+
+
+# ── Graph Editing ──────────────────────────────────────────────────────────────
+
+@router.post(
+    "/users/{user_id}/graph/edit/start",
+    response_model=EditSessionResponse,
+    tags=["editing"],
+    summary="Start a new graph edit session for a user",
+)
+async def start_user_edit_session(
+    user_id: str,
+    request: StartEditRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.start_session("user", user_id)
+    except Exception as e:
+        logger.exception(f"Edit session start failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/message",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Send a message in the edit session",
+)
+async def user_edit_message(
+    user_id: str,
+    request: SendMessageRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.send_message(request.session_id, request.message)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Edit message failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/apply",
+    response_model=ApplyMutationsResponse,
+    tags=["editing"],
+    summary="Apply accepted mutations to the user graph",
+)
+async def apply_user_mutations(
+    user_id: str,
+    request: ApplyMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.apply_mutations(request.session_id, request.mutations)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Apply mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/reject",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Reject the LLM's proposed mutations and get a follow-up question",
+)
+async def reject_user_mutations(
+    user_id: str,
+    request: RejectMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.reject_mutations(request.session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Reject mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/graph/edit/history",
+    response_model=list[EditSessionMessage],
+    tags=["editing"],
+    summary="Get full conversation history for an edit session",
+)
+async def get_user_edit_history(
+    user_id: str,
+    session_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.get_history(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Get history failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/start",
+    response_model=EditSessionResponse,
+    tags=["editing"],
+    summary="Start a new graph edit session for a job",
+)
+async def start_job_edit_session(
+    job_id: str,
+    request: StartEditRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.start_session("job", job_id, request.recruiter_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Job edit session start failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/message",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Send a message in the job edit session",
+)
+async def job_edit_message(
+    job_id: str,
+    request: SendMessageRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.send_message(request.session_id, request.message)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Job edit message failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/apply",
+    response_model=ApplyMutationsResponse,
+    tags=["editing"],
+    summary="Apply accepted mutations to the job graph",
+)
+async def apply_job_mutations(
+    job_id: str,
+    request: ApplyMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.apply_mutations(request.session_id, request.mutations)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Apply job mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/reject",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Reject proposed job mutations and get a follow-up question",
+)
+async def reject_job_mutations(
+    job_id: str,
+    request: RejectMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.reject_mutations(request.session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Reject job mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Admin ──────────────────────────────────────────────────────────────────────
