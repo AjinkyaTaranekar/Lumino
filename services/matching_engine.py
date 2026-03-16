@@ -431,6 +431,144 @@ class MatchingEngine:
         return paths
 
     # ──────────────────────────────────────────────────────────────────────────
+    # RICH CONTEXT FOR LLM EXPLANATION
+    # ──────────────────────────────────────────────────────────────────────────
+
+    async def gather_match_context(self, user_id: str, job_id: str) -> dict:
+        """
+        Pull rich contextual data for a user-job pair to power a detailed LLM explanation.
+
+        Returns a dict with:
+          - matched_skills_rich: list of dicts (skill, level, years, evidence_strength,
+                                  importance, min_years, usage_contexts, usage_what, outcomes)
+          - missing_must_have:   list of dicts (skill, min_years) for must_have gaps only
+          - missing_nice:        list of skill names for nice_to_have gaps
+          - assessment:          dict from CriticalAssessment node (parsed JSON fields)
+          - job_meta:            dict (exp_min, company_size, remote_policy)
+          - matched_domains_rich: list of dicts (domain, depth, years)
+        """
+        import json as _j
+
+        # Query 1: matched skills with evidence details + how they were used
+        matched_rich = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
+                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
+                  -[:MATCHES]->(req:JobSkillRequirement)
+                  <-[:REQUIRES_SKILL]-(:JobSkillFamily)
+                  <-[:HAS_SKILL_FAMILY_REQ]-(:JobSkillRequirements)
+                  <-[:HAS_SKILL_REQUIREMENTS]-(j:Job {id: $job_id})
+            OPTIONAL MATCH (p:Project {user_id: $user_id})-[demo:DEMONSTRATES_SKILL]->(s)
+            RETURN s.name            AS skill,
+                   s.level           AS level,
+                   s.years           AS years,
+                   s.evidence_strength AS evidence_strength,
+                   req.importance    AS importance,
+                   req.min_years     AS min_years,
+                   collect(DISTINCT demo.context)[0..3] AS usage_contexts,
+                   collect(DISTINCT demo.what)[0..2]    AS usage_what,
+                   collect(DISTINCT demo.outcome)[0..2] AS outcomes
+            ORDER BY
+              CASE req.importance WHEN 'must_have' THEN 0 ELSE 1 END,
+              s.years DESC
+            """,
+            {"user_id": user_id, "job_id": job_id},
+        )
+
+        # Query 2: all job requirement names (to compute missing nice_to_have list)
+        all_reqs = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            OPTIONAL MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
+                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
+                  -[:MATCHES]->(req)
+            RETURN req.name AS skill, req.importance AS importance,
+                   req.min_years AS min_years, s IS NOT NULL AS matched
+            """,
+            {"user_id": user_id, "job_id": job_id},
+        )
+        missing_must = [
+            {"skill": r["skill"], "min_years": r["min_years"]}
+            for r in all_reqs
+            if not r["matched"] and r["importance"] == "must_have"
+        ]
+        missing_nice = [
+            r["skill"]
+            for r in all_reqs
+            if not r["matched"] and r["importance"] != "must_have"
+        ]
+
+        # Query 3: critical assessment
+        assessment_rows = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})-[:HAS_ASSESSMENT]->(a:CriticalAssessment)
+            RETURN a.overall_signal       AS overall_signal,
+                   a.seniority_assessment AS seniority_assessment,
+                   a.depth_vs_breadth     AS depth_vs_breadth,
+                   a.candidate_identity   AS candidate_identity,
+                   a.honest_summary       AS honest_summary,
+                   a.genuine_strengths    AS genuine_strengths,
+                   a.red_flags            AS red_flags,
+                   a.inflated_skills      AS inflated_skills,
+                   a.five_w_h_summary     AS five_w_h_summary
+            """,
+            {"user_id": user_id},
+        )
+        assessment = {}
+        if assessment_rows:
+            raw = dict(assessment_rows[0])
+            for key in ("genuine_strengths", "red_flags", "inflated_skills"):
+                val = raw.get(key)
+                if isinstance(val, str):
+                    try:
+                        raw[key] = _j.loads(val)
+                    except Exception:
+                        raw[key] = [val] if val else []
+            if isinstance(raw.get("five_w_h_summary"), str):
+                try:
+                    raw["five_w_h_summary"] = _j.loads(raw["five_w_h_summary"])
+                except Exception:
+                    pass
+            assessment = raw
+
+        # Query 4: job metadata
+        job_meta_rows = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})
+            RETURN j.experience_years_min AS exp_min,
+                   j.company_size         AS company_size,
+                   j.remote_policy        AS remote_policy
+            """,
+            {"job_id": job_id},
+        )
+        job_meta = dict(job_meta_rows[0]) if job_meta_rows else {}
+
+        # Query 5: matched domains with depth
+        domains_rich = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})-[:HAS_DOMAIN_CATEGORY]->(:DomainCategory)
+                  -[:HAS_DOMAIN_FAMILY]->(:DomainFamily)-[:HAS_DOMAIN]->(d:Domain)
+                  -[:MATCHES]->(dr:JobDomainRequirement)
+                  <-[:REQUIRES_DOMAIN]-(:JobDomainFamily)
+                  <-[:HAS_DOMAIN_FAMILY_REQ]-(:JobDomainRequirements)
+                  <-[:HAS_DOMAIN_REQUIREMENTS]-(j:Job {id: $job_id})
+            RETURN d.name AS domain, d.depth AS depth, d.years_experience AS years
+            ORDER BY d.years_experience DESC
+            """,
+            {"user_id": user_id, "job_id": job_id},
+        )
+
+        return {
+            "matched_skills_rich": [dict(r) for r in matched_rich],
+            "missing_must_have": missing_must,
+            "missing_nice": missing_nice,
+            "assessment": assessment,
+            "job_meta": job_meta,
+            "matched_domains_rich": [dict(r) for r in domains_rich],
+        }
+
+    # ──────────────────────────────────────────────────────────────────────────
     # HELPERS
     # ──────────────────────────────────────────────────────────────────────────
 

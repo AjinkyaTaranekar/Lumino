@@ -176,68 +176,213 @@ class LLMExtractionService:
         missing_domains: list[str],
         paths: list[str],
         perspective: str = "recruiter",
-    ) -> str:
+        rich_context: dict | None = None,
+    ) -> dict:
         """
-        Generate a natural-language explanation of a user-job match.
+        Generate a structured, evidence-based explanation of a user-job match.
 
-        Passes all structured match data (scores, matched/missing lists, graph paths)
-        to the LLM and returns a concise 2–3 sentence plain-English summary.
-        perspective='seeker'   → second person ("You have strong skills in...")
-        perspective='recruiter' → third person ("Owais is a strong match...")
-        Uses free-text mode (no JSON) at temperature 0.4.
+        Uses rich_context (skill evidence, 5W+H usage, critical assessment, domain depth)
+        to produce a detailed, actionable analysis — not just name-matching.
+
+        Returns a dict with:
+          verdict, headline, why_they_fit, critical_gaps, nice_to_have_gaps,
+          seniority_fit, honest_take, recommendation, interview_focus
         """
+        import json as _j
+
         company_str = company or "Unknown Company"
-        matched_skills_str = ", ".join(matched_skills) if matched_skills else "None"
-        missing_skills_str = ", ".join(missing_skills) if missing_skills else "None"
-        matched_domains_str = ", ".join(matched_domains) if matched_domains else "None"
-        missing_domains_str = ", ".join(missing_domains) if missing_domains else "None"
-        paths_str = "\n".join(f"- {p}" for p in paths[:10]) if paths else "(no direct graph paths found)"
+        ctx = rich_context or {}
 
+        # ── Format matched skills with evidence context ──────────────────────────
+        skill_lines = []
+        for s in ctx.get("matched_skills_rich", []):
+            name     = s.get("skill", "?")
+            level    = s.get("level") or "unknown level"
+            years    = s.get("years")
+            ev       = s.get("evidence_strength") or "unknown evidence"
+            imp      = s.get("importance") or "default"
+            min_yr   = s.get("min_years")
+            contexts = [c for c in (s.get("usage_contexts") or []) if c]
+            whats    = [w for w in (s.get("usage_what") or []) if w]
+            outcomes = [o for o in (s.get("outcomes") or []) if o]
+
+            years_str = f"{years}yr" if years else "yrs unknown"
+            min_str   = f" (job needs {min_yr}yr min)" if min_yr else ""
+            ev_label  = {
+                "multiple_productions": "★★★★ production-proven",
+                "project_backed":       "★★★ project-evidenced",
+                "mentioned_once":       "★★ mentioned briefly",
+                "claimed_only":         "★ claimed only",
+            }.get(ev, ev)
+
+            how_parts = []
+            if whats:
+                how_parts.append(f"used to: {'; '.join(whats[:2])}")
+            if contexts:
+                how_parts.append(f"context: {'; '.join(contexts[:2])}")
+            if outcomes:
+                how_parts.append(f"outcome: {'; '.join(outcomes[:1])}")
+
+            how_str = " — " + " | ".join(how_parts) if how_parts else ""
+            skill_lines.append(
+                f"  • {name} [{imp}]: {level}, {years_str}{min_str}, {ev_label}{how_str}"
+            )
+
+        # Fall back to flat list if rich context not available
+        if not skill_lines and matched_skills:
+            skill_lines = [f"  • {s}" for s in matched_skills]
+
+        # ── Format gaps ──────────────────────────────────────────────────────────
+        must_gap_lines = []
+        for g in ctx.get("missing_must_have", []):
+            sk = g.get("skill", "?")
+            my = g.get("min_years")
+            must_gap_lines.append(f"  • {sk} (must_have{f', {my}yr min' if my else ''})")
+        if not must_gap_lines:
+            must_gap_lines = [f"  • {s}" for s in missing_skills if s]
+
+        nice_gaps = ctx.get("missing_nice", [m for m in missing_skills if m not in
+                             [g.get("skill", "") for g in ctx.get("missing_must_have", [])]])
+        nice_gap_str = ", ".join(nice_gaps[:6]) if nice_gaps else "None"
+
+        # ── Format assessment ────────────────────────────────────────────────────
+        assessment = ctx.get("assessment", {})
+        seniority    = assessment.get("seniority_assessment") or "unknown"
+        signal       = assessment.get("overall_signal") or "unknown"
+        identity     = assessment.get("candidate_identity") or ""
+        honest_summ  = assessment.get("honest_summary") or ""
+        red_flags    = assessment.get("red_flags") or []
+        inflated     = assessment.get("inflated_skills") or []
+        genuine      = assessment.get("genuine_strengths") or []
+        five_wh      = assessment.get("five_w_h_summary") or {}
+
+        red_flag_str   = "\n".join(f"  ⚠ {f}" for f in red_flags[:4]) if red_flags else "  None noted"
+        genuine_str    = "\n".join(f"  ✓ {g}" for g in genuine[:4]) if genuine else "  (none noted)"
+        inflated_str   = "\n".join(f"  ! {i}" for i in inflated[:3]) if inflated else "  None"
+
+        # ── Format domains ───────────────────────────────────────────────────────
+        domain_lines = []
+        for d in ctx.get("matched_domains_rich", []):
+            dn   = d.get("domain", "?")
+            dep  = d.get("depth") or "unknown"
+            dyrs = d.get("years")
+            domain_lines.append(f"  • {dn}: {dep} depth" + (f", {dyrs}yr" if dyrs else ""))
+        if not domain_lines and matched_domains:
+            domain_lines = [f"  • {d}" for d in matched_domains]
+
+        job_meta  = ctx.get("job_meta", {})
+        exp_min   = job_meta.get("exp_min")
+        co_size   = job_meta.get("company_size") or "unknown"
+        remote    = job_meta.get("remote_policy") or "unknown"
+
+        five_wh_str = ""
+        if isinstance(five_wh, dict) and five_wh:
+            five_wh_str = "\nCandidate 5W+H:\n" + "\n".join(
+                f"  {k.upper()}: {v}" for k, v in five_wh.items() if v
+            )
+
+        # ── Perspective instruction ──────────────────────────────────────────────
         if perspective == "seeker":
-            audience_instruction = (
-                "Write directly to the job seeker using second-person pronouns (you/your). "
-                f"For example: 'You are a strong match for this role because...'. "
-                "Do not refer to the candidate by name."
+            person_instr = (
+                "Write in SECOND PERSON (you/your). "
+                "Tone: honest and constructive — help them understand their fit and what to prepare. "
+                "E.g. 'Your Python expertise is well-evidenced... however, Kubernetes is a critical gap you'll need to address.'"
+            )
+            output_guidance = (
+                "For 'why_they_fit': use 'Your [skill] experience...' phrasing.\n"
+                "For 'honest_take': frame concerns as areas to prepare, not disqualifiers.\n"
+                "For 'recommendation': advise them on whether to apply and what to prepare."
             )
         else:
-            audience_instruction = (
-                f"Write for a recruiter reviewing the candidate. "
-                f"Refer to the candidate by name ({user_id}) using third-person pronouns. "
-                f"For example: '{user_id} is a strong match for this role because...'."
+            person_instr = (
+                f"Write in THIRD PERSON about candidate '{user_id}'. "
+                "Tone: professional recruiter/hiring manager lens — direct, honest, evidence-based. "
+                f"E.g. '{user_id} demonstrates production-proven Python skills...'"
+            )
+            output_guidance = (
+                "For 'why_they_fit': reference the candidate by name or 'the candidate'.\n"
+                "For 'honest_take': be direct about risks and genuine strengths.\n"
+                "For 'recommendation': advise the hiring team on next steps."
             )
 
         system_msg = (
-            "You are a career advisor writing match summaries for a knowledge-graph-based job matching platform. "
-            "Write concise, plain-English summaries. Be specific — always name actual skills and domains "
-            "from the data provided. Never invent data not given to you. Do not use bullet points."
+            "You are a senior engineering manager generating a detailed, evidence-based job match analysis. "
+            "You have access to the candidate's actual graph data: how skills were used, at what scale, "
+            "with what evidence quality — not just which skill names match. "
+            "Your analysis must go beyond surface-level name matching to assess genuine fit.\n\n"
+            "Return ONLY valid JSON matching this exact schema:\n"
+            "{\n"
+            '  "verdict": "Strong match" | "Good match" | "Moderate match" | "Weak match" | "Not recommended",\n'
+            '  "headline": "1 sentence: who this person is and why they do/do not fit this specific role",\n'
+            '  "why_they_fit": ["skill or domain with specific evidence and context — not just names"],\n'
+            '  "critical_gaps": ["must-have gaps with explanation of impact on this role"],\n'
+            '  "nice_to_have_gaps": ["lower priority gaps"],\n'
+            '  "seniority_fit": "1-2 sentences: assessed level vs what the role needs",\n'
+            '  "honest_take": "2-3 sentences: evidence-backed assessment of genuine strengths and concerns",\n'
+            '  "recommendation": "Hire | Proceed to technical screen | Conditional consider | Pass — with 1 sentence rationale",\n'
+            '  "interview_focus": ["specific technical areas to probe if proceeding"]\n'
+            "}"
         )
 
         user_msg = (
             f"Candidate: {user_id}\n"
-            f"Job: {job_title} at {company_str}\n"
-            f"Overall Match Score: {round(total_score * 100)}% "
-            f"(Skills 65% weight: {round(skill_score * 100)}%, Domain 35% weight: {round(domain_score * 100)}%)\n"
-            f"Culture Fit Bonus: {round(culture_bonus * 100)}%\n"
-            f"Preference Fit Bonus: {round(preference_bonus * 100)}%\n\n"
-            f"Matched skills: {matched_skills_str}\n"
-            f"Skill gaps: {missing_skills_str}\n"
-            f"Matched domains: {matched_domains_str}\n"
-            f"Domain gaps: {missing_domains_str}\n\n"
-            f"Knowledge graph paths showing how this candidate connects to the job:\n{paths_str}\n\n"
-            f"Write 2–3 sentences explaining why this candidate is or is not a strong match for this role. "
-            f"Mention specific skills and domains by name. If there are gaps, note what they would need. "
-            f"{audience_instruction}"
+            f"Role: {job_title} at {company_str}\n"
+            f"Company size: {co_size} | Remote: {remote}"
+            + (f" | Min experience: {exp_min}yr" if exp_min else "")
+            + "\n\n"
+            f"Match scores: Overall {round(total_score * 100)}% "
+            f"(Skills 65%→{round(skill_score * 100)}%, Domain 35%→{round(domain_score * 100)}%) "
+            f"| Culture bonus: {round(culture_bonus * 100)}% | Preference bonus: {round(preference_bonus * 100)}%\n\n"
+            "═══ MATCHED SKILLS (with evidence quality + how actually used) ═══\n"
+            + ("\n".join(skill_lines) or "  None")
+            + "\n\n"
+            "═══ CRITICAL GAPS (must-have skills not in profile) ═══\n"
+            + ("\n".join(must_gap_lines) or "  None — all must-haves covered")
+            + "\n\n"
+            f"Nice-to-have gaps: {nice_gap_str}\n\n"
+            "═══ MATCHED DOMAINS ═══\n"
+            + ("\n".join(domain_lines) or "  None")
+            + "\n\n"
+            "═══ CANDIDATE ASSESSMENT (from critical analysis) ═══\n"
+            f"Profile signal: {signal} | Seniority: {seniority}\n"
+            + (f"Identity: {identity}\n" if identity else "")
+            + (f"Honest summary: {honest_summ}\n" if honest_summ else "")
+            + f"\nGenuine evidenced strengths:\n{genuine_str}\n"
+            + f"\nRed flags / concerns:\n{red_flag_str}\n"
+            + f"\nInflated skill claims:\n{inflated_str}\n"
+            + five_wh_str
+            + "\n\n"
+            f"{person_instr}\n"
+            f"{output_guidance}\n\n"
+            "Generate the structured match explanation. Be specific — use actual skill names, "
+            "evidence levels, and context from the data above. Do NOT be generic."
         )
 
-        text = await self._call_with_retry(
+        raw = await self._call_with_retry(
             model=self._model_name,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
             ],
-            temperature=0.4,
+            response_format={"type": "json_object"},
+            temperature=0.3,
         )
-        return text.strip()
+
+        try:
+            return _j.loads(raw)
+        except Exception:
+            # Fallback: wrap raw text so callers always get a dict
+            return {
+                "verdict": "Unknown",
+                "headline": raw[:200] if raw else "Explanation unavailable",
+                "why_they_fit": [],
+                "critical_gaps": [],
+                "nice_to_have_gaps": [],
+                "seniority_fit": "",
+                "honest_take": raw if raw else "",
+                "recommendation": "",
+                "interview_focus": [],
+            }
 
     async def extract_job_posting(self, job_text: str) -> JobPostingExtraction:
         """

@@ -286,14 +286,15 @@ async def explain_match(
     db: Neo4jClient = Depends(get_neo4j),
 ):
     """
-    Generate a natural-language explanation for a user-job match.
+    Generate a structured, evidence-based explanation for a user-job match.
 
-    Fetches match scores and graph paths from Neo4j, then passes all structured
-    data to Groq (llama-3.3-70b-versatile) to produce a concise 2–3 sentence
-    plain-English summary.
+    Uses skill evidence quality (evidence_strength), 5W+H context from how
+    skills were actually used in projects (DEMONSTRATES_SKILL edge properties),
+    the candidate's CriticalAssessment node (seniority, red flags, genuine
+    strengths), domain depth, and seniority fit against job requirements.
 
-    perspective: 'seeker'    → second person ("You are a strong match...")
-                 'recruiter' → third person  ("Owais is a strong match...")
+    perspective: 'seeker'    → second person, constructive framing
+                 'recruiter' → third person, hiring-manager lens
     """
     engine = MatchingEngine(db)
     result = await engine._score_user_job_pair(user_id, job_id)
@@ -301,8 +302,10 @@ async def explain_match(
         raise HTTPException(
             status_code=404, detail=f"User '{user_id}' or job '{job_id}' not found"
         )
-    paths_data = await engine.trace_match_paths(user_id, job_id, limit=10)
+
+    paths_data   = await engine.trace_match_paths(user_id, job_id, limit=10)
     path_strings = [p["path"] for p in paths_data]
+    rich_context = await engine.gather_match_context(user_id, job_id)
 
     try:
         llm = LLMExtractionService()
@@ -321,6 +324,7 @@ async def explain_match(
             missing_domains=result.missing_domains,
             paths=path_strings,
             perspective=perspective,
+            rich_context=rich_context,
         )
     except Exception as e:
         logger.exception(f"LLM explanation failed: {e}")
