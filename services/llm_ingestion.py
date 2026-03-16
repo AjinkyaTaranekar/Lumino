@@ -40,6 +40,8 @@ class LLMIngestionService:
         await self._ingest_experiences(user_id, extraction.experiences)
         await self._ingest_preferences(user_id, extraction.preferences)
         await self._ingest_patterns(user_id, extraction.patterns)
+        if extraction.assessment:
+            await self._ingest_assessment(user_id, extraction.assessment)
         await recompute_weights(user_id, self.client)
         logger.info(f"LLM hierarchy written for user {user_id}")
 
@@ -66,9 +68,10 @@ class LLMIngestionService:
                 SET fam.source = 'llm'
                 MERGE (cat)-[:HAS_SKILL_FAMILY]->(fam)
                 MERGE (s:Skill {name: $name, user_id: $user_id})
-                SET s.years  = $years,
-                    s.level  = $level,
-                    s.source = 'llm'
+                SET s.years             = $years,
+                    s.level             = $level,
+                    s.evidence_strength = $evidence_strength,
+                    s.source            = 'llm'
                 MERGE (fam)-[:HAS_SKILL]->(s)
                 """,
                 {
@@ -77,6 +80,7 @@ class LLMIngestionService:
                     "name": skill.name,
                     "years": skill.years,
                     "level": skill.level,
+                    "evidence_strength": getattr(skill, "evidence_strength", None),
                 },
             )
 
@@ -89,9 +93,11 @@ class LLMIngestionService:
                 MERGE (cat:ProjectCategory {name: 'Projects', user_id: $user_id})
                 MERGE (u)-[:HAS_PROJECT_CATEGORY]->(cat)
                 MERGE (p:Project {name: $name, user_id: $user_id})
-                SET p.description = $description,
-                    p.domain      = $domain,
-                    p.source      = 'llm'
+                SET p.description           = $description,
+                    p.domain                = $domain,
+                    p.contribution_type     = $contribution_type,
+                    p.has_measurable_impact = $has_measurable_impact,
+                    p.source                = 'llm'
                 MERGE (cat)-[:HAS_PROJECT]->(p)
                 """,
                 {
@@ -99,21 +105,52 @@ class LLMIngestionService:
                     "name": project.name,
                     "description": project.description,
                     "domain": project.domain,
+                    "contribution_type": getattr(project, "contribution_type", None),
+                    "has_measurable_impact": getattr(project, "has_measurable_impact", False),
                 },
             )
 
-            # Link project → skills (only if skill node exists)
-            for skill_name in project.skills_demonstrated:
+            # Link project → skills (only if skill node exists), storing 5W+H context on edge
+            for skill_usage in project.skills_demonstrated:
+                # Support both SkillUsage objects and plain strings (backwards compat)
+                if isinstance(skill_usage, str):
+                    skill_name = skill_usage
+                    context = what = how = why = scale = outcome = None
+                else:
+                    skill_name = skill_usage.name
+                    context = skill_usage.context
+                    what = skill_usage.what
+                    how = skill_usage.how
+                    why = skill_usage.why
+                    scale = skill_usage.scale
+                    outcome = skill_usage.outcome
+                    # Auto-build context summary if not provided
+                    if not context:
+                        parts = [p for p in [what, how, outcome] if p]
+                        context = " | ".join(parts) if parts else None
+
                 await self.client.run_write(
                     """
                     MATCH (p:Project {name: $project_name, user_id: $user_id})
                     MATCH (s:Skill {name: $skill_name, user_id: $user_id})
-                    MERGE (p)-[:DEMONSTRATES_SKILL]->(s)
+                    MERGE (p)-[r:DEMONSTRATES_SKILL]->(s)
+                    SET r.context = $context,
+                        r.what    = $what,
+                        r.how     = $how,
+                        r.why     = $why,
+                        r.scale   = $scale,
+                        r.outcome = $outcome
                     """,
                     {
                         "user_id": user_id,
                         "project_name": project.name,
                         "skill_name": skill_name,
+                        "context": context,
+                        "what": what,
+                        "how": how,
+                        "why": why,
+                        "scale": scale,
+                        "outcome": outcome,
                     },
                 )
 
@@ -160,16 +197,20 @@ class LLMIngestionService:
 
     async def _ingest_experiences(self, user_id: str, experiences: list) -> None:
         for exp in experiences:
+            accomplishments = getattr(exp, "accomplishments", []) or []
+            accomplishments_json = __import__("json").dumps(accomplishments) if accomplishments else None
             await self.client.run_write(
                 """
                 MATCH (u:User {id: $user_id})
                 MERGE (cat:ExperienceCategory {name: 'Experience', user_id: $user_id})
                 MERGE (u)-[:HAS_EXPERIENCE_CATEGORY]->(cat)
                 MERGE (e:Experience {title: $title, user_id: $user_id})
-                SET e.company        = $company,
-                    e.duration_years = $duration_years,
-                    e.description    = $description,
-                    e.source         = 'llm'
+                SET e.company           = $company,
+                    e.duration_years    = $duration_years,
+                    e.description       = $description,
+                    e.accomplishments   = $accomplishments,
+                    e.contribution_type = $contribution_type,
+                    e.source            = 'llm'
                 MERGE (cat)-[:HAS_EXPERIENCE]->(e)
                 """,
                 {
@@ -178,6 +219,8 @@ class LLMIngestionService:
                     "company": exp.company,
                     "duration_years": exp.duration_years,
                     "description": exp.description,
+                    "accomplishments": accomplishments_json,
+                    "contribution_type": getattr(exp, "contribution_type", None),
                 },
             )
 
@@ -199,6 +242,43 @@ class LLMIngestionService:
                     "value": pref.value,
                 },
             )
+
+    async def _ingest_assessment(self, user_id: str, assessment) -> None:
+        """Store the critical assessment as a node attached to the User."""
+        import json as _json
+        await self.client.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (a:CriticalAssessment {user_id: $user_id})
+            SET a.overall_signal         = $overall_signal,
+                a.seniority_assessment   = $seniority_assessment,
+                a.depth_vs_breadth       = $depth_vs_breadth,
+                a.ownership_signals      = $ownership_signals,
+                a.red_flags              = $red_flags,
+                a.inflated_skills        = $inflated_skills,
+                a.genuine_strengths      = $genuine_strengths,
+                a.honest_summary         = $honest_summary,
+                a.candidate_identity     = $candidate_identity,
+                a.five_w_h_summary       = $five_w_h_summary,
+                a.interview_focus_areas  = $interview_focus_areas,
+                a.source                 = 'llm'
+            MERGE (u)-[:HAS_ASSESSMENT]->(a)
+            """,
+            {
+                "user_id": user_id,
+                "overall_signal": assessment.overall_signal,
+                "seniority_assessment": assessment.seniority_assessment,
+                "depth_vs_breadth": assessment.depth_vs_breadth,
+                "ownership_signals": _json.dumps(assessment.ownership_signals),
+                "red_flags": _json.dumps(assessment.red_flags),
+                "inflated_skills": _json.dumps(assessment.inflated_skills),
+                "genuine_strengths": _json.dumps(assessment.genuine_strengths),
+                "honest_summary": assessment.honest_summary,
+                "candidate_identity": getattr(assessment, "candidate_identity", ""),
+                "five_w_h_summary": _json.dumps(getattr(assessment, "five_w_h_summary", {})),
+                "interview_focus_areas": _json.dumps(assessment.interview_focus_areas),
+            },
+        )
 
     async def _ingest_patterns(self, user_id: str, patterns: list) -> None:
         for pattern in patterns:

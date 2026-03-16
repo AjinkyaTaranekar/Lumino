@@ -224,7 +224,10 @@ class GraphEditService:
                 SET fam.source = 'user_edit'
                 MERGE (cat)-[:HAS_SKILL_FAMILY]->(fam)
                 MERGE (s:Skill {name: $name, user_id: $entity_id})
-                SET s.years = $years, s.level = $level, s.source = 'user_edit'
+                SET s.years             = $years,
+                    s.level             = $level,
+                    s.evidence_strength = $evidence_strength,
+                    s.source            = 'user_edit'
                 MERGE (fam)-[:HAS_SKILL]->(s)
                 """,
                 {
@@ -233,6 +236,7 @@ class GraphEditService:
                     "name": name,
                     "years": spec.get("years"),
                     "level": spec.get("level"),
+                    "evidence_strength": spec.get("evidence_strength"),
                 },
             )
         elif label == "Domain" and entity_type == "user":
@@ -264,13 +268,18 @@ class GraphEditService:
                 MERGE (cat:ProjectCategory {name: 'Projects', user_id: $entity_id})
                 MERGE (u)-[:HAS_PROJECT_CATEGORY]->(cat)
                 MERGE (p:Project {name: $name, user_id: $entity_id})
-                SET p.description = $description, p.source = 'user_edit'
+                SET p.description          = $description,
+                    p.contribution_type    = $contribution_type,
+                    p.has_measurable_impact = $has_measurable_impact,
+                    p.source               = 'user_edit'
                 MERGE (cat)-[:HAS_PROJECT]->(p)
                 """,
                 {
                     "entity_id": entity_id,
                     "name": name,
                     "description": spec.get("description", ""),
+                    "contribution_type": spec.get("contribution_type"),
+                    "has_measurable_impact": spec.get("has_measurable_impact", False),
                 },
             )
         else:
@@ -310,7 +319,7 @@ class GraphEditService:
             )
 
     async def _add_edge(self, entity_type: str, entity_id: str, edge_spec: dict) -> None:
-        """Parse 'Type:name' refs and MERGE the edge between them."""
+        """Parse 'Type:name' refs, MERGE the edge, and write any 5W+H properties onto it."""
         def parse_ref(ref: str) -> tuple[str | None, str]:
             if ":" in ref:
                 label, name = ref.split(":", 1)
@@ -325,14 +334,31 @@ class GraphEditService:
         from_filter = f":{from_label}" if from_label else ""
         to_filter = f":{to_label}" if to_label else ""
 
-        await self.neo4j.run_write(
-            f"""
-            MATCH (a{from_filter} {{name: $from_name, {id_key}: $entity_id}})
-            MATCH (b{to_filter} {{name: $to_name, {id_key}: $entity_id}})
-            MERGE (a)-[:{rel_type}]->(b)
-            """,
-            {"from_name": from_name, "to_name": to_name, "entity_id": entity_id},
-        )
+        # Collect 5W+H edge properties (everything except structural keys)
+        edge_props = {
+            k: v for k, v in edge_spec.items()
+            if k not in ("from", "to", "rel") and v is not None
+        }
+
+        if edge_props:
+            await self.neo4j.run_write(
+                f"""
+                MATCH (a{from_filter} {{name: $from_name, {id_key}: $entity_id}})
+                MATCH (b{to_filter} {{name: $to_name, {id_key}: $entity_id}})
+                MERGE (a)-[r:{rel_type}]->(b)
+                SET r += $props
+                """,
+                {"from_name": from_name, "to_name": to_name, "entity_id": entity_id, "props": edge_props},
+            )
+        else:
+            await self.neo4j.run_write(
+                f"""
+                MATCH (a{from_filter} {{name: $from_name, {id_key}: $entity_id}})
+                MATCH (b{to_filter} {{name: $to_name, {id_key}: $entity_id}})
+                MERGE (a)-[:{rel_type}]->(b)
+                """,
+                {"from_name": from_name, "to_name": to_name, "entity_id": entity_id},
+            )
 
     async def _get_session(self, session_id: str) -> dict:
         row = await self.sqlite.fetchone(

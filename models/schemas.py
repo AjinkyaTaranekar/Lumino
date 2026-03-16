@@ -27,19 +27,84 @@ class ExtractedSkill(BaseModel):
     )
     years: Optional[float] = Field(default=None, description="Years of experience, null if unknown")
     level: Optional[Literal["beginner", "intermediate", "advanced", "expert"]] = Field(
-        default=None, description="Proficiency level inferred from context"
+        default=None, description="Proficiency level inferred from context — be conservative, not generous"
+    )
+    evidence_strength: Optional[Literal["claimed_only", "mentioned_once", "project_backed", "multiple_productions"]] = Field(
+        default=None,
+        description=(
+            "How well evidenced is this skill? "
+            "'claimed_only' = listed as skill but no project evidence; "
+            "'mentioned_once' = appears in one project/role but superficially; "
+            "'project_backed' = has at least one concrete project with this skill; "
+            "'multiple_productions' = demonstrated across multiple real projects/roles"
+        )
+    )
+
+
+class SkillUsage(BaseModel):
+    """
+    Rich 5W+H capture of a skill used in a specific project context.
+    This enables graph-to-graph matching beyond simple name matching.
+    """
+    name: str = Field(description="Canonical skill name used in this project, e.g. 'Python', 'React'")
+    what: Optional[str] = Field(
+        default=None,
+        description="WHAT was built or accomplished using this skill in this project. Be specific."
+    )
+    how: Optional[str] = Field(
+        default=None,
+        description=(
+            "HOW this skill was applied — specific patterns, techniques, frameworks, or approaches used. "
+            "E.g. 'Used async/await patterns with connection pooling to handle concurrent DB queries'"
+        )
+    )
+    why: Optional[str] = Field(
+        default=None,
+        description="WHY this skill was chosen or what problem it solved in this context."
+    )
+    scale: Optional[str] = Field(
+        default=None,
+        description="Scale or scope: users, data volume, requests/sec, team size, revenue — whatever is relevant."
+    )
+    outcome: Optional[str] = Field(
+        default=None,
+        description="Measurable outcome or impact from using this skill. Null if not mentioned."
+    )
+    # Computed summary for backwards-compat and quick display
+    context: Optional[str] = Field(
+        default=None,
+        description=(
+            "Single-sentence summary combining the most important 5W+H signals. "
+            "Auto-generate from the other fields if not provided. "
+            "E.g. 'Built async payment API (FastAPI) handling 10k req/s, reducing latency by 40%'"
+        )
     )
 
 
 class ExtractedProject(BaseModel):
     name: str = Field(description="Project name")
-    description: str = Field(description="What the project does and its impact")
-    skills_demonstrated: List[str] = Field(
-        description="Skill names directly used in this project"
+    description: str = Field(
+        description=(
+            "Rich description covering: (1) what the project does, (2) your specific contribution "
+            "vs team contribution, (3) scale or impact (users, data volume, team size, revenue), "
+            "(4) key technical challenges solved. Be specific and quantify where possible. "
+            "Do NOT embellish — capture only what is stated."
+        )
+    )
+    skills_demonstrated: List[SkillUsage] = Field(
+        description="Skills directly used in this project, each with context on HOW it was applied"
     )
     domain: Optional[str] = Field(
         default=None,
         description="Domain this project belongs to, e.g. 'FinTech', 'Healthcare'"
+    )
+    contribution_type: Optional[Literal["sole_engineer", "tech_lead", "senior_contributor", "team_member", "unclear"]] = Field(
+        default=None,
+        description="What was the person's actual role/ownership level on this project?"
+    )
+    has_measurable_impact: bool = Field(
+        default=False,
+        description="True only if the description contains at least one concrete metric or measurable outcome"
     )
 
 
@@ -66,6 +131,24 @@ class ExtractedExperience(BaseModel):
         default=None, description="Duration in years, null if unknown"
     )
     description: Optional[str] = Field(default=None, description="Role description")
+    accomplishments: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Concrete, specific accomplishments from this role. Each must name what was done, "
+            "how it was done, and ideally a measurable outcome or scale. "
+            "E.g. 'Reduced API latency by 40% by migrating from REST polling to WebSocket streaming for 50k daily users'. "
+            "If the profile is vague, capture exactly what is stated without embellishing."
+        )
+    )
+    contribution_type: Optional[Literal["sole_engineer", "tech_lead", "senior_contributor", "team_member", "unclear"]] = Field(
+        default=None,
+        description=(
+            "What was their actual role in this experience? "
+            "'sole_engineer' = built it alone; 'tech_lead' = led a team; "
+            "'senior_contributor' = senior IC on a team; 'team_member' = one of many contributors; "
+            "'unclear' = cannot determine from profile"
+        )
+    )
 
 
 class ExtractedPreference(BaseModel):
@@ -90,6 +173,163 @@ class ExtractedPattern(BaseModel):
     )
 
 
+class CriticalAssessment(BaseModel):
+    """
+    Brutally honest assessment of the candidate from a recruiter/engineering manager lens.
+    This is NOT flattery — it is a calibrated, evidence-based evaluation.
+    """
+    overall_signal: Literal["strong", "moderate", "weak", "misleading"] = Field(
+        description=(
+            "Overall signal quality of this profile. "
+            "'strong' = concrete evidence, real impact, clearly owned work; "
+            "'moderate' = some evidence but gaps or vagueness; "
+            "'weak' = mostly vague, no quantified impact, buzzword-heavy; "
+            "'misleading' = claims inconsistent with or unsupported by evidence"
+        )
+    )
+    seniority_assessment: Literal["junior", "mid", "senior", "staff_plus", "unclear"] = Field(
+        description=(
+            "Honest seniority level based on evidence, NOT claimed title. "
+            "Assess ownership, scope of impact, and technical depth actually demonstrated."
+        )
+    )
+    depth_vs_breadth: Literal["deep_specialist", "strong_generalist", "shallow_generalist", "unclear"] = Field(
+        description=(
+            "'deep_specialist' = strong depth in 1-2 areas with production evidence; "
+            "'strong_generalist' = solid across multiple areas with real projects; "
+            "'shallow_generalist' = many skills listed but none well-evidenced; "
+            "'unclear' = cannot determine"
+        )
+    )
+    ownership_signals: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Concrete signals of individual ownership and impact. "
+            "E.g. 'Led migration of monolith to microservices serving 2M users', "
+            "'Solo-built the entire data pipeline from scratch'. "
+            "Only include if clearly stated in the profile."
+        )
+    )
+    red_flags: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Specific concerns a recruiter or EM would have. Be specific and blunt. "
+            "E.g. 'Claims 5 years Python but all projects are tutorial-level CRUD apps', "
+            "'3 jobs in 18 months with no explanation', "
+            "'All project descriptions are vague: no metrics, no ownership clarity', "
+            "'Skill list reads like a keyword dump — 15+ technologies with no depth evidence'"
+        )
+    )
+    inflated_skills: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Skills where the claimed level is higher than what the evidence supports. "
+            "E.g. 'Kubernetes: claims expert but only mentioned in passing once', "
+            "'Machine Learning: listed but all projects are simple sklearn tutorials'"
+        )
+    )
+    genuine_strengths: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Skills or areas where the profile shows genuine, evidenced strength. "
+            "Only include things actually backed by concrete project/experience evidence."
+        )
+    )
+    honest_summary: str = Field(
+        description=(
+            "A 2-3 sentence brutally honest summary of who this person actually is, "
+            "written as if you're an engineering manager advising a recruiter off the record. "
+            "What can this person actually do? What level are they really at? "
+            "What would worry you about hiring them for a senior role?"
+        )
+    )
+    candidate_identity: str = Field(
+        default="",
+        description=(
+            "A precise, honest 1-paragraph profile of WHO this person is professionally. "
+            "Cover: their primary technical identity (e.g. 'backend Python engineer'), "
+            "the domain/industry they are genuinely experienced in, "
+            "their actual seniority level, their working style signals, "
+            "and what type of role/team they would thrive or struggle in. "
+            "This is the 'in and out' picture of the candidate before any interview."
+        )
+    )
+    five_w_h_summary: dict = Field(
+        default_factory=dict,
+        description=(
+            "5W+H summary of the candidate: "
+            "{'who': 'who they are professionally', "
+            "'what': 'what they build/do', "
+            "'when': 'timeline/career progression', "
+            "'where': 'domains/companies/contexts they operate in', "
+            "'why': 'what drives them / what problems they solve', "
+            "'how': 'their technical approach and working style'}"
+        )
+    )
+    interview_focus_areas: List[str] = Field(
+        default_factory=list,
+        description=(
+            "The 2-3 most important areas to probe in a technical interview to validate "
+            "or disprove what is claimed. E.g. 'Probe actual Kubernetes production experience — "
+            "ask what they specifically configured and what broke', "
+            "'Ask for the exact architecture of the payment system — the description is vague'"
+        )
+    )
+
+
+class InterpretationFlag(BaseModel):
+    """
+    A single uncertain interpretation made by the LLM during extraction.
+    Each flag = one clarification question to ask the user before finalising the graph.
+    The graph node/edge it refers to is identified by `field` in the format Type:name:property.
+    """
+    field: str = Field(
+        description=(
+            "Dot-path to the interpreted field. Format: 'Type:Name:property'. "
+            "Examples: 'Skill:Python:level', 'Project:PaymentAPI:contribution_type', "
+            "'Experience:Senior Engineer at Stripe:accomplishments', 'Domain:FinTech:depth'"
+        )
+    )
+    raw_text: str = Field(
+        description="The exact text snippet from the resume that led to this interpretation. Quote it directly."
+    )
+    interpreted_as: str = Field(
+        description="What the LLM decided this means. Be specific: e.g. 'level=advanced, years=3'"
+    )
+    confidence: Literal["high", "medium", "low"] = Field(
+        description=(
+            "'high' = clearly stated; 'medium' = inferred from context; "
+            "'low' = assumed/guessed with minimal evidence"
+        )
+    )
+    ambiguity_reason: str = Field(
+        description=(
+            "Why is this uncertain? E.g. 'Years not stated — inferred from job timeline', "
+            "'Contribution unclear — resume uses we/our throughout', "
+            "'Level inferred from seniority of role, not from technical depth described'"
+        )
+    )
+    clarification_question: str = Field(
+        description=(
+            "The exact natural-language question to show the user to resolve this. "
+            "Be specific and reference their actual resume content. "
+            "E.g. 'Your resume says \"built a payment API\" — were you the sole engineer on this, "
+            "or part of a larger team? What was your specific contribution?'"
+        )
+    )
+    resolution_impact: Literal["critical", "important", "minor"] = Field(
+        description=(
+            "'critical' = directly affects job matching (skill level, years, domain depth); "
+            "'important' = affects context quality (contribution type, project scale); "
+            "'minor' = enrichment only (preferences, patterns)"
+        )
+    )
+    suggested_options: Optional[List[str]] = Field(
+        default=None,
+        description="If this is a multiple-choice clarification, provide the options. Leave null for open-ended."
+    )
+
+
 class UserProfileExtraction(BaseModel):
     """Top-level schema for Gemini user profile extraction. Passed as response_schema."""
     skills: List[ExtractedSkill] = Field(default_factory=list)
@@ -98,6 +338,19 @@ class UserProfileExtraction(BaseModel):
     experiences: List[ExtractedExperience] = Field(default_factory=list)
     preferences: List[ExtractedPreference] = Field(default_factory=list)
     patterns: List[ExtractedPattern] = Field(default_factory=list)
+    assessment: Optional[CriticalAssessment] = Field(
+        default=None,
+        description="Critical recruiter/EM lens assessment of the entire profile"
+    )
+    interpretation_flags: List[InterpretationFlag] = Field(
+        default_factory=list,
+        description=(
+            "All uncertain interpretations made during extraction that require user clarification. "
+            "Generate a flag for EVERY field where confidence is medium or low, "
+            "and for any inference that materially affects matching (skill levels, years, contribution types). "
+            "Order by resolution_impact DESC (critical first)."
+        )
+    )
 
 
 class ExtractedJobSkillRequirement(BaseModel):
@@ -249,7 +502,14 @@ class GraphMutation(BaseModel):
     add_nodes: List[dict] = Field(default_factory=list)
     update_nodes: List[dict] = Field(default_factory=list)
     remove_nodes: List[str] = Field(default_factory=list, description="Node names to remove (e.g. 'GraphQL' or 'Skill:GraphQL')")
-    add_edges: List[dict] = Field(default_factory=list, description="Each dict: {from: 'Type:name', rel: 'REL_TYPE', to: 'Type:name'}")
+    add_edges: List[dict] = Field(
+        default_factory=list,
+        description=(
+            "Each dict: {from: 'Type:name', rel: 'REL_TYPE', to: 'Type:name', context: '...'}. "
+            "For DEMONSTRATES_SKILL edges, always include a 'context' field describing HOW the skill "
+            "was used in that project (approach, tools, outcome)."
+        )
+    )
 
 
 class GraphMutationProposal(BaseModel):
@@ -315,3 +575,56 @@ class RollbackResponse(BaseModel):
     entity_type: str
     entity_id: str
     status: str = "restored"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CLARIFICATION / DIGITAL TWIN VERIFICATION SCHEMAS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class ClarificationQuestion(BaseModel):
+    """A single pending clarification question shown to the user."""
+    flag_id: str
+    field: str                        # e.g. "Skill:Python:level"
+    raw_text: str                     # the resume snippet that caused the ambiguity
+    interpreted_as: str               # what the LLM assumed
+    confidence: str                   # high / medium / low
+    ambiguity_reason: str
+    clarification_question: str       # question to show the user
+    resolution_impact: str            # critical / important / minor
+    suggested_options: Optional[List[str]] = None
+    status: str = "pending"           # pending / confirmed / corrected / skipped
+
+
+class ClarificationsResponse(BaseModel):
+    user_id: str
+    total_flags: int
+    pending: int
+    resolved: int
+    questions: List[ClarificationQuestion]
+    graph_verified: bool              # True once all critical flags are resolved
+
+
+class ResolveFlagRequest(BaseModel):
+    is_correct: bool = Field(
+        description="True if the LLM's interpretation was correct. False if the user is correcting it."
+    )
+    user_answer: str = Field(
+        description="The user's answer in their own words."
+    )
+    correction: Optional[str] = Field(
+        default=None,
+        description=(
+            "If is_correct=False, provide the correct value. "
+            "For multiple-choice fields use the exact option. "
+            "For text fields write the corrected value."
+        )
+    )
+
+
+class ResolveFlagResponse(BaseModel):
+    flag_id: str
+    status: str                        # confirmed / corrected
+    graph_updated: bool
+    updated_field: Optional[str] = None
+    updated_value: Optional[str] = None
+    remaining_critical: int            # how many critical flags still pending

@@ -47,9 +47,10 @@ class LLMEditAgent:
         graph_summary = await self._get_graph_summary(entity_type, entity_id)
         system_msg = self._build_system_prompt(graph_summary)
         opening_user_msg = (
-            "I want to review and improve my knowledge graph profile. "
-            "Please start by asking me a focused First Principles question about my "
-            "weakest or least-evidenced skill or experience area."
+            "I want to build out my professional knowledge graph so it accurately reflects "
+            "what I can actually do — not just what looks good on paper. "
+            "Please start by asking me a specific, deep question about the area of my profile "
+            "that has the weakest evidence or seems most vague. Be direct."
         )
 
         raw_json = await self._call_with_retry(
@@ -97,18 +98,20 @@ class LLMEditAgent:
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     async def _get_graph_summary(self, entity_type: str, entity_id: str) -> dict:
-        """Fetch a compact summary of the entity's current graph state for the system prompt."""
+        """Fetch a rich 5W+H graph summary for the system prompt."""
         if entity_type == "user":
             skills = await self.neo4j.run_query(
                 """
                 MATCH (u:User {id: $id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
                       -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
-                OPTIONAL MATCH (p:Project {user_id: $id})-[:DEMONSTRATES_SKILL]->(s)
+                OPTIONAL MATCH (p:Project {user_id: $id})-[r:DEMONSTRATES_SKILL]->(s)
                 RETURN s.name AS name,
                        coalesce(s.years, 0) AS years,
                        coalesce(s.level, 'unknown') AS level,
-                       count(p) AS projects
-                ORDER BY projects ASC, years ASC
+                       coalesce(s.evidence_strength, 'unknown') AS evidence_strength,
+                       count(p) AS project_count,
+                       collect(CASE WHEN r.context IS NOT NULL THEN r.context ELSE null END)[0..3] AS usage_contexts
+                ORDER BY project_count ASC, years ASC
                 """,
                 {"id": entity_id},
             )
@@ -127,7 +130,39 @@ class LLMEditAgent:
                 """
                 MATCH (u:User {id: $id})-[:HAS_PROJECT_CATEGORY]->(:ProjectCategory)
                       -[:HAS_PROJECT]->(p:Project)
-                RETURN p.name AS name, p.description AS description
+                OPTIONAL MATCH (p)-[r:DEMONSTRATES_SKILL]->(s:Skill)
+                RETURN p.name AS name,
+                       p.description AS description,
+                       coalesce(p.contribution_type, 'unclear') AS contribution_type,
+                       coalesce(p.has_measurable_impact, false) AS has_measurable_impact,
+                       collect({skill: s.name, context: r.context, how: r.how, outcome: r.outcome}) AS skill_usages
+                """,
+                {"id": entity_id},
+            )
+            experiences = await self.neo4j.run_query(
+                """
+                MATCH (u:User {id: $id})-[:HAS_EXPERIENCE_CATEGORY]->(:ExperienceCategory)
+                      -[:HAS_EXPERIENCE]->(e:Experience)
+                RETURN e.title AS title,
+                       e.company AS company,
+                       coalesce(e.duration_years, 0) AS duration_years,
+                       e.description AS description,
+                       e.accomplishments AS accomplishments,
+                       coalesce(e.contribution_type, 'unclear') AS contribution_type
+                ORDER BY e.duration_years DESC
+                """,
+                {"id": entity_id},
+            )
+            assessment = await self.neo4j.run_query(
+                """
+                MATCH (u:User {id: $id})-[:HAS_ASSESSMENT]->(a:CriticalAssessment)
+                RETURN a.overall_signal AS overall_signal,
+                       a.seniority_assessment AS seniority_assessment,
+                       a.candidate_identity AS candidate_identity,
+                       a.honest_summary AS honest_summary,
+                       a.red_flags AS red_flags,
+                       a.inflated_skills AS inflated_skills,
+                       a.interview_focus_areas AS interview_focus_areas
                 """,
                 {"id": entity_id},
             )
@@ -137,6 +172,8 @@ class LLMEditAgent:
                 "skills": skills,
                 "domains": domains,
                 "projects": projects,
+                "experiences": experiences,
+                "assessment": assessment[0] if assessment else None,
             }
         else:
             requirements = await self.neo4j.run_query(
@@ -155,40 +192,100 @@ class LLMEditAgent:
             }
 
     def _build_system_prompt(self, graph_summary: dict) -> str:
-        """Build the system prompt for the First Principles interview."""
-        # Find the weakest area (fewest projects + lowest years) for user profiles
+        """Build the deep 5W+H interview system prompt."""
+        assessment = graph_summary.get("assessment") or {}
+        candidate_identity = assessment.get("candidate_identity", "")
+        honest_summary = assessment.get("honest_summary", "")
+        red_flags = assessment.get("red_flags", "[]")
+        inflated_skills = assessment.get("inflated_skills", "[]")
+        interview_focus_areas = assessment.get("interview_focus_areas", "[]")
+
+        # Find weakest-evidenced skill to anchor first question
+        skills = graph_summary.get("skills", [])
         weakest_note = ""
-        if graph_summary.get("skills"):
-            skills = graph_summary["skills"]
-            if skills:
-                weakest = skills[0]  # already sorted ASC by projects, years in query
-                weakest_note = (
-                    f"\nWeakest evidenced skill: '{weakest['name']}' "
-                    f"({weakest['years']} yrs, {weakest['projects']} supporting projects). "
-                    "Start your interview here."
-                )
+        probe_targets = []
+        if skills:
+            weakest = skills[0]
+            evidence = weakest.get("evidence_strength", "unknown")
+            weakest_note = (
+                f"\nWEAKEST SKILL: '{weakest['name']}' "
+                f"(claimed {weakest['years']} yrs / {weakest['level']}, "
+                f"evidence_strength={evidence}, backed by {weakest.get('project_count', 0)} project(s))."
+            )
+            # Collect skills where evidence doesn't match claimed level
+            probe_targets = [
+                s for s in skills
+                if s.get("evidence_strength") in ("claimed_only", "mentioned_once", "unknown")
+                or (s.get("level") in ("advanced", "expert") and s.get("project_count", 0) < 2)
+            ]
+
+        probe_list = "\n".join(
+            f"  - {s['name']}: claimed {s['level']}/{s['years']}yrs but evidence_strength={s.get('evidence_strength','?')}"
+            for s in probe_targets[:5]
+        )
 
         return (
-            "You are an expert career coach conducting a First Principles interview to deeply "
-            "understand a professional's skills and experience. Your goal is to ask one focused, "
-            "probing question per turn that uncovers concrete evidence for skills and experiences.\n\n"
+            "You are a senior engineering manager AND technical recruiter conducting a deep-dive "
+            "5W+H profiling interview. Your dual goal:\n"
+            "  1. BUILD a rich knowledge graph (mutations) from what the person tells you\n"
+            "  2. CRITICALLY ASSESS whether their claims are genuinely backed by evidence\n\n"
+            "You already have an initial profile assessment:\n"
+            f"CANDIDATE IDENTITY: {candidate_identity or '(not yet assessed)'}\n"
+            f"HONEST SUMMARY: {honest_summary or '(not yet assessed)'}\n"
+            f"RED FLAGS: {red_flags}\n"
+            f"INFLATED/UNSUPPORTED SKILLS: {inflated_skills}\n"
+            f"PRIORITY PROBE AREAS: {interview_focus_areas}\n"
+            f"{weakest_note}\n"
+            + (f"\nSKILLS TO PROBE (low evidence vs claimed level):\n{probe_list}\n" if probe_list else "")
+            + "\n"
+            "INTERVIEW PHILOSOPHY — 5W+H FOR EVERY ANSWER:\n"
+            "  WHO:   Were you the sole owner? part of a team? what was your specific role?\n"
+            "  WHAT:  What exactly did you build/design/ship? Be precise.\n"
+            "  WHEN:  When did this happen? How long did it take?\n"
+            "  WHERE: What company/team/context? What scale/environment?\n"
+            "  WHY:   Why did you make this technical choice? What problem did it solve?\n"
+            "  HOW:   What specific technique/architecture/pattern did you use?\n\n"
             "INTERVIEW RULES:\n"
-            "1. Ask exactly ONE focused question per response — never multiple questions\n"
-            "2. Start with the weakest/least-evidenced area (fewest supporting projects, lowest years)\n"
-            "3. Ask 'walk me through...' or 'explain how you used X in Y context' style questions\n"
-            "4. From the user's answer, extract concrete mutations (new skills, updated years, new projects)\n"
-            "5. If the answer warrants no graph changes, leave all mutation lists empty\n"
-            "6. ALWAYS respond with ONLY valid JSON — no text before or after\n\n"
+            "1. Ask exactly ONE focused, probing question per turn — never multiple questions\n"
+            "2. PRIORITIZE probing skills with low evidence vs claimed level — these are the gaps\n"
+            "3. When the profile is vague, ask for specifics: exact numbers, architecture, what broke\n"
+            "4. Do NOT accept generic answers — if they say 'I used Python', ask 'what specifically "
+            "   did you build with Python, at what scale, and what was the hardest part?'\n"
+            "5. Look for ownership signals: 'we built' vs 'I built', 'contributed to' vs 'led'\n"
+            "6. If a skill claim seems inflated, probe it directly: 'You list Kubernetes as expert — "
+            "   walk me through the last production Kubernetes issue you debugged personally'\n"
+            "7. After each answer, extract 5W+H mutations — update edge context with HOW/WHAT/WHY/OUTCOME\n"
+            "8. Update evidence_strength on skills based on what they tell you\n"
+            "9. If answer reveals a skill is lower than claimed, update the level downward\n"
+            "10. NEVER accept vague answers — if the user says 'I worked on a payment system', "
+            "ask: 'What exactly did YOU build in that system? Walk me through the specific component.'\n"
+            "11. Always follow impact: 'What metric improved? What was the before/after?'\n"
+            "12. Always probe ownership: 'When you say we/our/the team, what was YOUR specific role?'\n"
+            "13. Dig into failures: 'What went wrong with this? What would you do differently?'\n"
+            "14. Probe motivation: 'Why this approach and not [alternative]?'\n"
+            "15. Do NOT move to a new topic until you have WHO, WHAT, HOW, WHY, and an OUTCOME\n"
+            "16. Minimum 3 exchanges on a topic before switching\n"
+            "17. ALWAYS respond with ONLY valid JSON — no text before or after\n\n"
             "CURRENT PROFILE STATE:\n"
-            f"{json.dumps(graph_summary, indent=2)}"
-            f"{weakest_note}\n\n"
+            f"{json.dumps(graph_summary, indent=2)}\n\n"
             "RESPONSE SCHEMA (return ONLY valid JSON matching this):\n"
             f"{_PROPOSAL_SCHEMA}\n\n"
             "Node formats for add_nodes:\n"
-            "  Skill:   {\"label\": \"Skill\", \"name\": \"...\", \"years\": 2, \"level\": \"intermediate\", \"family\": \"Web Frameworks\"}\n"
-            "  Domain:  {\"label\": \"Domain\", \"name\": \"...\", \"years_experience\": 2, \"depth\": \"moderate\", \"family\": \"FinTech\"}\n"
-            "  Project: {\"label\": \"Project\", \"name\": \"...\", \"description\": \"...\"}\n"
-            "Edge format for add_edges: {\"from\": \"Project:Name\", \"rel\": \"DEMONSTRATES_SKILL\", \"to\": \"Skill:Name\"}\n"
+            "  Skill:   {\"label\": \"Skill\", \"name\": \"...\", \"years\": 2, \"level\": \"intermediate\", "
+            "\"family\": \"Web Frameworks\", \"evidence_strength\": \"project_backed\"}\n"
+            "  Domain:  {\"label\": \"Domain\", \"name\": \"...\", \"years_experience\": 2, "
+            "\"depth\": \"moderate\", \"family\": \"FinTech\"}\n"
+            "  Project: {\"label\": \"Project\", \"name\": \"...\", \"description\": \"...\", "
+            "\"contribution_type\": \"tech_lead\", \"has_measurable_impact\": true}\n"
+            "Edge format — ALWAYS include 5W+H context on DEMONSTRATES_SKILL edges:\n"
+            "  {\"from\": \"Project:Name\", \"rel\": \"DEMONSTRATES_SKILL\", \"to\": \"Skill:Name\",\n"
+            "   \"context\": \"one-sentence summary\",\n"
+            "   \"what\": \"what was built\", \"how\": \"specific technique\",\n"
+            "   \"why\": \"why this skill was used\", \"scale\": \"10k users/day\",\n"
+            "   \"outcome\": \"reduced latency by 40%\"}\n"
+            "update_nodes example for correcting inflated skill:\n"
+            "  {\"label\": \"Skill\", \"name\": \"Kubernetes\", \"level\": \"intermediate\", "
+            "\"evidence_strength\": \"mentioned_once\"}\n"
             "remove_nodes: list of strings like \"Skill:GraphQL\" or just \"GraphQL\""
         )
 

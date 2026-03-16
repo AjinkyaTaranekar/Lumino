@@ -87,6 +87,19 @@ export const api = {
   // Stats
   getUserStats:     (userId)               => get(`/users/${userId}/graph-stats`),
 
+  // Clarification / Digital Twin Verification
+  getClarifications:  (userId)             => get(`/users/${userId}/clarifications`),
+  resolveFlag: (userId, flagId, isCorrect, userAnswer, correction) =>
+    post(`/users/${userId}/clarifications/${flagId}/resolve`, {
+      is_correct: isCorrect,
+      user_answer: userAnswer,
+      correction: correction || null,
+    }),
+  skipFlag: (userId, flagId) => post(`/users/${userId}/clarifications/${flagId}/skip`, {}),
+  interpretFlag: (userId, flagId, answer) =>
+    post(`/users/${userId}/clarifications/${flagId}/interpret`, { answer }),
+  describeUser: (userId) => get(`/users/${userId}/describe`),
+
   // Admin — delete
   deleteUser: (userId) => del(`/users/${userId}`),
   deleteJob:  (jobId)  => del(`/jobs/${jobId}`),

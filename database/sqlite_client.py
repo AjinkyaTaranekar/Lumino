@@ -48,6 +48,27 @@ class SQLiteClient:
                     snapshot_json TEXT NOT NULL,
                     created_at    TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS extraction_flags (
+                    flag_id               TEXT PRIMARY KEY,
+                    user_id               TEXT NOT NULL,
+                    field                 TEXT NOT NULL,
+                    raw_text              TEXT NOT NULL,
+                    interpreted_as        TEXT NOT NULL,
+                    confidence            TEXT NOT NULL,
+                    ambiguity_reason      TEXT NOT NULL,
+                    clarification_question TEXT NOT NULL,
+                    resolution_impact     TEXT NOT NULL,
+                    suggested_options     TEXT,
+                    status                TEXT NOT NULL DEFAULT 'pending',
+                    user_answer           TEXT,
+                    correction_applied    TEXT,
+                    created_at            TEXT NOT NULL,
+                    resolved_at           TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_extraction_flags_user
+                    ON extraction_flags(user_id, status);
                 """
             )
             await db.commit()

@@ -32,6 +32,7 @@ from models.schemas import (
     BatchCandidateResponse,
     BatchMatchResponse,
     CheckpointRequest,
+    ClarificationsResponse,
     EditSessionMessage,
     EditSessionResponse,
     GraphMutationProposal,
@@ -40,11 +41,14 @@ from models.schemas import (
     IngestUserRequest,
     MatchResult,
     RejectMutationsRequest,
+    ResolveFlagRequest,
+    ResolveFlagResponse,
     RollbackResponse,
     SendMessageRequest,
     StartEditRequest,
 )
 from services.checkpoint_service import CheckpointService
+from services.clarification_service import ClarificationService
 from services.graph_edit_service import GraphEditService
 from services.ingestion import IngestionService
 from services.llm_extraction import LLMExtractionService
@@ -69,17 +73,22 @@ def get_sqlite_db() -> SQLiteClient:
 async def ingest_user(
     request: IngestUserRequest,
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Extract structured entities from raw profile text and write to Neo4j.
 
     Pipeline:
     1. Groq (llama-3.3-70b) extracts skills, domains, projects, experiences,
-       preferences, and problem-solving patterns as structured JSON.
+       critical assessment, and interpretation_flags for every uncertain inference.
     2. The 4-level hierarchy is written to Neo4j (User → Category → Family → Leaf).
+    3. Interpretation flags are stored in SQLite for the clarification workflow.
+
+    The response includes `clarification_questions` — critical questions the user
+    should answer to verify their digital twin graph before job matching.
     """
     try:
-        service = IngestionService(db)
+        service = IngestionService(db, sqlite)
         result = await service.ingest_user(request.user_id, request.profile_text)
         return {"status": "success", **result}
     except Exception as e:
@@ -121,10 +130,11 @@ async def upload_user_pdf(
     user_id: str = Form(...),
     file: UploadFile = File(...),
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Accept a PDF resume, extract text server-side via pypdf, then run the
-    standard LLM ingestion pipeline.
+    standard LLM ingestion pipeline (extraction + flags + graph write).
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
@@ -132,7 +142,7 @@ async def upload_user_pdf(
         profile_text = await _extract_pdf_text(file)
         if not profile_text.strip():
             raise HTTPException(status_code=422, detail="Could not extract text from PDF")
-        service = IngestionService(db)
+        service = IngestionService(db, sqlite)
         result = await service.ingest_user(user_id, profile_text)
         return {"status": "success", **result}
     except HTTPException:
@@ -938,6 +948,166 @@ async def reject_job_mutations(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         logger.exception(f"Reject job mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Clarification / Digital Twin Verification ──────────────────────────────────
+
+@router.get(
+    "/users/{user_id}/clarifications",
+    response_model=ClarificationsResponse,
+    tags=["clarification"],
+    summary="Get pending clarification questions for a user's profile",
+)
+async def get_clarifications(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Returns all interpretation flags generated during resume extraction,
+    ordered by impact (critical first).
+
+    Each flag includes:
+    - The exact text from the resume that was interpreted
+    - What the LLM decided it means
+    - Why there is uncertainty
+    - A specific clarification question to ask the user
+    - Suggested answer options where applicable
+
+    `graph_verified` becomes True when all critical flags are resolved.
+    Resolve flags via POST /users/{user_id}/clarifications/{flag_id}/resolve
+    """
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.get_clarifications(user_id)
+    except Exception as e:
+        logger.exception(f"Get clarifications failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/resolve",
+    response_model=ResolveFlagResponse,
+    tags=["clarification"],
+    summary="Resolve a clarification question — confirm or correct the LLM's interpretation",
+)
+async def resolve_clarification(
+    user_id: str,
+    flag_id: str,
+    request: ResolveFlagRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Confirm or correct a single interpretation flag.
+
+    If `is_correct=true`: the LLM's interpretation is confirmed and the flag is marked verified.
+
+    If `is_correct=false`: provide a `correction` value and the graph node will be
+    patched immediately. For example, if the LLM set skill level='expert' but the
+    user corrects it to 'intermediate', the Skill node is updated and weights recomputed.
+
+    `remaining_critical` in the response tells you how many critical flags are still pending.
+    When it reaches 0, the graph is a verified digital twin of the user.
+    """
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.resolve_flag(
+            user_id=user_id,
+            flag_id=flag_id,
+            is_correct=request.is_correct,
+            user_answer=request.user_answer,
+            correction=request.correction,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Resolve clarification failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/skip",
+    tags=["clarification"],
+    summary="Skip a clarification question",
+)
+async def skip_clarification(
+    user_id: str,
+    flag_id: str,
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """Mark a flag as skipped. The LLM's interpretation remains in the graph as-is."""
+    try:
+        svc = ClarificationService(db, sqlite)
+        await svc.skip_flag(user_id, flag_id)
+        return {"status": "skipped", "flag_id": flag_id}
+    except Exception as e:
+        logger.exception(f"Skip clarification failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/interpret",
+    tags=["clarification"],
+    summary="Interpret a natural-language answer without saving — show to user for confirmation",
+)
+async def interpret_clarification_answer(
+    user_id: str,
+    flag_id: str,
+    request: dict,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Takes the user's natural language answer and returns the LLM's interpretation.
+    Does NOT modify the graph. Call /resolve to save once the user confirms.
+
+    Returns: { interpreted_value, is_complete, needs_clarification, explanation, confidence }
+    """
+    from fastapi import Body
+    answer = request.get("answer", "")
+    if not answer.strip():
+        raise HTTPException(status_code=400, detail="answer is required")
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.interpret_answer(user_id, flag_id, answer)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Interpret answer failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/describe",
+    tags=["profile"],
+    summary="Generate a rich natural-language description of the user from their graph",
+)
+async def describe_user(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Generates a comprehensive, honest natural-language description of the user
+    based on everything in their knowledge graph:
+    - Professional identity and career arc
+    - Genuine strengths with evidence
+    - Domain expertise depth
+    - Honest assessment of seniority level
+    - What roles/teams they are best suited for
+    - What gaps or concerns exist
+
+    Uses the CriticalAssessment node + all skills/projects/domains/experiences.
+    """
+    try:
+        from services.llm_extraction import LLMExtractionService
+        extractor = LLMExtractionService()
+        description = await extractor.describe_user_from_graph(user_id, db)
+        return {"user_id": user_id, **description}
+    except Exception as e:
+        logger.exception(f"Describe user failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

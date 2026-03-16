@@ -69,11 +69,29 @@ export default function EditGraph() {
     try {
       const res = await api.applyMutations('user', session.userId, sessionId, mutations)
       setGraphKey(k => k + 1)   // reload graph
+      const summary = [
+        res.nodes_added    > 0 ? `+${res.nodes_added} nodes`    : null,
+        res.nodes_updated  > 0 ? `~${res.nodes_updated} updated` : null,
+        res.nodes_removed  > 0 ? `-${res.nodes_removed} removed` : null,
+        res.edges_added    > 0 ? `+${res.edges_added} edges`     : null,
+      ].filter(Boolean).join(', ')
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `✓ Applied: +${res.nodes_added} nodes, ~${res.nodes_updated} updated, -${res.nodes_removed} removed, +${res.edges_added} edges. Checkpoint saved.`,
+        content: `✓ Applied${summary ? ': ' + summary : ''}. Graph updated.`,
         proposal: null,
       }])
+      // Auto-continue interview — ask the next probing question
+      setLoading(true)
+      try {
+        const next = await api.sendEditMessage('user', session.userId, sessionId,
+          "Those changes are saved. Based on what I've told you so far, what area do you want to dig deeper into next?")
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: next.follow_up_question,
+          proposal: next,
+        }])
+      } catch (_) { /* non-fatal */ }
+      setLoading(false)
     } catch (err) {
       alert(`Failed to apply mutations: ${err.message}`)
     }
