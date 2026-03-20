@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 # Node colors by type
 NODE_TYPE_COLORS: dict[str, str] = {
+    # ── User technical nodes ───────────────────────────────────────────────────
     "User": "#E74C3C",
     "SkillCategory": "#2980B9",
     "SkillFamily": "#5DADE2",
@@ -38,6 +39,14 @@ NODE_TYPE_COLORS: dict[str, str] = {
     "Preference": "#76D7C4",
     "PatternCategory": "#7D6608",
     "ProblemSolvingPattern": "#F9E79F",
+    # ── User human-portrait nodes (digital twin) ───────────────────────────────
+    "Anecdote": "#F1948A",          # warm pink — personal story
+    "Motivation": "#F39C12",        # amber — what drives them
+    "Value": "#E8DAEF",             # soft purple — core beliefs
+    "Goal": "#A9DFBF",              # mint — aspirations
+    "CultureIdentity": "#AED6F1",   # sky blue — how they work
+    "BehavioralInsight": "#FAD7A0", # peach — observed patterns
+    # ── Job nodes ─────────────────────────────────────────────────────────────
     "Job": "#C0392B",
     "JobSkillRequirements": "#2471A3",
     "JobSkillFamily": "#7FB3D3",
@@ -47,6 +56,14 @@ NODE_TYPE_COLORS: dict[str, str] = {
     "JobDomainRequirement": "#DDD0EA",
     "JobCultureRequirements": "#148F77",
     "WorkStyle": "#76D7C4",
+    # ── Job deep-profile nodes (recruiter interview) ───────────────────────────
+    "TeamComposition": "#5D6D7E",   # slate — team structure
+    "RoleContext": "#85929E",       # grey-blue — role context
+    "HiringGoal": "#F0B27A",        # orange — hiring intent
+    "SoftSkillRequirement": "#FAD7A0", # peach — soft skill asks
+    "TeamCultureIdentity": "#A9DFBF",  # mint — team culture
+    "SuccessMetric": "#82E0AA",     # green — what success looks like
+    "InterviewSignal": "#F9E79F",   # yellow — signals to watch
 }
 
 NODE_SIZES: dict[str, int] = {
@@ -57,6 +74,13 @@ NODE_SIZES: dict[str, int] = {
     "Skill": 14, "Domain": 14, "Project": 16,
     "Experience": 14, "Preference": 12,
     "ProblemSolvingPattern": 12,
+    # User human-portrait nodes
+    "Anecdote": 16, "Motivation": 16, "Value": 14,
+    "Goal": 16, "CultureIdentity": 18, "BehavioralInsight": 12,
+    # Job deep-profile nodes
+    "TeamComposition": 16, "RoleContext": 14, "HiringGoal": 14,
+    "SoftSkillRequirement": 14, "TeamCultureIdentity": 16,
+    "SuccessMetric": 14, "InterviewSignal": 12,
 }
 
 DEFAULT_NODE_COLOR = "#BDC3C7"
@@ -68,6 +92,8 @@ _USER_LABEL_FILTER = (
     "-Job|-JobSkillRequirements|-JobSkillFamily|-JobSkillRequirement"
     "|-JobDomainRequirements|-JobDomainFamily|-JobDomainRequirement"
     "|-JobCultureRequirements|-WorkStyle"
+    "|-TeamComposition|-RoleContext|-HiringGoal"
+    "|-SoftSkillRequirement|-TeamCultureIdentity|-SuccessMetric|-InterviewSignal"
 )
 _JOB_LABEL_FILTER = (
     "-User|-SkillCategory|-SkillFamily|-Skill"
@@ -76,6 +102,7 @@ _JOB_LABEL_FILTER = (
     "|-ExperienceCategory|-Experience"
     "|-PreferenceCategory|-Preference"
     "|-PatternCategory|-ProblemSolvingPattern"
+    "|-Anecdote|-Motivation|-Value|-Goal|-CultureIdentity|-BehavioralInsight"
 )
 
 # Types that belong exclusively to the user hierarchy
@@ -87,6 +114,9 @@ USER_NODE_TYPES: frozenset[str] = frozenset({
     "ExperienceCategory", "Experience",
     "PreferenceCategory", "Preference",
     "PatternCategory", "ProblemSolvingPattern",
+    # Digital twin — human portrait nodes
+    "Anecdote", "Motivation", "Value", "Goal",
+    "CultureIdentity", "BehavioralInsight",
 })
 
 # Types that belong exclusively to the job hierarchy
@@ -95,6 +125,10 @@ JOB_NODE_TYPES: frozenset[str] = frozenset({
     "JobSkillRequirements", "JobSkillFamily", "JobSkillRequirement",
     "JobDomainRequirements", "JobDomainFamily", "JobDomainRequirement",
     "JobCultureRequirements", "WorkStyle",
+    # Deep job profile nodes (recruiter interview)
+    "TeamComposition", "RoleContext", "HiringGoal",
+    "SoftSkillRequirement", "TeamCultureIdentity",
+    "SuccessMetric", "InterviewSignal",
 })
 
 
@@ -128,15 +162,24 @@ class VisualizationService:
             node_id = node.get("id", "")
             label = str(node.get("label", ""))[:30]
             node_type = node.get("type", "default")
+            weight = node.get("weight")
+
+            if node_type in ("Skill", "Domain") and weight is not None:
+                size = int(10 + weight * 30)  # maps 0.0→10, 1.0→40
+                years = node.get("years") or node.get("years_experience")
+                level = node.get("level") or node.get("depth") or "n/a"
+                years_str = f"{years} yrs" if years is not None else "n/a yrs"
+                title = f"{label}  ·  {node_type} | {years_str} | {level} | weight: {weight:.2f}"
+            else:
+                size = NODE_SIZES.get(node_type, DEFAULT_NODE_SIZE)
+                title = f"{label}  ·  {node_type}"
 
             G.add_node(
                 node_id,
                 label=label,
-                title=(
-                    f"{label}  ·  {node_type}"
-                ),
+                title=title,
                 color=NODE_TYPE_COLORS.get(node_type, DEFAULT_NODE_COLOR),
-                size=NODE_SIZES.get(node_type, DEFAULT_NODE_SIZE),
+                size=size,
             )
 
         for edge in edges_data:
@@ -195,7 +238,8 @@ class VisualizationService:
         """)
 
         filepath = os.path.join(self.output_dir, f"graph_{user_id}.html")
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
 
         logger.info(
             f"Generated graph for user {user_id}: "
@@ -294,7 +338,8 @@ class VisualizationService:
         """)
 
         filepath = os.path.join(self.output_dir, f"graph_job_{job_id}.html")
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
 
         logger.info(
             f"Generated graph for job {job_id}: "
@@ -422,7 +467,8 @@ class VisualizationService:
         )
 
         # Inject legend before writing
-        net.write_html(filepath)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(net.generate_html())
         self._inject_legend(filepath)
 
         total_nodes = len(user_nodes) + len(job_nodes)
@@ -735,7 +781,11 @@ class VisualizationService:
             RETURN DISTINCT
                 elementId(n) AS id,
                 coalesce(n.name, n.title, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
-                labels(n)[0] AS type
+                labels(n)[0] AS type,
+                n.weight AS weight,
+                n.years AS years,
+                n.level AS level,
+                n.depth AS depth
             """,
             query_params,
         )
@@ -772,7 +822,11 @@ class VisualizationService:
             RETURN
                 elementId(n) AS id,
                 coalesce(n.name, n.title, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
-                labels(n)[0] AS type
+                labels(n)[0] AS type,
+                n.weight AS weight,
+                n.years AS years,
+                n.level AS level,
+                n.depth AS depth
             """,
             query_params,
         )

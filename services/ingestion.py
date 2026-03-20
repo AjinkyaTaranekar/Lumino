@@ -1,29 +1,37 @@
 """
 LLM ingestion orchestrator.
 
-Two-phase pipeline for both users and jobs:
-  Phase 1: Groq extraction → structured JSON (skills, domains, projects, etc.)
-  Phase 2: Write hierarchy → Neo4j (source='llm')
+Three-phase pipeline for users:
+  Phase 1: Groq extraction → structured JSON (skills, domains, projects, experiences,
+           critical assessment, AND interpretation_flags for every uncertain inference)
+  Phase 2: Write hierarchy → Neo4j (source='llm', verified=false on inferred nodes)
+  Phase 3: Store interpretation_flags → SQLite for user clarification workflow
+
+The clarification workflow (via ClarificationService) lets users confirm or correct
+every LLM inference before their graph is treated as a verified digital twin.
 """
 
 import logging
 from database.neo4j_client import Neo4jClient
+from database.sqlite_client import SQLiteClient
 from services.llm_extraction import LLMExtractionService
 from services.llm_ingestion import LLMIngestionService
+from services.clarification_service import ClarificationService
 
 logger = logging.getLogger(__name__)
 
 
 class IngestionService:
-    def __init__(self, neo4j_client: Neo4jClient):
+    def __init__(self, neo4j_client: Neo4jClient, sqlite_client: SQLiteClient | None = None):
         self._client = neo4j_client
+        self._sqlite = sqlite_client
         self._llm_extractor = LLMExtractionService()
         self._llm_ingester = LLMIngestionService(neo4j_client)
 
     async def ingest_user(self, user_id: str, profile_text: str) -> dict:
         """
-        Ingest a user profile via LLM extraction + Neo4j write.
-        Returns ingestion stats for the API response.
+        Ingest a user profile via LLM extraction + Neo4j write + flag storage.
+        Returns ingestion stats including clarification questions for the API response.
         """
         logger.info(f"Ingesting user: {user_id}")
 
@@ -31,6 +39,27 @@ class IngestionService:
         await self._llm_ingester.ingest_user_profile(user_id, extraction)
         skill_links = await self._llm_ingester.link_skill_matches(user_id)
         domain_links = await self._llm_ingester.link_domain_matches(user_id)
+
+        # Store interpretation flags for the clarification workflow
+        flags_count = 0
+        clarification_questions = []
+        if self._sqlite and extraction.interpretation_flags:
+            clarification_svc = ClarificationService(self._client, self._sqlite)
+            flags_count = await clarification_svc.store_flags(user_id, extraction.interpretation_flags)
+            # Return the critical questions immediately so the API caller can show them
+            clarifications = await clarification_svc.get_clarifications(user_id)
+            clarification_questions = [
+                {
+                    "flag_id": q.flag_id,
+                    "question": q.clarification_question,
+                    "field": q.field,
+                    "interpreted_as": q.interpreted_as,
+                    "impact": q.resolution_impact,
+                    "options": q.suggested_options,
+                }
+                for q in clarifications.questions
+                if q.resolution_impact == "critical"
+            ]
 
         result = {
             "user_id": user_id,
@@ -41,6 +70,9 @@ class IngestionService:
             "experiences_extracted": len(extraction.experiences),
             "skill_matches_linked": skill_links,
             "domain_matches_linked": domain_links,
+            "interpretation_flags": flags_count,
+            "graph_verified": flags_count == 0,
+            "clarification_questions": clarification_questions,
         }
         logger.info(f"User ingestion complete: {result}")
         return result

@@ -42,6 +42,129 @@ function PathItem({ path, index }) {
   )
 }
 
+const VERDICT_STYLES = {
+  'Strong match':   { bg: 'rgba(39,174,96,0.15)',  border: 'rgba(39,174,96,0.4)',  color: '#27ae60' },
+  'Good match':     { bg: 'rgba(39,174,96,0.08)',  border: 'rgba(39,174,96,0.25)', color: '#2ecc71' },
+  'Moderate match': { bg: 'rgba(230,126,34,0.12)', border: 'rgba(230,126,34,0.4)', color: '#e67e22' },
+  'Weak match':     { bg: 'rgba(231,76,60,0.10)',  border: 'rgba(231,76,60,0.35)', color: '#e74c3c' },
+  'Not recommended':{ bg: 'rgba(231,76,60,0.15)',  border: 'rgba(231,76,60,0.5)',  color: '#c0392b' },
+}
+
+function ExplanationPanel({ explanation }) {
+  // Handle plain-string fallback (old API)
+  if (typeof explanation === 'string') {
+    return <p className="text-xs leading-relaxed" style={{ color: '#c8d0db' }}>{explanation}</p>
+  }
+
+  const {
+    verdict = '', headline = '', why_they_fit = [], critical_gaps = [],
+    nice_to_have_gaps = [], seniority_fit = '', honest_take = '',
+    recommendation = '', interview_focus = [],
+  } = explanation
+
+  const vs = VERDICT_STYLES[verdict] || VERDICT_STYLES['Moderate match']
+
+  return (
+    <div className="space-y-3">
+      {/* Verdict badge */}
+      {verdict && (
+        <div className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold"
+             style={{ background: vs.bg, border: `1px solid ${vs.border}`, color: vs.color }}>
+          {verdict}
+        </div>
+      )}
+
+      {/* Headline */}
+      {headline && (
+        <p className="text-xs leading-relaxed font-medium" style={{ color: '#e0e0e0' }}>
+          {headline}
+        </p>
+      )}
+
+      {/* Why they fit */}
+      {why_they_fit?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#27ae60' }}>Why they fit</p>
+          <ul className="space-y-1">
+            {why_they_fit.map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed flex gap-1.5" style={{ color: '#c8d0db' }}>
+                <span style={{ color: '#27ae60', flexShrink: 0 }}>✓</span>{item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Critical gaps */}
+      {critical_gaps?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#e74c3c' }}>Critical gaps</p>
+          <ul className="space-y-1">
+            {critical_gaps.map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed flex gap-1.5" style={{ color: '#c8d0db' }}>
+                <span style={{ color: '#e74c3c', flexShrink: 0 }}>✗</span>{item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Nice-to-have gaps */}
+      {nice_to_have_gaps?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#e67e22' }}>Nice-to-have gaps</p>
+          <ul className="space-y-1">
+            {nice_to_have_gaps.slice(0, 4).map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed flex gap-1.5" style={{ color: '#8892a4' }}>
+                <span style={{ color: '#e67e22', flexShrink: 0 }}>~</span>{item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Seniority fit */}
+      {seniority_fit && (
+        <div className="rounded-lg px-3 py-2" style={{ background: 'rgba(91,155,213,0.08)', border: '1px solid rgba(91,155,213,0.2)' }}>
+          <p className="text-xs font-semibold mb-0.5" style={{ color: '#5b9bd5' }}>Seniority fit</p>
+          <p className="text-xs leading-relaxed" style={{ color: '#c8d0db' }}>{seniority_fit}</p>
+        </div>
+      )}
+
+      {/* Honest take */}
+      {honest_take && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#8892a4' }}>Honest assessment</p>
+          <p className="text-xs leading-relaxed" style={{ color: '#c8d0db' }}>{honest_take}</p>
+        </div>
+      )}
+
+      {/* Recommendation */}
+      {recommendation && (
+        <div className="rounded-lg px-3 py-2 mt-1"
+             style={{ background: vs.bg, border: `1px solid ${vs.border}` }}>
+          <p className="text-xs font-semibold mb-0.5" style={{ color: vs.color }}>Recommendation</p>
+          <p className="text-xs leading-relaxed" style={{ color: '#e0e0e0' }}>{recommendation}</p>
+        </div>
+      )}
+
+      {/* Interview focus */}
+      {interview_focus?.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold mb-1" style={{ color: '#f39c12' }}>Interview focus areas</p>
+          <ul className="space-y-1">
+            {interview_focus.map((item, i) => (
+              <li key={i} className="text-xs leading-relaxed flex gap-1.5" style={{ color: '#c8d0db' }}>
+                <span style={{ color: '#f39c12', flexShrink: 0 }}>→</span>{item}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MatchExplorer() {
   const { jobId }      = useParams()
   const { session }    = useAuth()
@@ -61,6 +184,19 @@ export default function MatchExplorer() {
   const [explanation, setExplanation] = useState(null)
   const [explaining, setExplaining]   = useState(false)
   const [explainError, setExplainError] = useState(null)
+
+  async function handleExplain() {
+    setExplaining(true)
+    setExplainError(null)
+    try {
+      const exp = await api.explainMatch(userId, jobId, isProxy ? 'recruiter' : 'seeker')
+      setExplanation(exp.explanation)
+    } catch (e) {
+      setExplainError(e.message)
+    } finally {
+      setExplaining(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -208,7 +344,7 @@ export default function MatchExplorer() {
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold uppercase tracking-wider flex items-center gap-1"
                        style={{ color: '#5dade2' }}>
-                      <Sparkles size={12} /> AI Explanation
+                      <Sparkles size={12} /> AI Analysis
                     </p>
                     {!explanation && !explaining && (
                       <button
@@ -222,13 +358,9 @@ export default function MatchExplorer() {
                     )}
                   </div>
                   {explaining && (
-                    <p className="text-xs" style={{ color: '#8892a4' }}>Generating…</p>
+                    <p className="text-xs" style={{ color: '#8892a4' }}>Analysing evidence…</p>
                   )}
-                  {explanation && (
-                    <p className="text-xs leading-relaxed" style={{ color: '#c8d0db' }}>
-                      {explanation}
-                    </p>
-                  )}
+                  {explanation && <ExplanationPanel explanation={explanation} />}
                   {explainError && (
                     <p className="text-xs" style={{ color: '#e74c3c' }}>{explainError}</p>
                   )}

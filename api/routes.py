@@ -25,13 +25,31 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from database.neo4j_client import Neo4jClient, get_client
+from database.sqlite_client import SQLiteClient, get_sqlite
 from models.schemas import (
+    ApplyMutationsResponse,
+    ApplyMutationsRequest,
     BatchCandidateResponse,
     BatchMatchResponse,
+    CheckpointRequest,
+    ClarificationsResponse,
+    EditSessionMessage,
+    EditSessionResponse,
+    GraphMutationProposal,
+    GraphVersion,
     IngestJobRequest,
     IngestUserRequest,
     MatchResult,
+    RejectMutationsRequest,
+    ResolveFlagRequest,
+    ResolveFlagResponse,
+    RollbackResponse,
+    SendMessageRequest,
+    StartEditRequest,
 )
+from services.checkpoint_service import CheckpointService
+from services.clarification_service import ClarificationService
+from services.graph_edit_service import GraphEditService
 from services.ingestion import IngestionService
 from services.llm_extraction import LLMExtractionService
 from services.matching_engine import MatchingEngine
@@ -45,23 +63,32 @@ def get_neo4j() -> Neo4jClient:
     return get_client()
 
 
+def get_sqlite_db() -> SQLiteClient:
+    return get_sqlite()
+
+
 # ── Ingestion ──────────────────────────────────────────────────────────────────
 
 @router.post("/users/ingest", tags=["ingestion"], summary="Ingest user profile")
 async def ingest_user(
     request: IngestUserRequest,
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Extract structured entities from raw profile text and write to Neo4j.
 
     Pipeline:
     1. Groq (llama-3.3-70b) extracts skills, domains, projects, experiences,
-       preferences, and problem-solving patterns as structured JSON.
+       critical assessment, and interpretation_flags for every uncertain inference.
     2. The 4-level hierarchy is written to Neo4j (User → Category → Family → Leaf).
+    3. Interpretation flags are stored in SQLite for the clarification workflow.
+
+    The response includes `clarification_questions` — critical questions the user
+    should answer to verify their digital twin graph before job matching.
     """
     try:
-        service = IngestionService(db)
+        service = IngestionService(db, sqlite)
         result = await service.ingest_user(request.user_id, request.profile_text)
         return {"status": "success", **result}
     except Exception as e:
@@ -103,10 +130,11 @@ async def upload_user_pdf(
     user_id: str = Form(...),
     file: UploadFile = File(...),
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Accept a PDF resume, extract text server-side via pypdf, then run the
-    standard LLM ingestion pipeline.
+    standard LLM ingestion pipeline (extraction + flags + graph write).
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are accepted")
@@ -114,7 +142,7 @@ async def upload_user_pdf(
         profile_text = await _extract_pdf_text(file)
         if not profile_text.strip():
             raise HTTPException(status_code=422, detail="Could not extract text from PDF")
-        service = IngestionService(db)
+        service = IngestionService(db, sqlite)
         result = await service.ingest_user(user_id, profile_text)
         return {"status": "success", **result}
     except HTTPException:
@@ -258,14 +286,15 @@ async def explain_match(
     db: Neo4jClient = Depends(get_neo4j),
 ):
     """
-    Generate a natural-language explanation for a user-job match.
+    Generate a structured, evidence-based explanation for a user-job match.
 
-    Fetches match scores and graph paths from Neo4j, then passes all structured
-    data to Groq (llama-3.3-70b-versatile) to produce a concise 2–3 sentence
-    plain-English summary.
+    Uses skill evidence quality (evidence_strength), 5W+H context from how
+    skills were actually used in projects (DEMONSTRATES_SKILL edge properties),
+    the candidate's CriticalAssessment node (seniority, red flags, genuine
+    strengths), domain depth, and seniority fit against job requirements.
 
-    perspective: 'seeker'    → second person ("You are a strong match...")
-                 'recruiter' → third person  ("Owais is a strong match...")
+    perspective: 'seeker'    → second person, constructive framing
+                 'recruiter' → third person, hiring-manager lens
     """
     engine = MatchingEngine(db)
     result = await engine._score_user_job_pair(user_id, job_id)
@@ -273,8 +302,10 @@ async def explain_match(
         raise HTTPException(
             status_code=404, detail=f"User '{user_id}' or job '{job_id}' not found"
         )
-    paths_data = await engine.trace_match_paths(user_id, job_id, limit=10)
+
+    paths_data   = await engine.trace_match_paths(user_id, job_id, limit=10)
     path_strings = [p["path"] for p in paths_data]
+    rich_context = await engine.gather_match_context(user_id, job_id)
 
     try:
         llm = LLMExtractionService()
@@ -293,6 +324,7 @@ async def explain_match(
             missing_domains=result.missing_domains,
             paths=path_strings,
             perspective=perspective,
+            rich_context=rich_context,
         )
     except Exception as e:
         logger.exception(f"LLM explanation failed: {e}")
@@ -575,6 +607,560 @@ async def get_user_graph_stats(
     if stats["categories"] == 0:
         raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
     return {"user_id": user_id, **stats}
+
+
+# ── Checkpointing ──────────────────────────────────────────────────────────────
+
+@router.post(
+    "/users/{user_id}/graph/checkpoint",
+    response_model=GraphVersion,
+    tags=["checkpointing"],
+    summary="Create a graph checkpoint for a user",
+)
+async def create_user_checkpoint(
+    user_id: str,
+    request: CheckpointRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Serialize the current user subgraph to SQLite as a versioned checkpoint."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        return await svc.create_checkpoint(
+            "user", user_id, request.label or f"manual_{user_id}"
+        )
+    except Exception as e:
+        logger.exception(f"User checkpoint creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/graph/versions",
+    response_model=list[GraphVersion],
+    tags=["checkpointing"],
+    summary="List graph versions for a user",
+)
+async def list_user_versions(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Return the 10 most recent graph checkpoints for a user."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        return await svc.list_versions("user", user_id)
+    except Exception as e:
+        logger.exception(f"User version listing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/rollback/{version_id}",
+    response_model=RollbackResponse,
+    tags=["checkpointing"],
+    summary="Rollback a user graph to a previous version",
+)
+async def rollback_user_graph(
+    user_id: str,
+    version_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Restore the user subgraph in Neo4j from a previously saved checkpoint."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        await svc.rollback("user", user_id, version_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"User rollback failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    return RollbackResponse(version_id=version_id, entity_type="user", entity_id=user_id)
+
+
+@router.post(
+    "/jobs/{job_id}/graph/checkpoint",
+    response_model=GraphVersion,
+    tags=["checkpointing"],
+    summary="Create a graph checkpoint for a job",
+)
+async def create_job_checkpoint(
+    job_id: str,
+    request: CheckpointRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Serialize the current job subgraph to SQLite as a versioned checkpoint."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        return await svc.create_checkpoint(
+            "job", job_id, request.label or f"manual_{job_id}"
+        )
+    except Exception as e:
+        logger.exception(f"Job checkpoint creation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/jobs/{job_id}/graph/versions",
+    response_model=list[GraphVersion],
+    tags=["checkpointing"],
+    summary="List graph versions for a job",
+)
+async def list_job_versions(
+    job_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Return the 10 most recent graph checkpoints for a job."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        return await svc.list_versions("job", job_id)
+    except Exception as e:
+        logger.exception(f"Job version listing failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/rollback/{version_id}",
+    response_model=RollbackResponse,
+    tags=["checkpointing"],
+    summary="Rollback a job graph to a previous version",
+)
+async def rollback_job_graph(
+    job_id: str,
+    version_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """Restore the job subgraph in Neo4j from a previously saved checkpoint."""
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = CheckpointService(db, sqlite, output_dir)
+    try:
+        await svc.rollback("job", job_id, version_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Job rollback failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    return RollbackResponse(version_id=version_id, entity_type="job", entity_id=job_id)
+
+
+# ── Graph Editing ──────────────────────────────────────────────────────────────
+
+@router.post(
+    "/users/{user_id}/graph/edit/start",
+    response_model=EditSessionResponse,
+    tags=["editing"],
+    summary="Start a new graph edit session for a user",
+)
+async def start_user_edit_session(
+    user_id: str,
+    request: StartEditRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.start_session("user", user_id)
+    except Exception as e:
+        logger.exception(f"Edit session start failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/message",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Send a message in the edit session",
+)
+async def user_edit_message(
+    user_id: str,
+    request: SendMessageRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.send_message(request.session_id, request.message)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Edit message failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/apply",
+    response_model=ApplyMutationsResponse,
+    tags=["editing"],
+    summary="Apply accepted mutations to the user graph",
+)
+async def apply_user_mutations(
+    user_id: str,
+    request: ApplyMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.apply_mutations(request.session_id, request.mutations)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Apply mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/graph/edit/reject",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Reject the LLM's proposed mutations and get a follow-up question",
+)
+async def reject_user_mutations(
+    user_id: str,
+    request: RejectMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.reject_mutations(request.session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Reject mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/graph/edit/history",
+    response_model=list[EditSessionMessage],
+    tags=["editing"],
+    summary="Get full conversation history for an edit session",
+)
+async def get_user_edit_history(
+    user_id: str,
+    session_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.get_history(session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Get history failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/start",
+    response_model=EditSessionResponse,
+    tags=["editing"],
+    summary="Start a new graph edit session for a job",
+)
+async def start_job_edit_session(
+    job_id: str,
+    request: StartEditRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.start_session("job", job_id, request.recruiter_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Job edit session start failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/message",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Send a message in the job edit session",
+)
+async def job_edit_message(
+    job_id: str,
+    request: SendMessageRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.send_message(request.session_id, request.message)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Job edit message failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/apply",
+    response_model=ApplyMutationsResponse,
+    tags=["editing"],
+    summary="Apply accepted mutations to the job graph",
+)
+async def apply_job_mutations(
+    job_id: str,
+    request: ApplyMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.apply_mutations(request.session_id, request.mutations)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Apply job mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/jobs/{job_id}/graph/edit/reject",
+    response_model=GraphMutationProposal,
+    tags=["editing"],
+    summary="Reject proposed job mutations and get a follow-up question",
+)
+async def reject_job_mutations(
+    job_id: str,
+    request: RejectMutationsRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    output_dir = os.getenv("OUTPUT_DIR", "./outputs")
+    svc = GraphEditService(db, sqlite, output_dir)
+    try:
+        return await svc.reject_mutations(request.session_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Reject job mutations failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Clarification / Digital Twin Verification ──────────────────────────────────
+
+@router.get(
+    "/users/{user_id}/clarifications",
+    response_model=ClarificationsResponse,
+    tags=["clarification"],
+    summary="Get pending clarification questions for a user's profile",
+)
+async def get_clarifications(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Returns all interpretation flags generated during resume extraction,
+    ordered by impact (critical first).
+
+    Each flag includes:
+    - The exact text from the resume that was interpreted
+    - What the LLM decided it means
+    - Why there is uncertainty
+    - A specific clarification question to ask the user
+    - Suggested answer options where applicable
+
+    `graph_verified` becomes True when all critical flags are resolved.
+    Resolve flags via POST /users/{user_id}/clarifications/{flag_id}/resolve
+    """
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.get_clarifications(user_id)
+    except Exception as e:
+        logger.exception(f"Get clarifications failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/resolve",
+    response_model=ResolveFlagResponse,
+    tags=["clarification"],
+    summary="Resolve a clarification question — confirm or correct the LLM's interpretation",
+)
+async def resolve_clarification(
+    user_id: str,
+    flag_id: str,
+    request: ResolveFlagRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Confirm or correct a single interpretation flag.
+
+    If `is_correct=true`: the LLM's interpretation is confirmed and the flag is marked verified.
+
+    If `is_correct=false`: provide a `correction` value and the graph node will be
+    patched immediately. For example, if the LLM set skill level='expert' but the
+    user corrects it to 'intermediate', the Skill node is updated and weights recomputed.
+
+    `remaining_critical` in the response tells you how many critical flags are still pending.
+    When it reaches 0, the graph is a verified digital twin of the user.
+    """
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.resolve_flag(
+            user_id=user_id,
+            flag_id=flag_id,
+            is_correct=request.is_correct,
+            user_answer=request.user_answer,
+            correction=request.correction,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Resolve clarification failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/skip",
+    tags=["clarification"],
+    summary="Skip a clarification question",
+)
+async def skip_clarification(
+    user_id: str,
+    flag_id: str,
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """Mark a flag as skipped. The LLM's interpretation remains in the graph as-is."""
+    try:
+        svc = ClarificationService(db, sqlite)
+        await svc.skip_flag(user_id, flag_id)
+        return {"status": "skipped", "flag_id": flag_id}
+    except Exception as e:
+        logger.exception(f"Skip clarification failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/clarifications/{flag_id}/interpret",
+    tags=["clarification"],
+    summary="Interpret a natural-language answer without saving — show to user for confirmation",
+)
+async def interpret_clarification_answer(
+    user_id: str,
+    flag_id: str,
+    request: dict,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Takes the user's natural language answer and returns the LLM's interpretation.
+    Does NOT modify the graph. Call /resolve to save once the user confirms.
+
+    Returns: { interpreted_value, is_complete, needs_clarification, explanation, confidence }
+    """
+    from fastapi import Body
+    answer = request.get("answer", "")
+    if not answer.strip():
+        raise HTTPException(status_code=400, detail="answer is required")
+    try:
+        svc = ClarificationService(db, sqlite)
+        return await svc.interpret_answer(user_id, flag_id, answer)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Interpret answer failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/describe",
+    tags=["profile"],
+    summary="Generate a rich natural-language description of the user from their graph",
+)
+async def describe_user(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Generates a comprehensive, honest natural-language description of the user
+    based on everything in their knowledge graph:
+    - Professional identity and career arc
+    - Genuine strengths with evidence
+    - Domain expertise depth
+    - Honest assessment of seniority level
+    - What roles/teams they are best suited for
+    - What gaps or concerns exist
+
+    Uses the CriticalAssessment node + all skills/projects/domains/experiences.
+    """
+    try:
+        from services.llm_extraction import LLMExtractionService
+        extractor = LLMExtractionService()
+        description = await extractor.describe_user_from_graph(user_id, db)
+        return {"user_id": user_id, **description}
+    except Exception as e:
+        logger.exception(f"Describe user failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/completeness",
+    tags=["profile"],
+    summary="Get digital twin completeness score (no LLM, fast)",
+)
+async def get_user_completeness(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Compute the user's digital twin completeness score without calling the LLM.
+
+    Returns a structured breakdown across two dimensions:
+
+    **Technical depth** (50% of overall):
+      - Skill evidence quality — how many skills are project-backed vs claimed-only
+      - Project impact — how many projects have measurable outcomes
+      - Experience accomplishments — how many roles have concrete achievements
+      - Skills with anecdotes — story coverage across the skill set
+
+    **Human depth** (50% of overall):
+      - Anecdotes captured (target: 5)
+      - Motivation identified
+      - Core values captured
+      - Career goal set
+      - Culture identity built
+      - Behavioral insights observed
+
+    Also surfaces **matching capability flags** — which scoring axes are currently
+    active for this user (evidence-weighted skills, soft skill scoring, culture fit).
+
+    Use this endpoint to drive a profile completeness dashboard without triggering
+    an expensive LLM describe call.
+    """
+    try:
+        extractor = LLMExtractionService()
+        completeness = await extractor.compute_completeness(user_id, db)
+        return {"user_id": user_id, **completeness.model_dump()}
+    except Exception as e:
+        logger.exception(f"Completeness check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ── Admin ──────────────────────────────────────────────────────────────────────

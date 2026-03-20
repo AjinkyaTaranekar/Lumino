@@ -1,12 +1,37 @@
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { LogOut, User, Briefcase, LayoutDashboard, Network, Upload, UserSearch, Shield, BookOpen, Users } from 'lucide-react'
+import { LogOut, Briefcase, LayoutDashboard, Network, Upload, Shield, BookOpen, Users, ShieldCheck, ShieldAlert, User } from 'lucide-react'
+import { api } from '../lib/api'
+
+function VerifyBadge({ userId }) {
+  const [pending, setPending] = useState(null)
+
+  useEffect(() => {
+    if (!userId) return
+    api.getClarifications(userId)
+      .then(d => setPending(d.questions.filter(q => q.status === 'pending' && q.resolution_impact === 'critical').length))
+      .catch(() => {})
+  }, [userId])
+
+  if (pending === null) return null
+  if (pending === 0) return <ShieldCheck size={12} style={{ color: '#27ae60' }} />
+  return (
+    <span
+      className="text-xs font-bold rounded-full w-4 h-4 flex items-center justify-center"
+      style={{ background: '#e94560', color: '#fff', fontSize: 9 }}>
+      {pending > 9 ? '9+' : pending}
+    </span>
+  )
+}
 
 const seekerNav = [
-  { to: '/user/upload',      icon: Upload,          label: 'Upload Resume' },
-  { to: '/user/guidelines',  icon: BookOpen,        label: 'Resume Guide' },
-  { to: '/user/model',       icon: Network,         label: 'My Model' },
-  { to: '/user/dashboard',   icon: LayoutDashboard, label: 'Job Dashboard' },
+  { to: '/user/upload',          icon: Upload,          label: 'Upload Resume' },
+  { to: '/user/guidelines',      icon: BookOpen,        label: 'Resume Guide' },
+  { to: '/user/clarifications',  icon: ShieldAlert,     label: 'Verify Profile', badge: true },
+  { to: '/user/profile',         icon: User,            label: 'My Profile' },
+  { to: '/user/model',           icon: Network,         label: 'My Model' },
+  { to: '/user/dashboard',       icon: LayoutDashboard, label: 'Job Dashboard' },
 ]
 
 const recruiterNav = [
@@ -74,7 +99,7 @@ export default function Layout({ children }) {
 
         {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {nav.map(({ to, icon: Icon, label }) => {
+          {nav.map(({ to, icon: Icon, label, badge }) => {
             const active = location.pathname === to || location.pathname.startsWith(to + '/')
             return (
               <Link
@@ -86,7 +111,10 @@ export default function Layout({ children }) {
                   color: active ? '#e94560' : '#8892a4',
                 }}>
                 <Icon size={16} />
-                {label}
+                <span className="flex-1">{label}</span>
+                {badge && session?.role !== 'recruiter' && session?.role !== 'admin' && (
+                  <VerifyBadge userId={session?.userId} />
+                )}
               </Link>
             )
           })}

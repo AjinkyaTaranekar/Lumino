@@ -21,6 +21,7 @@ build/
 .coverage
 htmlcov/
 *.log
+.venv/
 
 # ── Virtual environment ────────────────────────────────────────────────────────
 adaptive_job_rec/

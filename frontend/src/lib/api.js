@@ -87,7 +87,56 @@ export const api = {
   // Stats
   getUserStats:     (userId)               => get(`/users/${userId}/graph-stats`),
 
+  // Clarification / Digital Twin Verification
+  getClarifications:  (userId)             => get(`/users/${userId}/clarifications`),
+  resolveFlag: (userId, flagId, isCorrect, userAnswer, correction) =>
+    post(`/users/${userId}/clarifications/${flagId}/resolve`, {
+      is_correct: isCorrect,
+      user_answer: userAnswer,
+      correction: correction || null,
+    }),
+  skipFlag: (userId, flagId) => post(`/users/${userId}/clarifications/${flagId}/skip`, {}),
+  interpretFlag: (userId, flagId, answer) =>
+    post(`/users/${userId}/clarifications/${flagId}/interpret`, { answer }),
+  describeUser: (userId) => get(`/users/${userId}/describe`),
+
   // Admin — delete
   deleteUser: (userId) => del(`/users/${userId}`),
   deleteJob:  (jobId)  => del(`/jobs/${jobId}`),
+
+  // Graph editing — sessions
+  startEditSession: (entityType, entityId, recruiterId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/start`, recruiterId ? { recruiter_id: recruiterId } : {})
+  },
+  sendEditMessage: (entityType, entityId, sessionId, message) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/message`, { session_id: sessionId, message })
+  },
+  applyMutations: (entityType, entityId, sessionId, mutations) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/apply`, { session_id: sessionId, mutations })
+  },
+  rejectMutations: (entityType, entityId, sessionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/edit/reject`, { session_id: sessionId })
+  },
+  getEditHistory: (entityType, entityId, sessionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return get(`${base}/graph/edit/history?session_id=${sessionId}`)
+  },
+
+  // Graph versioning
+  listVersions: (entityType, entityId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return get(`${base}/graph/versions`)
+  },
+  rollback: (entityType, entityId, versionId) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/rollback/${versionId}`, {})
+  },
+  saveCheckpoint: (entityType, entityId, label) => {
+    const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`
+    return post(`${base}/graph/checkpoint`, { label: label || 'manual' })
+  },
 }

@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
 import GraphViewer from '../../components/GraphViewer'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Edit3 } from 'lucide-react'
 import { useState } from 'react'
 
 export default function UserModel() {
@@ -39,6 +39,14 @@ export default function UserModel() {
             onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
             onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
             <RefreshCw size={12} /> Refresh
+          </button>
+          <button
+            onClick={() => navigate('/user/edit-graph')}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
+            style={{ background: '#e94560', color: '#fff' }}
+            onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
+            onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
+            <Edit3 size={12} /> Edit Graph
           </button>
         </div>
 

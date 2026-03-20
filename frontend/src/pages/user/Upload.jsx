@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
-import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, BookOpen } from 'lucide-react'
+import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, BookOpen, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react'
 
 function StatCard({ label, value }) {
   return (
@@ -173,12 +173,73 @@ export default function Upload() {
                 Profile successfully processed
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-3 mb-6">
+
+            <div className="grid grid-cols-2 gap-3 mb-5">
               <StatCard label="Skills"      value={result.skills_extracted  || 0} />
               <StatCard label="Domains"     value={result.domains_extracted || 0} />
               <StatCard label="Projects"    value={result.projects_extracted || 0} />
               <StatCard label="Experiences" value={result.experiences_extracted || 0} />
             </div>
+
+            {/* Verification status banner */}
+            {result.interpretation_flags > 0 ? (
+              <div
+                className="rounded-xl px-4 py-4 mb-5"
+                style={{
+                  background: 'rgba(233,69,96,0.08)',
+                  border: '1px solid rgba(233,69,96,0.35)',
+                }}>
+                <div className="flex items-start gap-3 mb-3">
+                  <ShieldAlert size={20} style={{ color: '#e94560', flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <p className="font-semibold text-sm" style={{ color: '#e94560' }}>
+                      Graph not yet verified — {result.interpretation_flags} AI interpretations need review
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#8892a4' }}>
+                      The AI made inferences while reading your resume. Review them to ensure
+                      your knowledge graph is an exact digital twin of you.
+                    </p>
+                  </div>
+                </div>
+                {result.clarification_questions?.length > 0 && (
+                  <div className="mb-3 flex flex-col gap-2">
+                    <p className="text-xs font-semibold" style={{ color: '#8892a4' }}>
+                      Critical questions ({result.clarification_questions.length}):
+                    </p>
+                    {result.clarification_questions.map(q => (
+                      <div
+                        key={q.flag_id}
+                        className="rounded-lg px-3 py-2 flex items-start gap-2"
+                        style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(233,69,96,0.2)' }}>
+                        <AlertTriangle size={12} style={{ color: '#e94560', flexShrink: 0, marginTop: 2 }} />
+                        <p className="text-xs" style={{ color: '#e0e0e0' }}>{q.question}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button
+                  onClick={() => navigate('/user/clarifications')}
+                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors"
+                  style={{ background: '#e94560', color: '#fff' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
+                  Verify My Profile →
+                </button>
+              </div>
+            ) : (
+              <div
+                className="rounded-xl px-4 py-3 mb-5 flex items-center gap-3"
+                style={{
+                  background: 'rgba(39,174,96,0.08)',
+                  border: '1px solid rgba(39,174,96,0.3)',
+                }}>
+                <ShieldCheck size={18} style={{ color: '#27ae60' }} />
+                <p className="text-sm" style={{ color: '#27ae60' }}>
+                  Profile fully verified — no ambiguous interpretations detected.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => navigate('/user/model')}
@@ -186,14 +247,14 @@ export default function Upload() {
                 style={{ background: '#0f3460', color: '#e0e0e0', border: '1px solid #0f3460' }}
                 onMouseEnter={e => e.currentTarget.style.background = '#1a3a7a'}
                 onMouseLeave={e => e.currentTarget.style.background = '#0f3460'}>
-                View My Knowledge Graph
+                View Knowledge Graph
               </button>
               <button
                 onClick={() => navigate('/user/dashboard')}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-                style={{ background: '#e94560', color: '#fff' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-                onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
+                style={{ background: result.graph_verified ? '#e94560' : '#0f3460', color: '#fff' }}
+                onMouseEnter={e => e.currentTarget.style.background = result.graph_verified ? '#c73652' : '#1a3a7a'}
+                onMouseLeave={e => e.currentTarget.style.background = result.graph_verified ? '#e94560' : '#0f3460'}>
                 Browse Jobs →
               </button>
             </div>
