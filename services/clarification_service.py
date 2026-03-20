@@ -262,6 +262,13 @@ class ClarificationService:
             temperature=0.1,
         )
         raw = resp.choices[0].message.content
+        # Unwrap array → object (some models return [{...}] instead of {...})
+        try:
+            _parsed = json.loads(raw)
+            if isinstance(_parsed, list) and _parsed:
+                raw = json.dumps(_parsed[0])
+        except (json.JSONDecodeError, IndexError):
+            pass
         result = _InterpretResult.model_validate_json(raw)
         return result.model_dump()
 

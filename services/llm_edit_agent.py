@@ -711,6 +711,18 @@ class LLMEditAgent:
             (session_id, role, content, proposal_json, datetime.now(timezone.utc).isoformat()),
         )
 
+    @staticmethod
+    def _unwrap_json(raw: str) -> str:
+        """Some models (e.g. Gemini) return a JSON array instead of an object.
+        If the top-level value is a list, unwrap the first element."""
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                return json.dumps(parsed[0])
+        except (json.JSONDecodeError, IndexError):
+            pass
+        return raw
+
     async def _call_with_retry(self, messages: list) -> str:
         """Call LLM with exponential backoff (3 attempts)."""
         for attempt in range(3):
@@ -721,7 +733,7 @@ class LLMEditAgent:
                     response_format={"type": "json_object"},
                     temperature=0.7,
                 )
-                return resp.choices[0].message.content
+                return self._unwrap_json(resp.choices[0].message.content)
             except Exception as e:
                 if attempt == 2:
                     raise

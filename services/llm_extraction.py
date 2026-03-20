@@ -59,12 +59,23 @@ class LLMExtractionService:
         self._domain_hint = _build_domain_taxonomy_hint()
         logger.info(f"LLM extraction service initialized with model: {self._model_name}")
 
+    @staticmethod
+    def _unwrap_json(raw: str) -> str:
+        """Unwrap JSON array → object (some models return [{...}] instead of {...})."""
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list) and parsed:
+                return json.dumps(parsed[0])
+        except (json.JSONDecodeError, IndexError):
+            pass
+        return raw
+
     async def _call_with_retry(self, **kwargs) -> str:
         """Call LLM with exponential backoff (3 attempts: immediate, 1s, 2s)."""
         for attempt in range(3):
             try:
                 resp = await acompletion(**kwargs)
-                return resp.choices[0].message.content
+                return self._unwrap_json(resp.choices[0].message.content)
             except Exception as e:
                 if attempt == 2:
                     raise
