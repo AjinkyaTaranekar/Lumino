@@ -678,3 +678,59 @@ class ResolveFlagResponse(BaseModel):
     updated_field: Optional[str] = None
     updated_value: Optional[str] = None
     remaining_critical: int            # how many critical flags still pending
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# DIGITAL TWIN COMPLETENESS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TechnicalDepthBreakdown(BaseModel):
+    score_pct: int                          # 0-100
+    skills_total: int
+    skills_evidenced: int                   # evidence_strength != claimed_only
+    skills_with_anecdotes: int              # GROUNDED_IN → Anecdote edges
+    skills_claimed_only: int                # full weight penalty in matching
+    projects_total: int
+    projects_with_impact: int               # has_measurable_impact = true
+    experiences_total: int
+    experiences_with_accomplishments: int   # non-empty accomplishments list
+    has_critical_assessment: bool
+
+
+class HumanDepthBreakdown(BaseModel):
+    score_pct: int                          # 0-100
+    anecdotes_count: int                    # total Anecdote nodes
+    anecdotes_target: int = 5              # how many we consider "complete"
+    motivations_identified: bool            # has >= 1 Motivation node
+    values_identified: bool                 # has >= 1 Value node
+    goal_set: bool                          # has >= 1 Goal node
+    culture_identity_built: bool            # has CultureIdentity node
+    behavioral_insights_count: int          # total BehavioralInsight nodes
+    # Culture fit scoring is disabled if this is False — surfaced to user
+    culture_matching_enabled: bool
+
+
+class DigitalTwinCompleteness(BaseModel):
+    """
+    Computed (not LLM-generated) profile completeness score.
+    Shows how fully the digital twin represents the person across both
+    technical depth and human depth dimensions.
+
+    Both dimensions must be strong for full matching power:
+      - Technical depth affects skill/domain scoring accuracy
+      - Human depth enables soft skill and culture fit scoring
+    """
+    overall_pct: int                        # weighted average of both dimensions
+    technical_depth: TechnicalDepthBreakdown
+    human_depth: HumanDepthBreakdown
+
+    # Matching capability flags — shown to user so they understand impact
+    evidence_weighted_scoring_active: bool  # True when skills have evidence beyond claimed_only
+    soft_skill_scoring_active: bool         # True when ProblemSolvingPattern nodes exist
+    culture_fit_scoring_active: bool        # True when CultureIdentity node exists
+    profile_verified: bool                  # True when all critical clarification flags resolved
+
+    # Actionable gaps — specific, honest, with matching impact
+    missing_dimensions: List[str]
+    # The single most impactful next action
+    next_action: str

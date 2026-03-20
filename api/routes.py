@@ -1120,6 +1120,49 @@ async def describe_user(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get(
+    "/users/{user_id}/completeness",
+    tags=["profile"],
+    summary="Get digital twin completeness score (no LLM, fast)",
+)
+async def get_user_completeness(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Compute the user's digital twin completeness score without calling the LLM.
+
+    Returns a structured breakdown across two dimensions:
+
+    **Technical depth** (50% of overall):
+      - Skill evidence quality — how many skills are project-backed vs claimed-only
+      - Project impact — how many projects have measurable outcomes
+      - Experience accomplishments — how many roles have concrete achievements
+      - Skills with anecdotes — story coverage across the skill set
+
+    **Human depth** (50% of overall):
+      - Anecdotes captured (target: 5)
+      - Motivation identified
+      - Core values captured
+      - Career goal set
+      - Culture identity built
+      - Behavioral insights observed
+
+    Also surfaces **matching capability flags** — which scoring axes are currently
+    active for this user (evidence-weighted skills, soft skill scoring, culture fit).
+
+    Use this endpoint to drive a profile completeness dashboard without triggering
+    an expensive LLM describe call.
+    """
+    try:
+        extractor = LLMExtractionService()
+        completeness = await extractor.compute_completeness(user_id, db)
+        return {"user_id": user_id, **completeness.model_dump()}
+    except Exception as e:
+        logger.exception(f"Completeness check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Admin ──────────────────────────────────────────────────────────────────────
 
 @router.delete("/users/{user_id}", tags=["admin"], summary="Delete a user and all their data")

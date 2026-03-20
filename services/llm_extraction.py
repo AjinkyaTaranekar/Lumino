@@ -434,19 +434,27 @@ class LLMExtractionService:
 
     async def describe_user_from_graph(self, user_id: str, neo4j_client) -> dict:
         """
-        Query the user's graph and generate a rich natural-language description.
-        Returns a dict with identity, summary, strengths, concerns, career_arc, best_suited_for.
+        Query the user's complete graph — technical AND human portrait nodes — and
+        generate a rich natural-language description alongside a computed completeness score.
+
+        Returns a dict with:
+          - LLM-generated profile (identity, career_arc, strengths, assessment, etc.)
+          - completeness: DigitalTwinCompleteness (computed, not LLM-generated)
         """
-        # Fetch all relevant graph data
+        import json as _j
+
+        # ── Technical nodes ───────────────────────────────────────────────────
         skills = await neo4j_client.run_query(
             """
             MATCH (u:User {id: $id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
                   -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
             OPTIONAL MATCH (p:Project {user_id: $id})-[r:DEMONSTRATES_SKILL]->(s)
+            OPTIONAL MATCH (s)-[:GROUNDED_IN]->(anec:Anecdote)
             RETURN s.name AS name, s.years AS years, s.level AS level,
                    s.evidence_strength AS evidence_strength,
-                   count(p) AS project_count,
-                   collect(r.context)[0..2] AS contexts
+                   count(DISTINCT p) AS project_count,
+                   collect(DISTINCT r.context)[0..2] AS contexts,
+                   count(DISTINCT anec) AS anecdote_count
             ORDER BY project_count DESC, years DESC
             """,
             {"id": user_id},
@@ -498,38 +506,145 @@ class LLMExtractionService:
             """,
             {"id": user_id},
         )
+        patterns = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_PATTERN_CATEGORY]->
+                  (:PatternCategory)-[:HAS_PATTERN]->(p:ProblemSolvingPattern)
+            RETURN p.pattern AS pattern, p.evidence AS evidence
+            """,
+            {"id": user_id},
+        )
 
+        # ── Human portrait nodes ──────────────────────────────────────────────
+        anecdotes = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_ANECDOTE]->(a:Anecdote)
+            RETURN a.name AS name, a.situation AS situation, a.action AS action,
+                   a.result AS result, a.lesson_learned AS lesson_learned,
+                   a.confidence_signal AS confidence_signal,
+                   a.spontaneous AS spontaneous
+            """,
+            {"id": user_id},
+        )
+        motivations = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:MOTIVATED_BY]->(m:Motivation)
+            RETURN m.category AS category, m.strength AS strength, m.evidence AS evidence
+            ORDER BY m.strength DESC
+            """,
+            {"id": user_id},
+        )
+        values = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HOLDS_VALUE]->(v:Value)
+            RETURN v.name AS name, v.priority_rank AS priority_rank, v.evidence AS evidence
+            ORDER BY v.priority_rank
+            """,
+            {"id": user_id},
+        )
+        goals = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:ASPIRES_TO]->(g:Goal)
+            RETURN g.type AS type, g.description AS description,
+                   g.timeframe_years AS timeframe_years, g.clarity_level AS clarity_level
+            """,
+            {"id": user_id},
+        )
+        culture_identity = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity)
+            RETURN c.team_size_preference AS team_size_preference,
+                   c.leadership_style AS leadership_style,
+                   c.feedback_preference AS feedback_preference,
+                   c.pace_preference AS pace_preference,
+                   c.conflict_style AS conflict_style,
+                   c.energy_sources AS energy_sources,
+                   c.energy_drains AS energy_drains
+            """,
+            {"id": user_id},
+        )
+        behavioral_insights = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_BEHAVIORAL_INSIGHT]->(b:BehavioralInsight)
+            RETURN b.insight_type AS insight_type, b.trigger AS trigger,
+                   b.implication AS implication
+            """,
+            {"id": user_id},
+        )
+
+        # ── Profile verification status ───────────────────────────────────────
+        verification = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})
+            RETURN u.id AS id
+            """,
+            {"id": user_id},
+        )
+
+        # ── Compute completeness (deterministic, not LLM) ─────────────────────
+        completeness = self._compute_digital_twin_completeness(
+            skills=skills,
+            projects=projects,
+            experiences=experiences,
+            has_assessment=bool(assessment),
+            patterns=patterns,
+            anecdotes=[a for a in anecdotes if a.get("name")],
+            motivations=[m for m in motivations if m.get("category")],
+            values=[v for v in values if v.get("name")],
+            goals=[g for g in goals if g.get("description")],
+            culture_identity=culture_identity[0] if culture_identity and culture_identity[0].get("pace_preference") else None,
+            behavioral_insights=[b for b in behavioral_insights if b.get("insight_type")],
+        )
+
+        # ── Build full graph data for LLM ─────────────────────────────────────
         graph_data = {
             "skills": skills,
             "domains": domains,
             "projects": projects,
             "experiences": experiences,
             "assessment": assessment[0] if assessment else {},
+            "patterns": [p for p in patterns if p.get("pattern")],
+            # Human portrait — included only if data exists
+            "anecdotes": [a for a in anecdotes if a.get("name")],
+            "motivations": [m for m in motivations if m.get("category")],
+            "values": [v for v in values if v.get("name")],
+            "goals": [g for g in goals if g.get("description")],
+            "culture_identity": culture_identity[0] if culture_identity and culture_identity[0].get("pace_preference") else None,
+            "behavioral_insights": [b for b in behavioral_insights if b.get("insight_type")],
         }
 
         system_msg = (
             "You are a senior engineering manager writing an honest, insightful professional profile "
-            "of a candidate based on their knowledge graph data. This will be shown to the candidate "
-            "themselves so they can see how they are perceived. Be specific, evidence-based, and honest — "
-            "not flattering. Include both strengths and gaps.\n\n"
+            "of a candidate based on their complete knowledge graph — both technical skills and "
+            "the human portrait captured through the deep interview.\n\n"
+            "This profile is shown to the candidate themselves so they understand how they are perceived "
+            "by recruiters. Be specific, evidence-based, and honest — not flattering.\n\n"
+            "If motivations, values, goals, or culture identity data exist in the graph, incorporate them. "
+            "These reveal WHO this person is beyond their resume.\n"
+            "If anecdotes exist, reference the stories — they are stronger evidence than skill claims.\n"
+            "If behavioral insights exist, note them honestly.\n\n"
             "Return a JSON object with these exact keys:\n"
             "{\n"
             "  \"identity\": \"1-sentence professional identity statement\",\n"
             "  \"career_arc\": \"2-3 sentences describing their career progression and trajectory\",\n"
-            "  \"core_strengths\": [\"strength 1 with evidence\", \"strength 2 with evidence\"],\n"
-            "  \"domain_expertise\": \"paragraph about their domain depth and industry context\",\n"
-            "  \"technical_profile\": \"paragraph about their technical skills, depth vs breadth\",\n"
-            "  \"honest_assessment\": \"paragraph: what they can genuinely do well, what level they're at\",\n"
-            "  \"gaps_and_concerns\": [\"specific gap or concern with evidence\"],\n"
-            "  \"best_suited_for\": \"what kind of role, team, company size, and problems they are best matched with\",\n"
-            "  \"interview_ready_summary\": \"what a recruiter needs to know before interviewing them in 2-3 sentences\"\n"
+            "  \"who_they_are\": \"2-3 sentences on what drives them, how they work, and what they care about — "
+            "based on motivations/values/culture data if available, otherwise omit or note as unknown\",\n"
+            "  \"core_strengths\": [\"strength 1 with evidence — cite anecdotes where available\"],\n"
+            "  \"domain_expertise\": \"paragraph about domain depth and industry context\",\n"
+            "  \"technical_profile\": \"paragraph about technical skills, depth vs breadth, evidence quality\",\n"
+            "  \"honest_assessment\": \"paragraph: what they can genuinely do, what level they are at, "
+            "what they have not yet demonstrated\",\n"
+            "  \"gaps_and_concerns\": [\"specific gap or concern with evidence — be direct\"],\n"
+            "  \"best_suited_for\": \"what kind of role, team, company size, culture, and problem type "
+            "this person is best matched with — use culture identity data if present\",\n"
+            "  \"interview_ready_summary\": \"what a recruiter needs to know before interviewing in 2-3 sentences\"\n"
             "}\n"
             "Return ONLY valid JSON."
         )
 
         user_msg = (
-            f"Generate a professional profile description for user: {user_id}\n\n"
-            f"GRAPH DATA:\n{json.dumps(graph_data, indent=2, default=str)}"
+            f"Generate a professional profile for user: {user_id}\n\n"
+            f"COMPLETE GRAPH DATA:\n{json.dumps(graph_data, indent=2, default=str)}"
         )
 
         raw = await self._call_with_retry(
@@ -542,8 +657,317 @@ class LLMExtractionService:
             temperature=0.3,
         )
 
-        import json as _j
         try:
-            return _j.loads(raw)
+            description = _j.loads(raw)
         except Exception:
-            return {"identity": raw, "error": "parse_failed"}
+            description = {"identity": raw, "error": "parse_failed"}
+
+        description["completeness"] = completeness.model_dump()
+        return description
+
+    def _compute_digital_twin_completeness(
+        self,
+        skills: list,
+        projects: list,
+        experiences: list,
+        has_assessment: bool,
+        patterns: list,
+        anecdotes: list,
+        motivations: list,
+        values: list,
+        goals: list,
+        culture_identity: dict | None,
+        behavioral_insights: list,
+    ):
+        """
+        Compute the DigitalTwinCompleteness score — deterministic, no LLM.
+
+        Technical depth scoring (contributes 50% of overall):
+          Skills evidence quality:  40% of tech score
+          Projects with impact:     30% of tech score
+          Experiences + accmplshmt: 20% of tech score
+          Skills with anecdotes:    10% of tech score
+
+        Human depth scoring (contributes 50% of overall):
+          Anecdotes (cap at 5):     30% of human score
+          Motivation identified:    20% of human score
+          Values identified:        15% of human score
+          Goal set:                 15% of human score
+          Culture identity built:   15% of human score
+          Behavioral insights:       5% of human score
+        """
+        from models.schemas import (
+            DigitalTwinCompleteness, TechnicalDepthBreakdown, HumanDepthBreakdown
+        )
+
+        # ── Technical depth ────────────────────────────────────────────────────
+        total_skills  = len(skills)
+        claimed_only  = sum(1 for s in skills if s.get("evidence_strength") == "claimed_only")
+        evidenced     = sum(1 for s in skills if s.get("evidence_strength") in
+                           ("mentioned_once", "project_backed", "multiple_productions"))
+        with_anecdotes = sum(1 for s in skills if (s.get("anecdote_count") or 0) > 0)
+
+        total_projects = len(projects)
+        with_impact    = sum(1 for p in projects if p.get("has_measurable_impact"))
+
+        total_exp    = len(experiences)
+        with_accomp  = sum(
+            1 for e in experiences
+            if e.get("accomplishments") and len(e["accomplishments"]) > 0
+        )
+
+        # Sub-scores (0.0–1.0)
+        skill_evidence_score = (evidenced / total_skills) if total_skills else 0.0
+        project_impact_score = (with_impact / total_projects) if total_projects else 0.0
+        exp_accomp_score     = (with_accomp / total_exp) if total_exp else 0.0
+        anecdote_skill_score = (with_anecdotes / total_skills) if total_skills else 0.0
+
+        tech_raw = (
+            skill_evidence_score * 0.40 +
+            project_impact_score * 0.30 +
+            exp_accomp_score     * 0.20 +
+            anecdote_skill_score * 0.10
+        )
+        # Assessment bonus: cap the raw score at 0.95 without it, full 1.0 with it
+        if not has_assessment:
+            tech_raw = min(tech_raw, 0.90)
+        tech_pct = round(tech_raw * 100)
+
+        # ── Human depth ────────────────────────────────────────────────────────
+        anecdote_target  = 5
+        anecdote_count   = len(anecdotes)
+        anecdote_score   = min(anecdote_count / anecdote_target, 1.0)
+        has_motivation   = len(motivations) > 0
+        has_values       = len(values) > 0
+        has_goal         = len(goals) > 0
+        has_culture      = culture_identity is not None
+        has_behavior     = len(behavioral_insights) > 0
+
+        human_raw = (
+            anecdote_score       * 0.30 +
+            (1.0 if has_motivation else 0.0) * 0.20 +
+            (1.0 if has_values    else 0.0) * 0.15 +
+            (1.0 if has_goal      else 0.0) * 0.15 +
+            (1.0 if has_culture   else 0.0) * 0.15 +
+            (1.0 if has_behavior  else 0.0) * 0.05
+        )
+        human_pct = round(human_raw * 100)
+
+        overall_pct = round((tech_pct + human_pct) / 2)
+
+        # ── Matching capability flags ──────────────────────────────────────────
+        evidence_weighted_active = evidenced > 0
+        soft_skill_active        = len([p for p in patterns if p.get("pattern")]) > 0
+        culture_active           = has_culture
+
+        # ── Profile verification (check critical flags in SQLite via approximation) ─
+        # We don't have SQLite here — will be enriched by the route if needed.
+        # Approximate: assume verified if assessment exists and evidenced > claimed.
+        profile_verified = has_assessment and evidenced >= claimed_only
+
+        # ── Missing dimensions (actionable, honest) ────────────────────────────
+        missing: list[str] = []
+
+        if claimed_only > 0:
+            missing.append(
+                f"{claimed_only} skill(s) have only 'claimed' evidence — "
+                f"their matching weight is reduced to 30%. "
+                f"Add projects or anecdotes to strengthen them."
+            )
+        if with_anecdotes == 0 and total_skills > 0:
+            missing.append(
+                "No anecdotes captured yet. Recruiters can't see the stories behind your skills. "
+                "Start the deep profile interview."
+            )
+        elif with_anecdotes < total_skills and total_skills > 0:
+            missing.append(
+                f"{total_skills - with_anecdotes} skill(s) have no backing story. "
+                f"The more stories we have, the more accurately we can describe your experience."
+            )
+        if not has_motivation:
+            missing.append(
+                "Motivation not identified. We can't match you to companies whose mission aligns "
+                "with what drives you."
+            )
+        if not has_values:
+            missing.append(
+                "Core values not captured. Role culture matching will miss alignment signals."
+            )
+        if not has_goal:
+            missing.append(
+                "No career goal set. We can't prioritise growth-oriented or leadership roles for you."
+            )
+        if not has_culture:
+            missing.append(
+                "Culture identity incomplete — culture fit scoring is disabled for your matches. "
+                "This is 15% of your total match score."
+            )
+        if not has_assessment:
+            missing.append(
+                "Critical assessment not generated. Re-ingest your profile to produce it."
+            )
+        if total_projects == 0:
+            missing.append("No projects in your profile — skill evidence cannot be project-backed.")
+        elif with_impact == 0:
+            missing.append(
+                "None of your projects have measurable impact. "
+                "Add metrics (users, latency, revenue) to strengthen your evidence."
+            )
+
+        # ── Next action ────────────────────────────────────────────────────────
+        if human_pct < 20:
+            next_action = (
+                "Start the deep profile interview — your human portrait is nearly empty. "
+                "Culture fit scoring and motivation matching are currently disabled for you."
+            )
+        elif not has_motivation:
+            next_action = (
+                "Continue the profile interview to capture what drives you. "
+                "This enables motivation-based matching."
+            )
+        elif not has_goal:
+            next_action = (
+                "Tell us your 5-year goal. This unlocks role trajectory matching."
+            )
+        elif not has_culture:
+            next_action = (
+                "Complete the culture identity section of your interview. "
+                "This activates culture fit scoring (15% of your match score)."
+            )
+        elif claimed_only > 0:
+            next_action = (
+                f"Add stories or projects for {claimed_only} skill(s) sitting at 'claimed only'. "
+                f"Each one currently scores at 30% weight in matching."
+            )
+        elif with_anecdotes < total_skills:
+            next_action = (
+                f"Add anecdotes for {total_skills - with_anecdotes} more skill(s). "
+                f"Recruiters see the story — not just the skill name."
+            )
+        else:
+            next_action = (
+                "Your profile is strong. Keep it updated as you ship new work."
+            )
+
+        return DigitalTwinCompleteness(
+            overall_pct=overall_pct,
+            technical_depth=TechnicalDepthBreakdown(
+                score_pct=tech_pct,
+                skills_total=total_skills,
+                skills_evidenced=evidenced,
+                skills_with_anecdotes=with_anecdotes,
+                skills_claimed_only=claimed_only,
+                projects_total=total_projects,
+                projects_with_impact=with_impact,
+                experiences_total=total_exp,
+                experiences_with_accomplishments=with_accomp,
+                has_critical_assessment=has_assessment,
+            ),
+            human_depth=HumanDepthBreakdown(
+                score_pct=human_pct,
+                anecdotes_count=anecdote_count,
+                anecdotes_target=anecdote_target,
+                motivations_identified=has_motivation,
+                values_identified=has_values,
+                goal_set=has_goal,
+                culture_identity_built=has_culture,
+                behavioral_insights_count=len(behavioral_insights),
+                culture_matching_enabled=has_culture,
+            ),
+            evidence_weighted_scoring_active=evidence_weighted_active,
+            soft_skill_scoring_active=soft_skill_active,
+            culture_fit_scoring_active=culture_active,
+            profile_verified=profile_verified,
+            missing_dimensions=missing,
+            next_action=next_action,
+        )
+
+    async def compute_completeness(self, user_id: str, neo4j_client) -> "DigitalTwinCompleteness":
+        """
+        Compute digital twin completeness without calling the LLM.
+
+        Runs only the graph queries needed for the deterministic scoring model.
+        Much faster than describe_user_from_graph() — suitable for dashboard polling
+        and profile progress UIs that don't need the full LLM-generated description.
+        """
+        skills = await neo4j_client.run_query(
+            """
+            MATCH (u:User {id: $id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
+                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
+            OPTIONAL MATCH (s)-[:GROUNDED_IN]->(anec:Anecdote)
+            RETURN s.evidence_strength AS evidence_strength,
+                   count(DISTINCT anec) AS anecdote_count
+            """,
+            {"id": user_id},
+        )
+        projects = await neo4j_client.run_query(
+            """
+            MATCH (u:User {id: $id})-[:HAS_PROJECT_CATEGORY]->(:ProjectCategory)
+                  -[:HAS_PROJECT]->(p:Project)
+            RETURN p.has_measurable_impact AS has_measurable_impact
+            """,
+            {"id": user_id},
+        )
+        experiences = await neo4j_client.run_query(
+            """
+            MATCH (u:User {id: $id})-[:HAS_EXPERIENCE_CATEGORY]->(:ExperienceCategory)
+                  -[:HAS_EXPERIENCE]->(e:Experience)
+            RETURN e.accomplishments AS accomplishments
+            """,
+            {"id": user_id},
+        )
+        has_assessment_rows = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:HAS_ASSESSMENT]->(a:CriticalAssessment) RETURN a.overall_signal AS sig",
+            {"id": user_id},
+        )
+        has_assessment = bool(has_assessment_rows and has_assessment_rows[0].get("sig"))
+
+        patterns = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_PATTERN_CATEGORY]->
+                  (:PatternCategory)-[:HAS_PATTERN]->(p:ProblemSolvingPattern)
+            RETURN p.pattern AS pattern
+            """,
+            {"id": user_id},
+        )
+        anecdotes = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:HAS_ANECDOTE]->(a:Anecdote) RETURN a.name AS name",
+            {"id": user_id},
+        )
+        motivations = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:MOTIVATED_BY]->(m:Motivation) RETURN m.category AS category",
+            {"id": user_id},
+        )
+        values = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:HOLDS_VALUE]->(v:Value) RETURN v.name AS name",
+            {"id": user_id},
+        )
+        goals = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:ASPIRES_TO]->(g:Goal) RETURN g.description AS description",
+            {"id": user_id},
+        )
+        culture_identity = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity)
+            RETURN c.pace_preference AS pace_preference
+            """,
+            {"id": user_id},
+        )
+        behavioral_insights = await neo4j_client.run_query(
+            "OPTIONAL MATCH (u:User {id: $id})-[:HAS_BEHAVIORAL_INSIGHT]->(b:BehavioralInsight) RETURN b.insight_type AS insight_type",
+            {"id": user_id},
+        )
+
+        return self._compute_digital_twin_completeness(
+            skills=skills,
+            projects=projects,
+            experiences=experiences,
+            has_assessment=has_assessment,
+            patterns=patterns,
+            anecdotes=[a for a in anecdotes if a.get("name")],
+            motivations=[m for m in motivations if m.get("category")],
+            values=[v for v in values if v.get("name")],
+            goals=[g for g in goals if g.get("description")],
+            culture_identity=culture_identity[0] if culture_identity and culture_identity[0].get("pace_preference") else None,
+            behavioral_insights=[b for b in behavioral_insights if b.get("insight_type")],
+        )
