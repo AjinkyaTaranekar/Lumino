@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import ScoreBar from './ScoreBar'
 import SkillBadge from './SkillBadge'
-import { ArrowRight, Globe, Building2 } from 'lucide-react'
+import { ArrowRight, Globe, Building2, ThumbsUp, ThumbsDown } from 'lucide-react'
 
 function BonusBadge({ label, value }) {
   const pct = Math.round(value * 100)
@@ -17,6 +17,11 @@ function BonusBadge({ label, value }) {
 export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }) {
   const navigate = useNavigate()
 
+  import { useState } from 'react'
+
+  const [reaction, setReaction] = useState(null)
+  // 'like' | 'dislike' | null
+
   const handleExplore = () => {
     if (mode === 'seeker') {
       navigate(`/user/match/${result.job_id}`)
@@ -25,6 +30,17 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
       navigate(`/user/match/${result.job_id}`, { state: { viewAs: result.user_id } })
     }
   }
+
+  const handleLike = () => {
+  setReaction('like')
+  // optional: send to backend
+  // fetch('/api/like', { method: 'POST', body: JSON.stringify({ jobId: result.job_id }) })
+}
+
+const handleDislike = () => {
+  setReaction('dislike')
+  // optional: send to backend
+}
 
   const title   = mode === 'seeker' ? result.job_title : result.user_id
   const subtitle = mode === 'seeker'
@@ -49,14 +65,40 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
             )}
           </div>
         </div>
-        <button
-          onClick={handleExplore}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0 transition-colors"
-          style={{ background: '#e94560', color: '#fff' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-          onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-          Explore <ArrowRight size={12} />
-        </button>
+        <div className="flex items-center gap-2">
+  {/* Like */}
+  <button
+    onClick={handleLike}
+    className="p-2 rounded-lg transition-colors"
+    style={{
+      background: reaction === 'like' ? '#27ae60' : '#0f3460',
+      color: '#fff'
+    }}
+  >
+    <ThumbsUp size={14} />
+  </button>
+
+  {/* Dislike */}
+  <button
+    onClick={handleDislike}
+    className="p-2 rounded-lg transition-colors"
+    style={{
+      background: reaction === 'dislike' ? '#e94560' : '#0f3460',
+      color: '#fff'
+    }}
+  >
+    <ThumbsDown size={14} />
+  </button>
+
+  {/* Explore */}
+  <button
+    onClick={handleExplore}
+    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+    style={{ background: '#e94560', color: '#fff' }}
+  >
+    Explore <ArrowRight size={12} />
+  </button>
+</div>
       </div>
 
       {/* Score bars */}
