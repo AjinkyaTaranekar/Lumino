@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  
+  --color-primary: #3B82F6;
+  --color-primary-dark: #2563EB;
+  --color-indigo-950: #1e1b4b;
+  --color-brand-dark: #0F172A;
+  --color-brand-bg: #F8FAFC;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-slate-900;
+  }
+}
+
+@layer components {
+  .prism-shadow {
+    box-shadow: 0 20px 40px rgba(24, 20, 69, 0.06);
+  }
+  
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/30;
+  }
+}
