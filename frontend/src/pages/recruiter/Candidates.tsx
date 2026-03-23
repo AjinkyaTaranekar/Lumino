@@ -1,19 +1,19 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Network,
+  Sparkles,
+  Trophy,
+  Users,
+} from 'lucide-react';
 import { motion } from 'motion/react';
-import { api } from '../../lib/api';
-import type { CandidateResult } from '../../lib/types';
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import LoadingOverlay from '../../components/LoadingOverlay';
 import ScoreBar from '../../components/ScoreBar';
 import SkillBadge from '../../components/SkillBadge';
-import {
-  ArrowLeft,
-  Users,
-  ArrowRight,
-  Sparkles,
-  Network,
-  Trophy,
-} from 'lucide-react';
+import { api } from '../../lib/api';
+import type { CandidateResult } from '../../lib/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -49,8 +49,8 @@ function CultureBadge({ label, value }: CultureBadgeProps) {
     (value ?? 0) >= 0.7
       ? 'badge badge-green'
       : (value ?? 0) > 0
-      ? 'badge badge-orange'
-      : 'badge badge-gray';
+        ? 'badge badge-orange'
+        : 'badge badge-gray';
   return (
     <span className={cls}>
       {label}: {pct}%
@@ -67,9 +67,9 @@ interface CandidateCardProps {
 }
 
 function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
-  const navigate   = useNavigate();
-  const isTopRank  = rank <= 3;
-  const scorePct   = Math.round(result.total_score * 100);
+  const navigate = useNavigate();
+  const isTopRank = rank <= 3;
+  const scorePct = Math.round(result.total_score * 100);
   const avatarSeed = encodeURIComponent(result.user_id);
 
   return (
@@ -104,11 +104,10 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-sm text-indigo-950 truncate">{result.user_id}</h3>
             <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                isTopRank
+              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isTopRank
                   ? 'bg-primary-50 text-primary-600 border-primary-100'
                   : 'bg-slate-50 text-slate-400 border-slate-200'
-              }`}
+                }`}
             >
               {rankLabel(rank)}
             </span>
@@ -132,15 +131,15 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
       <div className="space-y-2 mb-4">
         <ScoreBar label="Overall Match" score={result.total_score} large />
         <div className="grid grid-cols-2 gap-3 mt-2">
-          <ScoreBar label="Skills (65%)"  score={result.skill_score} />
-          <ScoreBar label="Domain (35%)"  score={result.domain_score} />
+          <ScoreBar label="Skills (65%)" score={result.skill_score} />
+          <ScoreBar label="Domain (35%)" score={result.domain_score} />
         </div>
       </div>
 
       {/* ── Culture badges ── */}
       <div className="flex gap-2 mb-3 flex-wrap">
-        <CultureBadge label="Culture fit"  value={result.culture_bonus} />
-        <CultureBadge label="Preferences"  value={result.preference_bonus} />
+        <CultureBadge label="Culture fit" value={result.culture_bonus} />
+        <CultureBadge label="Preferences" value={result.preference_bonus} />
       </div>
 
       {/* ── Matched skills ── */}
@@ -186,12 +185,12 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function Candidates() {
-  const { jobId }  = useParams<{ jobId: string }>();
-  const navigate   = useNavigate();
+  const { jobId } = useParams<{ jobId: string }>();
+  const navigate = useNavigate();
 
   const [candidates, setCandidates] = useState<CandidateResult[] | null>(null);
-  const [loading, setLoading]       = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleFind() {
     if (!jobId) return;
@@ -210,7 +209,7 @@ export default function Candidates() {
 
   return (
     <>
-      <title>Candidates — Lumino</title>
+      <title>Candidates - Lumino</title>
       {loading && <LoadingOverlay message="Finding matching candidates…" />}
 
       <div className="px-6 py-8 max-w-4xl mx-auto">

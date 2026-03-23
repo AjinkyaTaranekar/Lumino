@@ -1,18 +1,18 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'motion/react';
 import {
-  Upload as UploadIcon,
-  FileText,
-  CheckCircle,
   AlertCircle,
-  BookOpen,
-  ShieldCheck,
-  ShieldAlert,
   AlertTriangle,
-  Network,
   BarChart3,
+  BookOpen,
+  CheckCircle,
+  FileText,
+  Network,
+  ShieldAlert,
+  ShieldCheck,
+  Upload as UploadIcon,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import React, { useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { IngestUserResponse } from '../../lib/types';
@@ -103,7 +103,7 @@ export default function ResumeManager() {
 
   return (
     <>
-      <title>Upload Resume — Lumino</title>
+      <title>Upload Resume - Lumino</title>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
 
@@ -115,7 +115,7 @@ export default function ResumeManager() {
             </h1>
             <p className="text-slate-500 mt-2 text-sm leading-relaxed">
               We'll extract your skills, domains, and experience to build your personal knowledge
-              graph — turning your resume into a precise digital twin.
+              graph - turning your resume into a precise digital twin.
             </p>
           </div>
           <Link
@@ -142,11 +142,10 @@ export default function ResumeManager() {
               aria-controls={`panel-${t}`}
               id={`tab-${t}`}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-500 ${
-                tab === t
+              className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-500 ${tab === t
                   ? 'bg-white text-indigo-950 shadow-prism'
                   : 'text-slate-500 hover:text-indigo-950'
-              }`}
+                }`}
             >
               {t === 'pdf' ? 'Upload PDF' : 'Paste Text'}
             </button>
@@ -173,13 +172,12 @@ export default function ResumeManager() {
                   ? `Selected file: ${file.name}. Press Enter to change file.`
                   : 'Drop your PDF here or press Enter to browse files'
               }
-              className={`rounded-2xl p-12 text-center cursor-pointer transition-all duration-200 border-2 border-dashed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 outline-none ${
-                dragging
+              className={`rounded-2xl p-12 text-center cursor-pointer transition-all duration-200 border-2 border-dashed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 outline-none ${dragging
                   ? 'border-blue-400 bg-blue-50 scale-[1.01]'
                   : file
-                  ? 'border-emerald-400 bg-emerald-50'
-                  : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
-              }`}
+                    ? 'border-emerald-400 bg-emerald-50'
+                    : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
+                }`}
             >
               <input
                 ref={fileRef}
@@ -324,7 +322,7 @@ export default function ResumeManager() {
             ) : (
               <div className="alert-success" role="status">
                 <ShieldCheck size={15} className="flex-shrink-0" aria-hidden="true" />
-                <span>Profile fully verified — no ambiguous interpretations detected.</span>
+                <span>Profile fully verified - no ambiguous interpretations detected.</span>
               </div>
             )}
 

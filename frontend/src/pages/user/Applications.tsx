@@ -1,18 +1,18 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import {
   Award,
-  Download,
-  FileText,
-  TrendingUp,
   BookOpen,
-  Users,
-  ExternalLink,
   CheckCircle,
+  Download,
+  ExternalLink,
+  FileText,
   Info,
+  TrendingUp,
+  Users,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -35,7 +35,7 @@ interface NextStep {
 
 const STRENGTHS: FeedbackPoint[] = [
   { id: 's1', text: 'Strong TypeScript and React foundation with production-grade experience.' },
-  { id: 's2', text: 'Clear communication style — answers were structured and concise.' },
+  { id: 's2', text: 'Clear communication style - answers were structured and concise.' },
   { id: 's3', text: 'Demonstrated ownership mindset when describing past projects.' },
   { id: 's4', text: 'Good understanding of trade-offs in system design decisions.' },
 ];
@@ -111,7 +111,7 @@ function CenterLabel({ cx, cy }: { cx?: number; cy?: number }) {
 export default function Applications() {
   return (
     <>
-      <title>My Applications — Lumino</title>
+      <title>My Applications - Lumino</title>
 
       <div className="px-6 py-8 max-w-6xl mx-auto space-y-8">
 
@@ -149,7 +149,7 @@ export default function Applications() {
                   </span>
                 </div>
                 <h2 className="text-xl font-extrabold text-indigo-950 tracking-tight mt-1">
-                  Senior Full-Stack Engineer — Stripe
+                  Senior Full-Stack Engineer - Stripe
                 </h2>
                 <p className="text-sm text-slate-500 mt-0.5">
                   Interviewed on <time dateTime="2026-03-20">20 March 2026</time>
@@ -234,7 +234,7 @@ export default function Applications() {
               <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
                 <Info size={13} className="text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <p className="text-xs text-amber-700 leading-relaxed">
-                  Focus on System Design first — it has the highest impact on your target role progression.
+                  Focus on System Design first - it has the highest impact on your target role progression.
                 </p>
               </div>
             </div>
@@ -332,7 +332,7 @@ export default function Applications() {
                 <Link
                   to={step.href}
                   className="inline-flex items-center gap-1.5 text-xs font-bold mt-auto focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 rounded"
-                  aria-label={`${step.cta} — ${step.title}`}
+                  aria-label={`${step.cta} - ${step.title}`}
                 >
                   {step.cta}
                   <ExternalLink size={11} aria-hidden="true" />
@@ -352,7 +352,7 @@ export default function Applications() {
             "The expert in anything was once a beginner. Every senior engineer started
             exactly where you are now."
           </blockquote>
-          <p className="text-sm text-slate-400 mt-3 font-medium">— Lumino Career Coach</p>
+          <p className="text-sm text-slate-400 mt-3 font-medium">- Lumino Career Coach</p>
         </div>
 
         {/* ── Footer Links ── */}

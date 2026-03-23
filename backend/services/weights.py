@@ -1,5 +1,5 @@
 """
-Weight computation service — computes and stores expertise weights on Skill and Domain nodes.
+Weight computation service - computes and stores expertise weights on Skill and Domain nodes.
 
 Weight formula (clamped 0.0–1.0):
   weight = years * 0.4 + num_projects_demonstrating * 0.3 + level_val * 0.3

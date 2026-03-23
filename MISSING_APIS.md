@@ -43,7 +43,7 @@ Response:
 }
 ```
 
-**Notes**: Requires LLM analysis of user graph + career goals. Currently no career goal nodes exist — would need `GoalNode` in graph.
+**Notes**: Requires LLM analysis of user graph + career goals. Currently no career goal nodes exist - would need `GoalNode` in graph.
 
 ---
 
@@ -158,7 +158,7 @@ Response (already implemented):
 
 ## 6. Job Team Dynamics
 
-**Screen**: Stepping Stone Job Details — Team Dynamics Radar Chart
+**Screen**: Stepping Stone Job Details - Team Dynamics Radar Chart
 
 ```
 GET /api/v1/jobs/{job_id}/team-dynamics
@@ -226,7 +226,7 @@ GET  /api/v1/users/{user_id}/matches/cached     # Return cached results with tim
 
 ---
 
-## 9. Hardcoded UI Stats — User Dashboard
+## 9. Hardcoded UI Stats - User Dashboard
 
 **Screen**: `Dashboard.tsx` → `UserDashboard` stat cards
 
@@ -248,7 +248,7 @@ Response:
 
 ---
 
-## 10. Hardcoded UI Stats — Recruiter Dashboard
+## 10. Hardcoded UI Stats - Recruiter Dashboard
 
 **Screen**: `Dashboard.tsx` → `RecruiterDashboard` stat cards
 
@@ -264,11 +264,11 @@ Response:
 }
 ```
 
-**Notes**: Requires interview scheduling data (see API #2) and historical hiring records — neither exists yet.
+**Notes**: Requires interview scheduling data (see API #2) and historical hiring records - neither exists yet.
 
 ---
 
-## 11. Hardcoded UI Stats — Admin Dashboard
+## 11. Hardcoded UI Stats - Admin Dashboard
 
 **Screen**: `Dashboard.tsx` → `AdminDashboardWidget` and `AdminDashboard.tsx`
 
@@ -289,7 +289,7 @@ Response:
 
 ## 12. User Avatar / Profile Photo
 
-**Screen**: `TopNavBar.tsx` — profile avatar
+**Screen**: `TopNavBar.tsx` - profile avatar
 
 ```
 GET /api/v1/users/{user_id}/avatar
@@ -304,28 +304,28 @@ Response: { avatar_url: str }
 
 ---
 
-## 13. Career Trajectory — All Content Hardcoded
+## 13. Career Trajectory - All Content Hardcoded
 
 **Screen**: `pages/user/Trajectory.tsx`
 
 The entire Trajectory page is mock data:
-- Milestones (current role, role history) — **hardcoded**
-- Skill gaps (e.g., "System Design", "Leadership") — **hardcoded**
-- Recommended next roles — **hardcoded**
-- Career path dot-grid visualization — **hardcoded**
+- Milestones (current role, role history) - **hardcoded**
+- Skill gaps (e.g., "System Design", "Leadership") - **hardcoded**
+- Recommended next roles - **hardcoded**
+- Career path dot-grid visualization - **hardcoded**
 
 Needs API #1 (`/users/{user_id}/career-trajectory`) fully implemented.
 
 ---
 
-## 14. Applications / Feedback Page — Entirely Mocked
+## 14. Applications / Feedback Page - Entirely Mocked
 
 **Screen**: `pages/user/Applications.tsx`
 
 The entire page uses mock data:
-- Application list (company, role, status, date) — **hardcoded**
-- Status distribution PieChart (Interviewing / Pending / Rejected) — **hardcoded**
-- AI-generated feedback per application — **hardcoded**
+- Application list (company, role, status, date) - **hardcoded**
+- Status distribution PieChart (Interviewing / Pending / Rejected) - **hardcoded**
+- AI-generated feedback per application - **hardcoded**
 
 ```
 GET /api/v1/users/{user_id}/applications
@@ -350,14 +350,14 @@ Body: { job_id: str }
 
 ---
 
-## 15. Practice / Interview Session — Entirely Mocked
+## 15. Practice / Interview Session - Entirely Mocked
 
 **Screen**: `pages/user/Practice.tsx`
 
 The interview session is fully simulated on the frontend:
-- AI interviewer responses — **hardcoded mock turns**
-- Question bank — **hardcoded**
-- Session scoring — **not implemented**
+- AI interviewer responses - **hardcoded mock turns**
+- Question bank - **hardcoded**
+- Session scoring - **not implemented**
 
 ```
 POST /api/v1/users/{user_id}/practice-sessions

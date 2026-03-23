@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, ChevronDown, ChevronUp } from 'lucide-react';
-import GraphViewer from '../../components/GraphViewer';
+import { ArrowLeft, ChevronDown, ChevronUp, Save } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPanel from '../../components/ChatPanel';
-import VersionHistory from '../../components/VersionHistory';
+import GraphViewer from '../../components/GraphViewer';
 import SkillGapPanel from '../../components/SkillGapPanel';
-import { api } from '../../lib/api';
+import VersionHistory from '../../components/VersionHistory';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
 import type { GraphMutation } from '../../lib/types';
 
 // ─── Chat message shape ───────────────────────────────────────────────────────
@@ -20,29 +20,29 @@ interface ChatMessage {
 // ─── Apply result shape ───────────────────────────────────────────────────────
 
 interface ApplyResult {
-  nodes_added?:   number;
+  nodes_added?: number;
   nodes_updated?: number;
   nodes_removed?: number;
-  edges_added?:   number;
+  edges_added?: number;
 }
 
 // ─── EditGraph ────────────────────────────────────────────────────────────────
 
 export default function EditGraph() {
-  const { session }  = useAuth();
-  const navigate     = useNavigate();
-  const location     = useLocation();
-  const userId       = session?.userId;
-  const jobId        = (location.state as { jobId?: string } | null)?.jobId;
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const userId = session?.userId;
+  const jobId = (location.state as { jobId?: string } | null)?.jobId;
 
-  const [sessionId,        setSessionId]        = useState<string | null>(null);
-  const [graphKey,         setGraphKey]          = useState(0);
-  const [messages,         setMessages]          = useState<ChatMessage[]>([]);
-  const [loading,          setLoading]           = useState(false);
-  const [initError,        setInitError]         = useState<string | null>(null);
-  const [showVersions,     setShowVersions]      = useState(false);
-  const [showGap,          setShowGap]           = useState(!!jobId);
-  const [checkpointSaving, setCheckpointSaving]  = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [graphKey, setGraphKey] = useState(0);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [showVersions, setShowVersions] = useState(false);
+  const [showGap, setShowGap] = useState(!!jobId);
+  const [checkpointSaving, setCheckpointSaving] = useState(false);
 
   const chatRef = useRef<{ preSeed: (msg: string) => void } | null>(null);
 
@@ -99,10 +99,10 @@ export default function EditGraph() {
       const res = await api.applyMutations('user', userId!, sessionId, mutations) as ApplyResult;
       setGraphKey(k => k + 1);
       const summary = [
-        (res.nodes_added   ?? 0) > 0 ? `+${res.nodes_added} nodes`   : null,
+        (res.nodes_added ?? 0) > 0 ? `+${res.nodes_added} nodes` : null,
         (res.nodes_updated ?? 0) > 0 ? `~${res.nodes_updated} updated` : null,
         (res.nodes_removed ?? 0) > 0 ? `-${res.nodes_removed} removed` : null,
-        (res.edges_added   ?? 0) > 0 ? `+${res.edges_added} edges`    : null,
+        (res.edges_added ?? 0) > 0 ? `+${res.edges_added} edges` : null,
       ].filter(Boolean).join(', ');
       setMessages(prev => [
         ...prev,
@@ -199,7 +199,7 @@ export default function EditGraph() {
 
   return (
     <>
-      <title>Deep Dive Interview — Lumino</title>
+      <title>Deep Dive Interview - Lumino</title>
 
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
 
@@ -218,7 +218,7 @@ export default function EditGraph() {
 
           {/* Center */}
           <h1 className="text-sm font-semibold text-indigo-950 truncate min-w-0">
-            Deep Dive Interview —{' '}
+            Deep Dive Interview -{' '}
             <span className="text-blue-500">{userId}</span>
           </h1>
 

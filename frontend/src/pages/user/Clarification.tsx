@@ -24,9 +24,9 @@ import type { ClarificationQuestion, ClarificationsResponse } from '../../lib/ty
 type Impact = 'critical' | 'important' | 'minor';
 
 const IMPACT_META: Record<Impact, { badge: string; label: string; icon: React.ElementType }> = {
-  critical:  { badge: 'badge-red',    label: 'Critical',  icon: AlertTriangle },
+  critical: { badge: 'badge-red', label: 'Critical', icon: AlertTriangle },
   important: { badge: 'badge-orange', label: 'Important', icon: Info },
-  minor:     { badge: 'badge-gray',   label: 'Minor',     icon: HelpCircle },
+  minor: { badge: 'badge-gray', label: 'Minor', icon: HelpCircle },
 };
 
 // ─── ImpactBadge ──────────────────────────────────────────────────────────────
@@ -100,12 +100,12 @@ interface QuestionCardProps {
 function QuestionCard({ q, onResolved }: QuestionCardProps) {
   const { session } = useAuth();
 
-  const [phase,          setPhase]    = useState<Phase>(q.status !== 'pending' ? 'done' : 'idle');
-  const [answer,         setAnswer]   = useState('');
-  const [interpretation, setInterp]   = useState<InterpretResult | null>(null);
-  const [followUp,       setFollowUp] = useState<string | null>(null);
-  const [saving,         setSaving]   = useState(false);
-  const [err,            setErr]      = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(q.status !== 'pending' ? 'done' : 'idle');
+  const [answer, setAnswer] = useState('');
+  const [interpretation, setInterp] = useState<InterpretResult | null>(null);
+  const [followUp, setFollowUp] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
   async function handleInterpret() {
     if (!answer.trim()) return;
@@ -160,7 +160,7 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
   }
 
   async function handleSkip() {
-    await api.skipFlag(session!.userId, q.flag_id).catch(() => {});
+    await api.skipFlag(session!.userId, q.flag_id).catch(() => { });
     setPhase('done');
     onResolved({ ...q, status: 'skipped' });
   }
@@ -181,14 +181,14 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
   }
 
   const borderColor =
-    q.resolution_impact === 'critical'  ? 'border-l-red-400'
-    : q.resolution_impact === 'important' ? 'border-l-amber-400'
-    : 'border-l-slate-200';
+    q.resolution_impact === 'critical' ? 'border-l-red-400'
+      : q.resolution_impact === 'important' ? 'border-l-amber-400'
+        : 'border-l-slate-200';
 
   const headerBg =
-    q.resolution_impact === 'critical'  ? 'bg-red-50'
-    : q.resolution_impact === 'important' ? 'bg-amber-50'
-    : 'bg-slate-50';
+    q.resolution_impact === 'critical' ? 'bg-red-50'
+      : q.resolution_impact === 'important' ? 'bg-amber-50'
+        : 'bg-slate-50';
 
   return (
     <div className={`card-lumino overflow-hidden border-l-4 ${borderColor}`}>
@@ -268,7 +268,7 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
             <textarea
               value={answer}
               onChange={e => setAnswer(e.target.value)}
-              placeholder="Be specific — what exactly? How many? What was your role?"
+              placeholder="Be specific - what exactly? How many? What was your role?"
               rows={4}
               autoFocus
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-indigo-950 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -317,11 +317,10 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
               <p className="text-xs text-slate-400 mt-1">{interpretation.explanation}</p>
               <div className="flex items-center gap-1.5 mt-2">
                 <span className="text-xs text-slate-400">Confidence:</span>
-                <span className={`text-xs font-semibold capitalize ${
-                  interpretation.confidence === 'high'   ? 'text-emerald-600'
-                  : interpretation.confidence === 'medium' ? 'text-amber-600'
-                  : 'text-red-500'
-                }`}>
+                <span className={`text-xs font-semibold capitalize ${interpretation.confidence === 'high' ? 'text-emerald-600'
+                    : interpretation.confidence === 'medium' ? 'text-amber-600'
+                      : 'text-red-500'
+                  }`}>
                   {interpretation.confidence}
                 </span>
               </div>
@@ -360,12 +359,12 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
 
 export default function Clarification() {
   const { session } = useAuth();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
 
-  const [data,    setData]    = useState<ClarificationsResponse | null>(null);
+  const [data, setData] = useState<ClarificationsResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
-  const [filter,  setFilter]  = useState<'pending' | 'all'>('pending');
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'pending' | 'all'>('pending');
 
   const load = useCallback(async () => {
     try {
@@ -383,9 +382,9 @@ export default function Clarification() {
   function onResolved(updated: ClarificationQuestion) {
     setData(prev => {
       if (!prev) return prev;
-      const questions       = prev.questions.map(q => q.flag_id === updated.flag_id ? { ...q, ...updated } : q);
-      const pending         = questions.filter(q => q.status === 'pending').length;
-      const resolved        = questions.filter(q => q.status !== 'pending').length;
+      const questions = prev.questions.map(q => q.flag_id === updated.flag_id ? { ...q, ...updated } : q);
+      const pending = questions.filter(q => q.status === 'pending').length;
+      const resolved = questions.filter(q => q.status !== 'pending').length;
       const criticalPending = questions.filter(q => q.status === 'pending' && q.resolution_impact === 'critical').length;
       return {
         ...prev,
@@ -397,7 +396,7 @@ export default function Clarification() {
     });
   }
 
-  const visible         = data?.questions.filter(q => filter === 'all' || q.status === 'pending') ?? [];
+  const visible = data?.questions.filter(q => filter === 'all' || q.status === 'pending') ?? [];
   const criticalPending = data?.questions.filter(q => q.status === 'pending' && q.resolution_impact === 'critical').length ?? 0;
 
   if (loading) {
@@ -418,7 +417,7 @@ export default function Clarification() {
 
   return (
     <>
-      <title>Verify Profile — Lumino</title>
+      <title>Verify Profile - Lumino</title>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
 
@@ -472,11 +471,10 @@ export default function Clarification() {
             const m = IMPACT_META[impact];
             return (
               <div key={impact} className="card-lumino p-3 text-center">
-                <p className={`text-xl font-bold ${
-                  impact === 'critical'  ? 'text-red-500'
-                  : impact === 'important' ? 'text-amber-600'
-                  : 'text-slate-400'
-                }`}>
+                <p className={`text-xl font-bold ${impact === 'critical' ? 'text-red-500'
+                    : impact === 'important' ? 'text-amber-600'
+                      : 'text-slate-400'
+                  }`}>
                   {count}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">{m.label} left</p>
@@ -492,11 +490,10 @@ export default function Clarification() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
-                  filter === f
+                className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${filter === f
                     ? 'bg-white shadow-sm text-indigo-950'
                     : 'text-slate-400 hover:text-slate-600'
-                }`}
+                  }`}
                 aria-pressed={filter === f}
               >
                 {f === 'pending'

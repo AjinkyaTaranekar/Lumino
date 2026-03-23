@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ChevronDown, Save } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import ChatPanel from '../../components/ChatPanel';
+import GraphViewer from '../../components/GraphViewer';
+import VersionHistory from '../../components/VersionHistory';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { GraphMutation } from '../../lib/types';
-import GraphViewer from '../../components/GraphViewer';
-import ChatPanel from '../../components/ChatPanel';
-import VersionHistory from '../../components/VersionHistory';
-import { ArrowLeft, Save, ChevronDown } from 'lucide-react';
 
 // ── Message type (local) ──────────────────────────────────────────────────
 
@@ -19,15 +19,15 @@ interface ChatMessage {
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function EditJobGraph() {
-  const { jobId }   = useParams<{ jobId: string }>();
+  const { jobId } = useParams<{ jobId: string }>();
   const { session } = useAuth();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
 
-  const [sessionId, setSessionId]       = useState<string | null>(null);
-  const [graphKey, setGraphKey]         = useState(0);
-  const [messages, setMessages]         = useState<ChatMessage[]>([]);
-  const [loading, setLoading]           = useState(false);
-  const [initError, setInitError]       = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [graphKey, setGraphKey] = useState(0);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const [showVersions, setShowVersions] = useState(false);
 
   // ── Start edit session on mount ───────────────────────────────────────
@@ -147,7 +147,7 @@ export default function EditJobGraph() {
 
   return (
     <>
-      <title>Edit Job Graph — Lumino</title>
+      <title>Edit Job Graph - Lumino</title>
 
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
 
@@ -211,7 +211,7 @@ export default function EditJobGraph() {
         {/* ── Two-panel layout ── */}
         <div className="flex flex-1 overflow-hidden">
 
-          {/* Graph — 60% */}
+          {/* Graph - 60% */}
           <main
             id="graph-panel"
             className="w-3/5 min-w-0 p-2 overflow-hidden"
@@ -226,7 +226,7 @@ export default function EditJobGraph() {
             />
           </main>
 
-          {/* Chat — 40% */}
+          {/* Chat - 40% */}
           <aside
             id="chat-panel"
             className="flex flex-col w-2/5 flex-shrink-0 border-l border-slate-100 bg-white"

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { ArrowLeft, Edit3, Layers, RefreshCw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, Edit3, Layers } from 'lucide-react';
 import GraphViewer from '../../components/GraphViewer';
-import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
 
 // ─── Stats shape returned by api.getUserStats ─────────────────────────────────
 
@@ -21,20 +21,20 @@ export default function UserModel() {
   const userId = session?.userId;
 
   const [graphKey, setGraphKey] = useState(0);
-  const [stats,    setStats]    = useState<GraphStats | null>(null);
+  const [stats, setStats] = useState<GraphStats | null>(null);
 
   useEffect(() => {
     if (!userId) return;
     api.getUserStats(userId)
       .then(s => setStats(s as GraphStats))
-      .catch(() => {});
+      .catch(() => { });
   }, [userId]);
 
   const iframeSrc = api.userVizUrl(userId!);
 
   return (
     <>
-      <title>Digital Twin — Lumino</title>
+      <title>Digital Twin - Lumino</title>
 
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
 
@@ -54,7 +54,7 @@ export default function UserModel() {
           {/* Center: title + stats */}
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-sm font-semibold text-indigo-950 truncate">
-              Digital Twin —{' '}
+              Digital Twin -{' '}
               <span className="text-blue-500">{userId}</span>
             </h1>
             {stats && (

@@ -1,16 +1,16 @@
-import { Link } from 'react-router-dom';
 import {
+  ArrowLeft,
   BookOpen,
-  CheckCircle,
-  XCircle,
-  Layers,
   Briefcase,
+  CheckCircle,
+  FileText,
   FolderOpen,
   Globe,
   Heart,
-  FileText,
-  ArrowLeft,
+  Layers,
+  XCircle,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -79,7 +79,7 @@ function GuideCard({ icon: Icon, iconBg, iconColor, title, dos, donts, example }
 export default function Guidelines() {
   return (
     <>
-      <title>Resume Guide — Lumino</title>
+      <title>Resume Guide - Lumino</title>
 
       <div className="min-h-screen bg-slate-50 pb-12">
         <div className="max-w-3xl mx-auto px-4 md:px-6 py-8">
@@ -117,7 +117,7 @@ export default function Guidelines() {
               <strong className="text-blue-600">projects</strong>, and{' '}
               <strong className="text-blue-600">work style preferences</strong>{' '}
               from your resume using an LLM. The clearer these sections are, the richer
-              your knowledge graph — and the better the job matches.
+              your knowledge graph - and the better the job matches.
             </p>
           </div>
 
@@ -194,11 +194,11 @@ export default function Guidelines() {
                 'One-line description of what it does',
               ]}
               donts={[
-                "Vague entries like 'personal project — various technologies'",
+                "Vague entries like 'personal project - various technologies'",
               ]}
               example={{
                 label: 'Project entry',
-                good: 'JobGraph (React, FastAPI, Neo4j) — graph-based job matching engine',
+                good: 'JobGraph (React, FastAPI, Neo4j) - graph-based job matching engine',
                 bad: 'Full-stack web application',
               }}
             />
@@ -234,7 +234,7 @@ export default function Guidelines() {
                 'These feed the culture matching score against job requirements',
               ]}
               donts={[
-                'Leaving this section out entirely — culture score will be zero',
+                'Leaving this section out entirely - culture score will be zero',
               ]}
             />
 

@@ -1,17 +1,16 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
 import {
-  TrendingUp,
-  Plus,
-  Zap,
-  CheckCircle,
-  Target,
   ArrowRight,
+  CheckCircle,
+  Maximize2,
+  Plus,
+  Target,
+  TrendingUp,
+  Zap,
   ZoomIn,
   ZoomOut,
-  Maximize2,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,7 +57,7 @@ const SKILL_BARS: SkillBar[] = [
 
 const RECOMMENDED_ROLES: RecommendedRole[] = [
   { title: 'Senior Full-Stack Engineer', company: 'Stripe', match: 94, jobId: 'job-001' },
-  { title: 'Tech Lead — Platform', company: 'Vercel', match: 88, jobId: 'job-002' },
+  { title: 'Tech Lead - Platform', company: 'Vercel', match: 88, jobId: 'job-002' },
   { title: 'Staff Engineer', company: 'Linear', match: 81, jobId: 'job-003' },
 ];
 
@@ -66,19 +65,19 @@ const RECOMMENDED_ROLES: RecommendedRole[] = [
 
 function statusColor(status: SkillBar['status']): string {
   if (status === 'critical') return 'bg-red-500';
-  if (status === 'gap')      return 'bg-orange-400';
+  if (status === 'gap') return 'bg-orange-400';
   return 'bg-emerald-500';
 }
 
 function statusTextColor(status: SkillBar['status']): string {
   if (status === 'critical') return 'text-red-600';
-  if (status === 'gap')      return 'text-orange-500';
+  if (status === 'gap') return 'text-orange-500';
   return 'text-emerald-600';
 }
 
 function statusLabel(status: SkillBar['status']): string {
   if (status === 'critical') return 'Critical';
-  if (status === 'gap')      return 'Gap';
+  if (status === 'gap') return 'Gap';
   return 'On Track';
 }
 
@@ -89,7 +88,7 @@ export default function Trajectory() {
 
   return (
     <>
-      <title>Career Trajectory — Lumino</title>
+      <title>Career Trajectory - Lumino</title>
 
       <div className="px-6 py-8 max-w-7xl mx-auto space-y-6">
 
@@ -316,7 +315,7 @@ export default function Trajectory() {
                     whileHover={{ x: 4 }}
                     transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                     className="w-full flex items-center justify-between p-3.5 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-100 hover:border-blue-200 transition-colors group focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 text-left"
-                    aria-label={`${role.title} at ${role.company} — ${role.match}% match. Click to view on dashboard.`}
+                    aria-label={`${role.title} at ${role.company} - ${role.match}% match. Click to view on dashboard.`}
                   >
                     <div>
                       <p className="text-sm font-bold text-indigo-950 group-hover:text-blue-700 transition-colors">

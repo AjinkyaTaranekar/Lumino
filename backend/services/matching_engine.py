@@ -1,7 +1,7 @@
 """
 Pure graph-based matching engine.
 
-All scoring is done through Cypher set-intersection queries — no vectors,
+All scoring is done through Cypher set-intersection queries - no vectors,
 no embeddings. Every score component is directly traceable to explicit
 graph edges, making the system fully scrutable.
 
@@ -440,7 +440,7 @@ class MatchingEngine:
         ProblemSolvingPattern + Experience.contribution_type + BehavioralInsight (user side).
 
         Returns None score when job has no SoftSkillRequirements or user has no
-        behavioral data — allowing graceful weight redistribution.
+        behavioral data - allowing graceful weight redistribution.
 
         Also returns behavioral_risk_flags: risk signals from BehavioralInsight nodes
         that conflict with dealbreaker soft skills.
@@ -500,7 +500,7 @@ class MatchingEngine:
         ]
 
         if not user_pattern_set and not has_leadership:
-            # No behavioral data at all — cannot score
+            # No behavioral data at all - cannot score
             return {"score": None, "risk_flags": []}
 
         total = len(soft_reqs)
@@ -528,7 +528,7 @@ class MatchingEngine:
             elif has_evidence:
                 matched_weight += 1.0
             else:
-                matched_weight += 0.5  # neutral — no data either way
+                matched_weight += 0.5  # neutral - no data either way
 
         score = matched_weight / total if total > 0 else None
 
@@ -844,7 +844,7 @@ class MatchingEngine:
                     pass
             assessment = raw
 
-        # User digital twin — human portrait
+        # User digital twin - human portrait
         motivations = await self.client.run_query(
             "OPTIONAL MATCH (u:User {id: $user_id})-[:MOTIVATED_BY]->(m:Motivation) "
             "RETURN m.category AS category, m.strength AS strength, m.evidence AS evidence "

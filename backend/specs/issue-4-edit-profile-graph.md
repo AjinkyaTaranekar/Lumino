@@ -8,7 +8,7 @@
 
 ## Problem Statement
 
-Users currently have no way to correct, refine, or augment the knowledge graph that the LLM extracted from their resume. The graph is a "black box write" — once ingested, it's fixed. This is a trust and accuracy problem: LLM extraction makes mistakes, users have nuanced context the LLM cannot infer, and graphs become stale as people grow.
+Users currently have no way to correct, refine, or augment the knowledge graph that the LLM extracted from their resume. The graph is a "black box write" - once ingested, it's fixed. This is a trust and accuracy problem: LLM extraction makes mistakes, users have nuanced context the LLM cannot infer, and graphs become stale as people grow.
 
 ---
 
@@ -83,7 +83,7 @@ Storage
 
 - Add an **"Edit Graph"** button to `UserModel.jsx` and `JobModel.jsx`.
 - Navigates to `/user/edit-graph` (or `/recruiter/edit-job/:jobId`).
-- Page layout: split view — graph on the left, chat panel on the right.
+- Page layout: split view - graph on the left, chat panel on the right.
 
 ---
 
@@ -91,11 +91,11 @@ Storage
 
 The LLM agent does not take free-form edits. Instead it **interviews the user** using the Socratic / First Principles method:
 
-**Session start**: LLM receives the user's current graph (serialized as JSON summary — nodes + edge counts by category) and opens with a focused question about an area to clarify.
+**Session start**: LLM receives the user's current graph (serialized as JSON summary - nodes + edge counts by category) and opens with a focused question about an area to clarify.
 
 **Question strategy (prompt-engineered)**:
 - Start with the _weakest_ area (lowest `years` value or no supporting project/experience nodes).
-- Ask open-ended "why" and "how" questions: _"You listed React as a skill — can you walk me through a project where you made architectural decisions using React?"_
+- Ask open-ended "why" and "how" questions: _"You listed React as a skill - can you walk me through a project where you made architectural decisions using React?"_
 - From the answer, extract: new skills, new projects, updated `years` values, new relationships between existing nodes.
 - Propose specific graph mutations before applying them.
 
@@ -362,9 +362,9 @@ GET  /api/v1/jobs/{job_id}/graph/versions
 
 ## Data Model Changes
 
-### SQLite (new — `.data_storage/lumino.db`)
+### SQLite (new - `.data_storage/lumino.db`)
 
-Three tables: `edit_sessions`, `session_messages`, `graph_snapshots` — see schema in Section 4 above.
+Three tables: `edit_sessions`, `session_messages`, `graph_snapshots` - see schema in Section 4 above.
 
 Add `aiosqlite` to `requirements.txt`.
 
@@ -372,13 +372,13 @@ Add `aiosqlite` to `requirements.txt`.
 
 ```cypher
 // Weight property on Skill + Domain nodes (added during ingestion and edit)
-// No schema change needed — Neo4j is schemaless; just SET n.weight = value
+// No schema change needed - Neo4j is schemaless; just SET n.weight = value
 
 // Provenance tagging: source='user_edit' (vs existing source='llm')
 // No schema change needed
 ```
 
-No new Neo4j node labels or constraints needed. `GraphVersion` is removed from Neo4j entirely — it lives in SQLite.
+No new Neo4j node labels or constraints needed. `GraphVersion` is removed from Neo4j entirely - it lives in SQLite.
 
 ---
 
@@ -417,7 +417,7 @@ No new Neo4j node labels or constraints needed. `GraphVersion` is removed from N
 
 | Question | Decision |
 |----------|----------|
-| Where to store snapshots + session history? | SQLite (`.data_storage/lumino.db`) — avoids Neo4j 1MB limit, keeps transient data separate |
+| Where to store snapshots + session history? | SQLite (`.data_storage/lumino.db`) - avoids Neo4j 1MB limit, keeps transient data separate |
 | LLM session persistence | Sessions survive page refreshes; history loaded from SQLite on re-open |
-| Max turn count per session? | None — open-ended conversation |
+| Max turn count per session? | None - open-ended conversation |
 | Recruiter job ownership | Recruiters can only edit jobs tagged with their `recruiter_id`; enforced in `GraphEditService.start_session` |

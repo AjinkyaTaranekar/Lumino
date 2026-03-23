@@ -1,31 +1,31 @@
-import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import ProtectedRoute from './components/ProtectedRoute';
+import { Suspense, lazy } from 'react';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import LuminoLayout from './components/LuminoLayout';
+import ProtectedRoute from './components/ProtectedRoute';
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
-const Login          = lazy(() => import('./pages/Login'));
+const Login = lazy(() => import('./pages/Login'));
 
 // User pages
-const Dashboard      = lazy(() => import('./pages/Dashboard'));
-const ResumeManager  = lazy(() => import('./pages/user/ResumeManager'));
-const Trajectory     = lazy(() => import('./pages/user/Trajectory'));
-const Applications   = lazy(() => import('./pages/user/Applications'));
-const Practice       = lazy(() => import('./pages/user/Practice'));
-const UserModel      = lazy(() => import('./pages/user/UserModel'));
-const EditGraph      = lazy(() => import('./pages/user/EditGraph'));
-const Clarification  = lazy(() => import('./pages/user/Clarification'));
-const UserProfile    = lazy(() => import('./pages/user/UserProfile'));
-const MatchExplorer  = lazy(() => import('./pages/user/MatchExplorer'));
-const Guidelines     = lazy(() => import('./pages/user/Guidelines'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ResumeManager = lazy(() => import('./pages/user/ResumeManager'));
+const Trajectory = lazy(() => import('./pages/user/Trajectory'));
+const Applications = lazy(() => import('./pages/user/Applications'));
+const Practice = lazy(() => import('./pages/user/Practice'));
+const UserModel = lazy(() => import('./pages/user/UserModel'));
+const EditGraph = lazy(() => import('./pages/user/EditGraph'));
+const Clarification = lazy(() => import('./pages/user/Clarification'));
+const UserProfile = lazy(() => import('./pages/user/UserProfile'));
+const MatchExplorer = lazy(() => import('./pages/user/MatchExplorer'));
+const Guidelines = lazy(() => import('./pages/user/Guidelines'));
 
 // Recruiter pages
 const CandidatesBrowser = lazy(() => import('./pages/recruiter/CandidatesBrowser'));
-const Candidates        = lazy(() => import('./pages/recruiter/Candidates'));
-const PostJob           = lazy(() => import('./pages/recruiter/PostJob'));
-const JobModel          = lazy(() => import('./pages/recruiter/JobModel'));
-const EditJobGraph      = lazy(() => import('./pages/recruiter/EditJobGraph'));
-const JobsList          = lazy(() => import('./pages/recruiter/JobsList'));
+const Candidates = lazy(() => import('./pages/recruiter/Candidates'));
+const PostJob = lazy(() => import('./pages/recruiter/PostJob'));
+const JobModel = lazy(() => import('./pages/recruiter/JobModel'));
+const EditJobGraph = lazy(() => import('./pages/recruiter/EditJobGraph'));
+const JobsList = lazy(() => import('./pages/recruiter/JobsList'));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -152,7 +152,7 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        {/* Match explorer — accessible by USER and RECRUITER */}
+        {/* Match explorer - accessible by USER and RECRUITER */}
         <Route
           path="/user/match/:jobId"
           element={

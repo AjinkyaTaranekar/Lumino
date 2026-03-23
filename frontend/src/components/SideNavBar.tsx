@@ -1,19 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import {
+  BookOpen,
+  Briefcase,
+  Database,
+  LayoutDashboard,
+  Network,
+  ShieldAlert,
+  TrendingUp,
+  Upload,
+  User as UserIcon,
+  Users,
+} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import {
-  LayoutDashboard,
-  Users,
-  Briefcase,
-  TrendingUp,
-  Database,
-  Upload,
-  ShieldAlert,
-  User as UserIcon,
-  BookOpen,
-  Network,
-} from 'lucide-react';
 
 interface NavItem {
   label: string;
@@ -29,28 +29,28 @@ export function SideNavBar() {
     if (user?.role !== 'USER' || !session?.userId) return;
     api.getClarifications(session.userId)
       .then(data => setProfileUnverified(!data.graph_verified || data.pending > 0))
-      .catch(() => {});
+      .catch(() => { });
   }, [user?.role, session?.userId]);
 
   const navItems: NavItem[] = user?.role === 'USER'
     ? [
-        { label: 'Dashboard',      to: '/dashboard',           icon: LayoutDashboard },
-        { label: 'Trajectory Map', to: '/trajectory',          icon: TrendingUp },
-        { label: 'My Profile',     to: '/user/profile',        icon: UserIcon },
-        { label: 'Upload Resume',  to: '/resume',              icon: Upload },
-        { label: 'Verify Profile', to: '/user/clarifications', icon: ShieldAlert },
-        { label: 'Digital Twin',   to: '/user/model',          icon: Network },
-        { label: 'Resume Guide',   to: '/user/guidelines',     icon: BookOpen },
-      ]
+      { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+      { label: 'Trajectory Map', to: '/trajectory', icon: TrendingUp },
+      { label: 'My Profile', to: '/user/profile', icon: UserIcon },
+      { label: 'Upload Resume', to: '/resume', icon: Upload },
+      { label: 'Verify Profile', to: '/user/clarifications', icon: ShieldAlert },
+      { label: 'Digital Twin', to: '/user/model', icon: Network },
+      { label: 'Resume Guide', to: '/user/guidelines', icon: BookOpen },
+    ]
     : user?.role === 'RECRUITER'
-    ? [
-        { label: 'Dashboard',      to: '/dashboard',           icon: LayoutDashboard },
-        { label: 'Talent Pool',    to: '/talent-pool',         icon: Users },
-        { label: 'Jobs',           to: '/jobs',                icon: Briefcase },
-        { label: 'Post a Job',     to: '/jobs/create',         icon: Database },
+      ? [
+        { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+        { label: 'Talent Pool', to: '/talent-pool', icon: Users },
+        { label: 'Jobs', to: '/jobs', icon: Briefcase },
+        { label: 'Post a Job', to: '/jobs/create', icon: Database },
       ]
-    : [
-        { label: 'Admin Console',  to: '/admin',               icon: Database },
+      : [
+        { label: 'Admin Console', to: '/admin', icon: Database },
       ];
 
   return (
@@ -66,16 +66,15 @@ export function SideNavBar() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 hover:translate-x-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${
-                  isActive
-                    ? 'bg-white text-blue-700 shadow-sm font-bold border border-slate-200/50'
-                    : showAlert
+                `flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 hover:translate-x-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 ${isActive
+                  ? 'bg-white text-blue-700 shadow-sm font-bold border border-slate-200/50'
+                  : showAlert
                     ? 'text-amber-600 hover:bg-amber-50/60'
                     : 'text-slate-600 hover:bg-slate-200/50'
                 }`
               }
               aria-current={({ isActive }: { isActive: boolean }) => isActive ? 'page' : undefined}
-              aria-label={showAlert ? `${item.label} — action required` : item.label}
+              aria-label={showAlert ? `${item.label} - action required` : item.label}
             >
               <div className="relative flex-shrink-0">
                 <item.icon size={20} aria-hidden="true" />

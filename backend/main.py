@@ -1,5 +1,5 @@
 """
-Adaptive Prototype 2.0 — Transparent Job Matching System
+Adaptive Prototype 2.0 - Transparent Job Matching System
 
 FastAPI application entry point.
 
@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     neo4j_pass = os.environ.get("NEO4J_PASSWORD", "")
 
     if not neo4j_pass:
-        logger.warning("NEO4J_PASSWORD is not set — connection may fail")
+        logger.warning("NEO4J_PASSWORD is not set - connection may fail")
 
     client = await init_client(neo4j_uri, neo4j_user, neo4j_pass)
     logger.info(f"Neo4j connected: {neo4j_uri}")
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI):
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Visualization output dir: {output_dir}")
 
-    logger.info("━━ System ready — visit http://localhost:8000/docs ━━")
+    logger.info("━━ System ready - visit http://localhost:8000/docs ━━")
 
     yield
 

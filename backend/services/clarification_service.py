@@ -1,5 +1,5 @@
 """
-Clarification Service — manages the extraction_flags lifecycle.
+Clarification Service - manages the extraction_flags lifecycle.
 
 After a resume is ingested the LLM flags every uncertain interpretation.
 This service:
@@ -207,11 +207,11 @@ class ClarificationService:
         Only call resolve_flag() once the user confirms the interpretation is correct.
 
         Returns dict with keys:
-          interpreted_value: str  — the concrete value to store (e.g. "intermediate", "3.5")
-          is_complete: bool       — False if answer is still too vague to save
-          needs_clarification: str|None — follow-up question if is_complete=False
-          explanation: str        — "I understood this to mean..."
-          confidence: str         — high/medium/low
+          interpreted_value: str  - the concrete value to store (e.g. "intermediate", "3.5")
+          is_complete: bool       - False if answer is still too vague to save
+          needs_clarification: str|None - follow-up question if is_complete=False
+          explanation: str        - "I understood this to mean..."
+          confidence: str         - high/medium/low
         """
         row = await self.sqlite.fetchone(
             "SELECT * FROM extraction_flags WHERE flag_id = ? AND user_id = ?",
@@ -237,8 +237,8 @@ class ClarificationService:
             "- 'is_complete=false' if the answer is vague, contradictory, or still ambiguous\n"
             "- For enum fields (level, depth, contribution_type), the interpreted_value must be one of the valid options\n"
             "- For numeric fields (years), extract the number or flag as incomplete if unclear\n"
-            "- Be strict: 'I think about 3-4 years' is incomplete — ask them to commit to a number\n"
-            "- 'I mostly did it myself' is incomplete — ask if they were the sole engineer or had team members\n"
+            "- Be strict: 'I think about 3-4 years' is incomplete - ask them to commit to a number\n"
+            "- 'I mostly did it myself' is incomplete - ask if they were the sole engineer or had team members\n"
             f"\nReturn ONLY valid JSON matching: {schema}"
         )
 
@@ -288,7 +288,7 @@ class ClarificationService:
         """
         parts = field.split(":", 2)
         if len(parts) < 3:
-            logger.warning(f"Cannot parse field path '{field}' — expected Type:Name:property")
+            logger.warning(f"Cannot parse field path '{field}' - expected Type:Name:property")
             return False
 
         node_type, node_name, prop = parts[0], parts[1], parts[2]

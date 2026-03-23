@@ -1,28 +1,28 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import {
+  Briefcase,
+  Building2,
+  Edit3,
+  Network,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { Job } from '../../lib/types';
-import {
-  Briefcase,
-  Plus,
-  RefreshCw,
-  Users,
-  Network,
-  Edit3,
-  Trash2,
-  Building2,
-} from 'lucide-react';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function remoteBadgeClass(policy: Job['remote_policy']): string {
   switch (policy) {
-    case 'remote':  return 'badge badge-green';
-    case 'hybrid':  return 'badge badge-orange';
-    case 'onsite':  return 'badge badge-blue';
-    default:        return 'badge badge-gray';
+    case 'remote': return 'badge badge-green';
+    case 'hybrid': return 'badge badge-orange';
+    case 'onsite': return 'badge badge-blue';
+    default: return 'badge badge-gray';
   }
 }
 
@@ -30,11 +30,11 @@ function remoteBadgeClass(policy: Job['remote_policy']): string {
 
 export default function JobsList() {
   const { session } = useAuth();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
 
-  const [jobs, setJobs]       = useState<Job[] | null>(null);
+  const [jobs, setJobs] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   async function load() {
@@ -67,7 +67,7 @@ export default function JobsList() {
 
   return (
     <>
-      <title>My Jobs — Lumino</title>
+      <title>My Jobs - Lumino</title>
 
       <div className="px-6 py-8 max-w-5xl mx-auto">
 

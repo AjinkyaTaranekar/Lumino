@@ -242,7 +242,7 @@ SKILL_TAXONOMY = {
     ],
 }
 
-# Work-style synonym map — normalizes free-text work styles to canonical keys.
+# Work-style synonym map - normalizes free-text work styles to canonical keys.
 # Used by the matching engine to fuzzy-match user culture preferences against
 # job work-style requirements without requiring exact string equality.
 WORK_STYLE_SYNONYMS: dict[str, frozenset] = {

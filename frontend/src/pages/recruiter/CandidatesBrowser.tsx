@@ -1,36 +1,36 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'motion/react';
-import { useAuth } from '../../context/AuthContext';
-import { api } from '../../lib/api';
-import type { Job } from '../../lib/types';
 import {
+  ArrowRight,
   Briefcase,
+  Plus,
   RefreshCw,
   Search,
   SlidersHorizontal,
   Zap,
-  ArrowRight,
-  Plus,
 } from 'lucide-react';
+import { motion } from 'motion/react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
+import type { Job } from '../../lib/types';
 
 function remoteBadgeClass(policy: Job['remote_policy']): string {
   switch (policy) {
-    case 'remote':  return 'badge badge-green';
-    case 'hybrid':  return 'badge badge-orange';
-    case 'onsite':  return 'badge badge-blue';
-    default:        return 'badge badge-gray';
+    case 'remote': return 'badge badge-green';
+    case 'hybrid': return 'badge badge-orange';
+    case 'onsite': return 'badge badge-blue';
+    default: return 'badge badge-gray';
   }
 }
 
 export default function CandidatesBrowser() {
   const { session } = useAuth();
-  const navigate    = useNavigate();
+  const navigate = useNavigate();
 
-  const [jobs, setJobs]       = useState<Job[] | null>(null);
+  const [jobs, setJobs] = useState<Job[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-  const [query, setQuery]     = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   async function load() {
     setLoading(true);
@@ -49,19 +49,19 @@ export default function CandidatesBrowser() {
 
   const filtered = jobs
     ? jobs.filter(j => {
-        const q = query.toLowerCase();
-        return (
-          !q ||
-          (j.title ?? '').toLowerCase().includes(q) ||
-          j.id.toLowerCase().includes(q) ||
-          (j.company ?? '').toLowerCase().includes(q)
-        );
-      })
+      const q = query.toLowerCase();
+      return (
+        !q ||
+        (j.title ?? '').toLowerCase().includes(q) ||
+        j.id.toLowerCase().includes(q) ||
+        (j.company ?? '').toLowerCase().includes(q)
+      );
+    })
     : null;
 
   return (
     <>
-      <title>Talent Pool — Lumino</title>
+      <title>Talent Pool - Lumino</title>
 
       <div className="px-6 py-8 max-w-7xl mx-auto">
 
@@ -176,7 +176,7 @@ export default function CandidatesBrowser() {
         {filtered !== null && filtered.length > 0 && (
           <>
             <p className="text-xs text-slate-400 mb-4">
-              {filtered.length} job{filtered.length !== 1 ? 's' : ''} — click one to rank candidates
+              {filtered.length} job{filtered.length !== 1 ? 's' : ''} - click one to rank candidates
             </p>
 
             <div
@@ -244,7 +244,7 @@ export default function CandidatesBrowser() {
             <div>
               <p className="text-sm font-semibold text-white mb-0.5">Trajectory Insight</p>
               <p className="text-xs text-indigo-200 leading-relaxed">
-                Lumino uses graph-to-graph matching to rank candidates — analysing skills,
+                Lumino uses graph-to-graph matching to rank candidates - analysing skills,
                 domain knowledge, and cultural trajectory rather than keyword overlap.
                 Click any job to see ranked matches.
               </p>

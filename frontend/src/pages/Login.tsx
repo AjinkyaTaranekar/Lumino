@@ -1,17 +1,17 @@
-import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { AlertCircle, LogIn } from 'lucide-react';
 import { motion } from 'motion/react';
-import { LogIn, AlertCircle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
 
-  const [userId,   setUserId]   = useState('');
+  const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
-  const [error,    setError]    = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   // Already logged in
   if (user) return <Navigate to="/dashboard" replace />;
@@ -19,7 +19,7 @@ export default function Login() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!userId.trim()) { setError('Please enter your User ID.'); return; }
-    if (!password)      { setError('Please enter your password.'); return; }
+    if (!password) { setError('Please enter your password.'); return; }
 
     setError('');
     setLoading(true);
@@ -38,7 +38,7 @@ export default function Login() {
   return (
     <>
       {/* Page title for WCAG */}
-      <title>Sign In — Lumino</title>
+      <title>Sign In - Lumino</title>
 
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <motion.div

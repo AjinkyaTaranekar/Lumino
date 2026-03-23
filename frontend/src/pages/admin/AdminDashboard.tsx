@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
 import {
-  Users,
-  Briefcase,
-  Trash2,
   AlertTriangle,
+  Briefcase,
   RefreshCw,
   Search,
+  Trash2,
+  Users,
 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../lib/api';
-import type { UserListItem, Job } from '../../lib/types';
+import type { Job, UserListItem } from '../../lib/types';
 
 // ─── DeleteButton ──────────────────────────────────────────────────────────────
 
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
 
   return (
     <>
-      <title>Admin Console — Lumino</title>
+      <title>Admin Console - Lumino</title>
 
       <div className="px-6 py-8 max-w-4xl mx-auto">
 
@@ -247,7 +247,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-indigo-950">
-                {users !== null ? users.length : '—'}
+                {users !== null ? users.length : '-'}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">Total Users</p>
             </div>
@@ -258,7 +258,7 @@ export default function AdminDashboard() {
             </div>
             <div>
               <p className="text-2xl font-bold text-indigo-950">
-                {jobs !== null ? jobs.length : '—'}
+                {jobs !== null ? jobs.length : '-'}
               </p>
               <p className="text-xs text-slate-400 mt-0.5">Total Jobs</p>
             </div>
@@ -271,11 +271,10 @@ export default function AdminDashboard() {
             <button
               key={t}
               onClick={() => { setTab(t); setSearch(''); }}
-              className={`flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
-                tab === t
+              className={`flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${tab === t
                   ? 'bg-white shadow-sm text-indigo-950'
                   : 'text-slate-400 hover:text-slate-600'
-              }`}
+                }`}
               aria-pressed={tab === t}
             >
               {t === 'users' ? <Users size={14} /> : <Briefcase size={14} />}

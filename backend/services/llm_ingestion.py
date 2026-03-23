@@ -1,5 +1,5 @@
 """
-LLM ingestion service — writes the Gemini-extracted hierarchy into Neo4j.
+LLM ingestion service - writes the Gemini-extracted hierarchy into Neo4j.
 
 Every node and relationship created here is tagged source='llm'. This provenance
 tag is used later by the graph merger and visualization service to filter views.

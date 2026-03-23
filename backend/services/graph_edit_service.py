@@ -1,5 +1,5 @@
 """
-Graph Edit Service — orchestrates edit sessions, LLM conversation, mutation application,
+Graph Edit Service - orchestrates edit sessions, LLM conversation, mutation application,
 and auto-checkpointing.
 
 Edit session lifecycle:
@@ -148,7 +148,7 @@ class GraphEditService:
 
         await self._touch_session(session_id)
         logger.info(
-            f"Mutations applied for {entity_type}:{entity_id} — "
+            f"Mutations applied for {entity_type}:{entity_id} - "
             f"+{nodes_added} nodes, ~{nodes_updated} updated, -{nodes_removed} removed, "
             f"+{edges_added} edges. Checkpoint: {checkpoint.version_id}"
         )

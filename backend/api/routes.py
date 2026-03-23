@@ -4,16 +4,16 @@ FastAPI route definitions.
 All endpoints are prefixed with /api/v1 (applied in main.py).
 
 Endpoints:
-  POST /users/ingest                      — extract + write user to Neo4j
-  POST /jobs/ingest                       — extract + write job to Neo4j
-  GET  /users/{user_id}/matches           — rank ALL jobs for a user (batch)
-  GET  /users/{user_id}/matches/{job_id}  — single user-job score detail
-  GET  /users/{user_id}/matches/{job_id}/paths — explicit graph paths (scrutability)
-  POST /users/{user_id}/visualize         — generate interactive HTML graph
-  GET  /users/{user_id}/visualize         — serve the HTML graph in browser
-  GET  /users                             — list all users
-  GET  /jobs                              — list all jobs
-  GET  /health                            — Neo4j connectivity check
+  POST /users/ingest                      - extract + write user to Neo4j
+  POST /jobs/ingest                       - extract + write job to Neo4j
+  GET  /users/{user_id}/matches           - rank ALL jobs for a user (batch)
+  GET  /users/{user_id}/matches/{job_id}  - single user-job score detail
+  GET  /users/{user_id}/matches/{job_id}/paths - explicit graph paths (scrutability)
+  POST /users/{user_id}/visualize         - generate interactive HTML graph
+  GET  /users/{user_id}/visualize         - serve the HTML graph in browser
+  GET  /users                             - list all users
+  GET  /jobs                              - list all jobs
+  GET  /health                            - Neo4j connectivity check
 """
 
 import io
@@ -84,7 +84,7 @@ async def ingest_user(
     2. The 4-level hierarchy is written to Neo4j (User → Category → Family → Leaf).
     3. Interpretation flags are stored in SQLite for the clarification workflow.
 
-    The response includes `clarification_questions` — critical questions the user
+    The response includes `clarification_questions` - critical questions the user
     should answer to verify their digital twin graph before job matching.
     """
     try:
@@ -244,7 +244,7 @@ async def get_all_candidates_for_job(
 ):
     """
     Compute match scores for ALL users in the database for the given job.
-    Returns results ranked by total_score (descending) — reverse-match for recruiters.
+    Returns results ranked by total_score (descending) - reverse-match for recruiters.
     """
     engine = MatchingEngine(db)
     return await engine.rank_all_users_for_job(job_id)
@@ -403,9 +403,9 @@ async def generate_match_visualization(
     Generate a combined pyvis graph showing both user and job subgraphs.
 
     Colour coding:
-      Green  — matched skills/domains (user has it, job requires it)
-      Orange — gaps (job requires it, user lacks it)
-      Green edges — MATCHES connections between matched nodes
+      Green  - matched skills/domains (user has it, job requires it)
+      Orange - gaps (job requires it, user lacks it)
+      Green edges - MATCHES connections between matched nodes
     """
     output_dir = os.getenv("OUTPUT_DIR", "./outputs")
     viz = VisualizationService(db, output_dir)
@@ -999,7 +999,7 @@ async def get_clarifications(
     "/users/{user_id}/clarifications/{flag_id}/resolve",
     response_model=ResolveFlagResponse,
     tags=["clarification"],
-    summary="Resolve a clarification question — confirm or correct the LLM's interpretation",
+    summary="Resolve a clarification question - confirm or correct the LLM's interpretation",
 )
 async def resolve_clarification(
     user_id: str,
@@ -1060,7 +1060,7 @@ async def skip_clarification(
 @router.post(
     "/users/{user_id}/clarifications/{flag_id}/interpret",
     tags=["clarification"],
-    summary="Interpret a natural-language answer without saving — show to user for confirmation",
+    summary="Interpret a natural-language answer without saving - show to user for confirmation",
 )
 async def interpret_clarification_answer(
     user_id: str,
@@ -1135,10 +1135,10 @@ async def get_user_completeness(
     Returns a structured breakdown across two dimensions:
 
     **Technical depth** (50% of overall):
-      - Skill evidence quality — how many skills are project-backed vs claimed-only
-      - Project impact — how many projects have measurable outcomes
-      - Experience accomplishments — how many roles have concrete achievements
-      - Skills with anecdotes — story coverage across the skill set
+      - Skill evidence quality - how many skills are project-backed vs claimed-only
+      - Project impact - how many projects have measurable outcomes
+      - Experience accomplishments - how many roles have concrete achievements
+      - Skills with anecdotes - story coverage across the skill set
 
     **Human depth** (50% of overall):
       - Anecdotes captured (target: 5)
@@ -1148,7 +1148,7 @@ async def get_user_completeness(
       - Culture identity built
       - Behavioral insights observed
 
-    Also surfaces **matching capability flags** — which scoring axes are currently
+    Also surfaces **matching capability flags** - which scoring axes are currently
     active for this user (evidence-weighted skills, soft skill scoring, culture fit).
 
     Use this endpoint to drive a profile completeness dashboard without triggering

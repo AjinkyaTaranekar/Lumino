@@ -1,12 +1,12 @@
+import { ArrowLeft, Edit3, Network, RefreshCw, Users } from 'lucide-react';
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { api } from '../../lib/api';
+import { useNavigate, useParams } from 'react-router-dom';
 import GraphViewer from '../../components/GraphViewer';
-import { ArrowLeft, RefreshCw, Users, Edit3, Network } from 'lucide-react';
+import { api } from '../../lib/api';
 
 export default function JobModel() {
   const { jobId } = useParams<{ jobId: string }>();
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
   // Bump key to force GraphViewer remount on refresh
   const [key, setKey] = useState(0);
@@ -15,7 +15,7 @@ export default function JobModel() {
 
   return (
     <>
-      <title>Job Model — Lumino</title>
+      <title>Job Model - Lumino</title>
 
       <div className="flex flex-col h-full">
 

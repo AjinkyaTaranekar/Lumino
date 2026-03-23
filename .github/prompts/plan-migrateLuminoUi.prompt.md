@@ -4,7 +4,7 @@
 
 ---
 
-## ✅ Phase 1: Foundation Setup — COMPLETE
+## ✅ Phase 1: Foundation Setup - COMPLETE
 *These tasks must be completed strictly in order to establish the base layer and plumbing for all subsequent UI work. No UI pages should be migrated until this phase is complete.*
 
 ### ✅ 1.1 TypeScript Integration & Tooling
@@ -41,7 +41,7 @@
 
 ---
 
-## ✅ Phase 2: Screen-by-Screen Migration — COMPLETE
+## ✅ Phase 2: Screen-by-Screen Migration - COMPLETE
 *Once Phase 1 is verified, these tracks can proceed concurrently. For each screen, follow the "Component Migration SOP" below.*
 
 **Component Migration SOP (Standard Operating Procedure):**
@@ -91,7 +91,7 @@
 
 ---
 
-## ✅ Phase 3: Componentization & Architecture Polish — COMPLETE
+## ✅ Phase 3: Componentization & Architecture Polish - COMPLETE
 *Perform this phase to reduce code duplication after the raw pages are moved over.*
 
 1. **Extract UI Atoms:** lumino uses massive inline Tailwind blocks. Extract these repeatedly used patterns into `frontend/src/components/ui/`:
@@ -104,7 +104,7 @@
 
 ---
 
-## ✅ Phase 4: Legacy Cleanup & Final Validation — COMPLETE
+## ✅ Phase 4: Legacy Cleanup & Final Validation - COMPLETE
 1. **Delete Old Code:** Purge all deprecated `.jsx` files in `frontend/src/pages/` that have been successfully superseded by their `.tsx` equivalents.
 2. **Strict Type Check:** Run `npx tsc --noEmit` and resolve any missing prop types or implicit `any` definitions.
 3. **E2E Flow Test:** 

@@ -1,21 +1,21 @@
-import { useState, useRef } from 'react';
+import {
+  AlertCircle,
+  Briefcase,
+  CheckCircle,
+  ChevronLeft,
+  ChevronRight,
+  Code2,
+  FileText,
+  Globe,
+  Upload,
+  Zap,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { IngestJobResponse } from '../../lib/types';
-import {
-  Upload,
-  FileText,
-  CheckCircle,
-  ChevronRight,
-  ChevronLeft,
-  Briefcase,
-  Code2,
-  Globe,
-  Zap,
-  AlertCircle,
-} from 'lucide-react';
 
 // ── Step indicator ────────────────────────────────────────────────────────
 
@@ -33,17 +33,17 @@ function StepIndicator({ current }: StepIndicatorProps) {
   return (
     <nav aria-label="Post job steps" className="flex items-center gap-0 mb-10">
       {STEPS.map((step, idx) => {
-        const done    = step.id < current;
-        const active  = step.id === current;
+        const done = step.id < current;
+        const active = step.id === current;
         return (
           <div key={step.id} className="flex items-center flex-1 last:flex-none">
             <div className="flex items-center gap-2">
               <div
                 aria-current={active ? 'step' : undefined}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors
-                  ${done   ? 'bg-primary-500 text-white'
-                  : active ? 'bg-primary-500 text-white ring-4 ring-primary-100'
-                           : 'bg-slate-100 text-slate-400'}`}
+                  ${done ? 'bg-primary-500 text-white'
+                    : active ? 'bg-primary-500 text-white ring-4 ring-primary-100'
+                      : 'bg-slate-100 text-slate-400'}`}
               >
                 {done ? <CheckCircle className="w-4 h-4" aria-hidden="true" /> : step.id}
               </div>
@@ -74,24 +74,24 @@ interface AnalysisResult extends IngestJobResponse {
 
 export default function PostJob() {
   const { session } = useAuth();
-  const navigate    = useNavigate();
-  const fileRef     = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // ── Multi-step state ──
-  const [step, setStep]         = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // ── Form data ──
-  const [jobId, setJobId]       = useState('');
-  const [department, setDept]   = useState('');
+  const [jobId, setJobId] = useState('');
+  const [department, setDept] = useState('');
   const [location, setLocation] = useState('');
-  const [tab, setTab]           = useState<'pdf' | 'text'>('pdf');
-  const [file, setFile]         = useState<File | null>(null);
-  const [text, setText]         = useState('');
+  const [tab, setTab] = useState<'pdf' | 'text'>('pdf');
+  const [file, setFile] = useState<File | null>(null);
+  const [text, setText] = useState('');
 
   // ── Async state ──
-  const [loading, setLoading]   = useState(false);
-  const [result, setResult]     = useState<AnalysisResult | null>(null);
-  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
 
   // ── Navigation helpers ────────────────────────────────────────────────
@@ -171,7 +171,7 @@ export default function PostJob() {
 
   return (
     <>
-      <title>Post a Job — Lumino</title>
+      <title>Post a Job - Lumino</title>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
 
@@ -281,7 +281,7 @@ export default function PostJob() {
                       <Briefcase className="w-4 h-4 text-primary-500" aria-hidden="true" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-indigo-950">Step 1 of 3 — Job Details</p>
+                      <p className="text-sm font-semibold text-indigo-950">Step 1 of 3 - Job Details</p>
                       <p className="text-xs text-slate-400">Set a unique identifier and metadata for this role</p>
                     </div>
                   </div>
@@ -367,7 +367,7 @@ export default function PostJob() {
                       <FileText className="w-4 h-4 text-primary-500" aria-hidden="true" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-indigo-950">Step 2 of 3 — Job Content</p>
+                      <p className="text-sm font-semibold text-indigo-950">Step 2 of 3 - Job Content</p>
                       <p className="text-xs text-slate-400">Upload a PDF or paste the job description text</p>
                     </div>
                   </div>
@@ -407,7 +407,7 @@ export default function PostJob() {
                     <div
                       role="button"
                       tabIndex={0}
-                      aria-label="PDF drop zone — click or drag and drop a PDF file"
+                      aria-label="PDF drop zone - click or drag and drop a PDF file"
                       onClick={() => fileRef.current?.click()}
                       onKeyDown={e => e.key === 'Enter' && fileRef.current?.click()}
                       onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -417,8 +417,8 @@ export default function PostJob() {
                         ${dragging
                           ? 'border-primary-400 bg-primary-50'
                           : file
-                          ? 'border-emerald-400 bg-emerald-50'
-                          : 'border-slate-200 bg-slate-50 hover:border-primary-300 hover:bg-primary-50'}`}
+                            ? 'border-emerald-400 bg-emerald-50'
+                            : 'border-slate-200 bg-slate-50 hover:border-primary-300 hover:bg-primary-50'}`}
                     >
                       <input
                         ref={fileRef}
@@ -479,7 +479,7 @@ export default function PostJob() {
                       <Zap className="w-4 h-4 text-emerald-500" aria-hidden="true" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-indigo-950">Step 3 of 3 — Review & Publish</p>
+                      <p className="text-sm font-semibold text-indigo-950">Step 3 of 3 - Review & Publish</p>
                       <p className="text-xs text-slate-400">Confirm the details below then publish to Lumino</p>
                     </div>
                   </div>
@@ -489,7 +489,7 @@ export default function PostJob() {
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-slate-400 font-medium">Job ID</span>
                       <code className="text-xs font-mono text-primary-500 bg-primary-50 px-2 py-0.5 rounded">
-                        {jobId || '—'}
+                        {jobId || '-'}
                       </code>
                     </div>
                     {department && (
@@ -507,16 +507,15 @@ export default function PostJob() {
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-slate-400 font-medium">Input method</span>
                       <span className="text-xs text-indigo-950">
-                        {tab === 'pdf' ? `PDF — ${file?.name ?? 'none'}` : 'Pasted text'}
+                        {tab === 'pdf' ? `PDF - ${file?.name ?? 'none'}` : 'Pasted text'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-slate-400 font-medium">Content ready</span>
-                      <span className={`text-xs font-medium ${
-                        (tab === 'pdf' && file) || (tab === 'text' && text.trim())
+                      <span className={`text-xs font-medium ${(tab === 'pdf' && file) || (tab === 'text' && text.trim())
                           ? 'text-emerald-600'
                           : 'text-red-400'
-                      }`}>
+                        }`}>
                         {(tab === 'pdf' && file) || (tab === 'text' && text.trim())
                           ? 'Yes'
                           : 'Missing'}

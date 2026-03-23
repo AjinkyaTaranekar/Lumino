@@ -1,7 +1,7 @@
 """
 Pydantic schemas for two purposes:
-1. Gemini structured output (response_schema) — controls LLM extraction format
-2. FastAPI request/response bodies — controls API interface
+1. Gemini structured output (response_schema) - controls LLM extraction format
+2. FastAPI request/response bodies - controls API interface
 
 Keep these separate to allow them to evolve independently.
 """
@@ -27,7 +27,7 @@ class ExtractedSkill(BaseModel):
     )
     years: Optional[float] = Field(default=None, description="Years of experience, null if unknown")
     level: Optional[Literal["beginner", "intermediate", "advanced", "expert"]] = Field(
-        default=None, description="Proficiency level inferred from context — be conservative, not generous"
+        default=None, description="Proficiency level inferred from context - be conservative, not generous"
     )
     evidence_strength: Optional[Literal["claimed_only", "mentioned_once", "project_backed", "multiple_productions"]] = Field(
         default=None,
@@ -54,7 +54,7 @@ class SkillUsage(BaseModel):
     how: Optional[str] = Field(
         default=None,
         description=(
-            "HOW this skill was applied — specific patterns, techniques, frameworks, or approaches used. "
+            "HOW this skill was applied - specific patterns, techniques, frameworks, or approaches used. "
             "E.g. 'Used async/await patterns with connection pooling to handle concurrent DB queries'"
         )
     )
@@ -64,7 +64,7 @@ class SkillUsage(BaseModel):
     )
     scale: Optional[str] = Field(
         default=None,
-        description="Scale or scope: users, data volume, requests/sec, team size, revenue — whatever is relevant."
+        description="Scale or scope: users, data volume, requests/sec, team size, revenue - whatever is relevant."
     )
     outcome: Optional[str] = Field(
         default=None,
@@ -88,7 +88,7 @@ class ExtractedProject(BaseModel):
             "Rich description covering: (1) what the project does, (2) your specific contribution "
             "vs team contribution, (3) scale or impact (users, data volume, team size, revenue), "
             "(4) key technical challenges solved. Be specific and quantify where possible. "
-            "Do NOT embellish — capture only what is stated."
+            "Do NOT embellish - capture only what is stated."
         )
     )
     skills_demonstrated: List[SkillUsage] = Field(
@@ -176,7 +176,7 @@ class ExtractedPattern(BaseModel):
 class CriticalAssessment(BaseModel):
     """
     Brutally honest assessment of the candidate from a recruiter/engineering manager lens.
-    This is NOT flattery — it is a calibrated, evidence-based evaluation.
+    This is NOT flattery - it is a calibrated, evidence-based evaluation.
     """
     overall_signal: Literal["strong", "moderate", "weak", "misleading"] = Field(
         description=(
@@ -217,7 +217,7 @@ class CriticalAssessment(BaseModel):
             "E.g. 'Claims 5 years Python but all projects are tutorial-level CRUD apps', "
             "'3 jobs in 18 months with no explanation', "
             "'All project descriptions are vague: no metrics, no ownership clarity', "
-            "'Skill list reads like a keyword dump — 15+ technologies with no depth evidence'"
+            "'Skill list reads like a keyword dump - 15+ technologies with no depth evidence'"
         )
     )
     inflated_skills: List[str] = Field(
@@ -270,9 +270,9 @@ class CriticalAssessment(BaseModel):
         default_factory=list,
         description=(
             "The 2-3 most important areas to probe in a technical interview to validate "
-            "or disprove what is claimed. E.g. 'Probe actual Kubernetes production experience — "
+            "or disprove what is claimed. E.g. 'Probe actual Kubernetes production experience - "
             "ask what they specifically configured and what broke', "
-            "'Ask for the exact architecture of the payment system — the description is vague'"
+            "'Ask for the exact architecture of the payment system - the description is vague'"
         )
     )
 
@@ -304,8 +304,8 @@ class InterpretationFlag(BaseModel):
     )
     ambiguity_reason: str = Field(
         description=(
-            "Why is this uncertain? E.g. 'Years not stated — inferred from job timeline', "
-            "'Contribution unclear — resume uses we/our throughout', "
+            "Why is this uncertain? E.g. 'Years not stated - inferred from job timeline', "
+            "'Contribution unclear - resume uses we/our throughout', "
             "'Level inferred from seniority of role, not from technical depth described'"
         )
     )
@@ -313,7 +313,7 @@ class InterpretationFlag(BaseModel):
         description=(
             "The exact natural-language question to show the user to resolve this. "
             "Be specific and reference their actual resume content. "
-            "E.g. 'Your resume says \"built a payment API\" — were you the sole engineer on this, "
+            "E.g. 'Your resume says \"built a payment API\" - were you the sole engineer on this, "
             "or part of a larger team? What was your specific contribution?'"
         )
     )
@@ -581,7 +581,7 @@ class EditSessionResponse(BaseModel):
     interview_banner: str = Field(
         default=(
             "Everything you share in this conversation shapes your digital twin. "
-            "Recruiters won't just see your skills — they'll see your stories, your motivations, "
+            "Recruiters won't just see your skills - they'll see your stories, your motivations, "
             "and how you think. The more genuine your answers, the more accurately this profile "
             "will represent who you truly are. Every answer you give can update your graph in real time."
         ),
@@ -714,7 +714,7 @@ class HumanDepthBreakdown(BaseModel):
     goal_set: bool                          # has >= 1 Goal node
     culture_identity_built: bool            # has CultureIdentity node
     behavioral_insights_count: int          # total BehavioralInsight nodes
-    # Culture fit scoring is disabled if this is False — surfaced to user
+    # Culture fit scoring is disabled if this is False - surfaced to user
     culture_matching_enabled: bool
 
 
@@ -732,13 +732,13 @@ class DigitalTwinCompleteness(BaseModel):
     technical_depth: TechnicalDepthBreakdown
     human_depth: HumanDepthBreakdown
 
-    # Matching capability flags — shown to user so they understand impact
+    # Matching capability flags - shown to user so they understand impact
     evidence_weighted_scoring_active: bool  # True when skills have evidence beyond claimed_only
     soft_skill_scoring_active: bool         # True when ProblemSolvingPattern nodes exist
     culture_fit_scoring_active: bool        # True when CultureIdentity node exists
     profile_verified: bool                  # True when all critical clarification flags resolved
 
-    # Actionable gaps — specific, honest, with matching impact
+    # Actionable gaps - specific, honest, with matching impact
     missing_dimensions: List[str]
     # The single most impactful next action
     next_action: str

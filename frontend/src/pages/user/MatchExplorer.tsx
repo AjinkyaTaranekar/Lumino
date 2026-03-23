@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { api } from '../../lib/api'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building2,
+  CheckCircle,
+  ChevronDown, ChevronRight, Sparkles,
+  TrendingUp,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import GraphViewer from '../../components/GraphViewer'
 import ScoreBar from '../../components/ScoreBar'
 import SkillBadge from '../../components/SkillBadge'
-import {
-  ArrowLeft, ChevronDown, ChevronRight, Sparkles,
-  Building2, TrendingUp, AlertTriangle, CheckCircle,
-} from 'lucide-react'
-import type { MatchResult, MatchExplanation } from '../../lib/types'
+import { useAuth } from '../../context/AuthContext'
+import { api } from '../../lib/api'
+import type { MatchExplanation, MatchResult } from '../../lib/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,10 +33,10 @@ interface MatchDetail extends MatchResult {
 // ─── Verdict badge map ────────────────────────────────────────────────────────
 
 const VERDICT_STYLES: Record<string, string> = {
-  'Strong match':    'badge-green',
-  'Good match':      'badge-green',
-  'Moderate match':  'badge-orange',
-  'Weak match':      'badge-red',
+  'Strong match': 'badge-green',
+  'Good match': 'badge-green',
+  'Moderate match': 'badge-orange',
+  'Weak match': 'badge-red',
   'Not recommended': 'badge-red',
 }
 
@@ -173,23 +177,23 @@ function PathItem({ path, index }: PathItemProps) {
 // ─── MatchExplorer ────────────────────────────────────────────────────────────
 
 export default function MatchExplorer() {
-  const { jobId }   = useParams<{ jobId: string }>()
+  const { jobId } = useParams<{ jobId: string }>()
   const { session } = useAuth()
-  const navigate    = useNavigate()
-  const location    = useLocation()
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  const viewAs  = (location.state as { viewAs?: string } | null)?.viewAs ?? null
-  const userId  = viewAs ?? session.userId
+  const viewAs = (location.state as { viewAs?: string } | null)?.viewAs ?? null
+  const userId = viewAs ?? session.userId
   const isProxy = !!viewAs
 
-  const [detail,      setDetail]      = useState<MatchDetail | null>(null)
-  const [paths,       setPaths]       = useState<GraphPath[]>([])
-  const [pathsOpen,   setPathsOpen]   = useState(false)
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState<string | null>(null)
+  const [detail, setDetail] = useState<MatchDetail | null>(null)
+  const [paths, setPaths] = useState<GraphPath[]>([])
+  const [pathsOpen, setPathsOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [explanation, setExplanation] = useState<string | MatchExplanation | null>(null)
-  const [explaining,  setExplaining]  = useState(false)
-  const [explainErr,  setExplainErr]  = useState<string | null>(null)
+  const [explaining, setExplaining] = useState(false)
+  const [explainErr, setExplainErr] = useState<string | null>(null)
 
   async function handleExplain() {
     setExplaining(true)
@@ -230,7 +234,7 @@ export default function MatchExplorer() {
       }
     }
     load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, userId])
 
   const scoreColorClass = detail
@@ -288,8 +292,8 @@ export default function MatchExplorer() {
               {/* Score cards */}
               <div className="card-lumino p-4 space-y-3 mb-6">
                 <ScoreBar label="Overall Match" score={detail.total_score} large />
-                <ScoreBar label="Skill Score"   score={detail.skill_score} />
-                <ScoreBar label="Domain Score"  score={detail.domain_score} />
+                <ScoreBar label="Skill Score" score={detail.skill_score} />
+                <ScoreBar label="Domain Score" score={detail.domain_score} />
                 {detail.culture_fit_score != null && (
                   <ScoreBar label="Culture Fit" score={detail.culture_fit_score} />
                 )}
@@ -420,7 +424,7 @@ export default function MatchExplorer() {
           )}
         </div>
 
-        {/* Right panel — graph */}
+        {/* Right panel - graph */}
         <div className="flex-1 p-4 bg-slate-50">
           <GraphViewer
             generateFn={() => api.generateMatchViz(userId, jobId!)}

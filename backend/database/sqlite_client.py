@@ -1,4 +1,4 @@
-"""SQLite client — persistence for edit sessions, message history, and graph snapshots."""
+"""SQLite client - persistence for edit sessions, message history, and graph snapshots."""
 
 import logging
 import os

@@ -1,21 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
-  CheckCircle,
   AlertTriangle,
+  Briefcase,
+  CheckCircle,
+  ChevronRight,
+  Code2,
+  Loader,
+  MessageSquare,
   RefreshCw,
   Star,
   Target,
-  MessageSquare,
-  ChevronRight,
-  User,
   TrendingUp,
-  Code2,
-  Briefcase,
-  Loader,
+  User,
 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
 import type { UserDescribeResponse } from '../../lib/types';
 
 export default function UserProfile() {
@@ -23,10 +23,10 @@ export default function UserProfile() {
   const { session } = useAuth();
   const userId = session?.userId;
 
-  const [profile,    setProfile]    = useState<UserDescribeResponse | null>(null);
-  const [loading,    setLoading]    = useState(true);
+  const [profile, setProfile] = useState<UserDescribeResponse | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(
     async (isRefresh = false) => {
@@ -53,7 +53,7 @@ export default function UserProfile() {
   if (loading) {
     return (
       <>
-        <title>My Profile — Lumino</title>
+        <title>My Profile - Lumino</title>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-3">
             <Loader size={28} className="animate-spin text-blue-500" />
@@ -67,7 +67,7 @@ export default function UserProfile() {
   if (error) {
     return (
       <>
-        <title>My Profile — Lumino</title>
+        <title>My Profile - Lumino</title>
         <div className="max-w-2xl mx-auto py-16 px-4">
           <div className="alert-error mb-4">{error}</div>
           <button
@@ -83,7 +83,7 @@ export default function UserProfile() {
 
   return (
     <>
-      <title>My Profile — Lumino</title>
+      <title>My Profile - Lumino</title>
 
       <div className="min-h-screen bg-slate-50 pb-12">
 

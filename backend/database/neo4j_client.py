@@ -1,5 +1,5 @@
 """
-Async Neo4j client — single source of truth for all database connectivity.
+Async Neo4j client - single source of truth for all database connectivity.
 
 Initialized once at FastAPI startup via init_client(), then accessible
 everywhere via get_client(). All Cypher execution flows through run_query
@@ -80,7 +80,7 @@ class Neo4jClient:
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (dr:JobDomainRequirement) "
                 "REQUIRE (dr.name, dr.job_id) IS UNIQUE"
             ),
-            # Digital twin identity nodes — all scoped per user
+            # Digital twin identity nodes - all scoped per user
             (
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (a:Anecdote) "
                 "REQUIRE (a.name, a.user_id) IS UNIQUE"
@@ -105,7 +105,7 @@ class Neo4jClient:
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (b:BehavioralInsight) "
                 "REQUIRE (b.name, b.user_id) IS UNIQUE"
             ),
-            # Job-side deep profile nodes — scoped per job
+            # Job-side deep profile nodes - scoped per job
             (
                 "CREATE CONSTRAINT IF NOT EXISTS FOR (t:TeamComposition) "
                 "REQUIRE (t.name, t.job_id) IS UNIQUE"
@@ -139,7 +139,7 @@ class Neo4jClient:
             try:
                 await self.run_write(constraint)
             except Exception as e:
-                # Constraint may already exist — log but don't fail startup
+                # Constraint may already exist - log but don't fail startup
                 logger.debug(f"Constraint skipped (may already exist): {e}")
 
         logger.info("Neo4j constraints initialized")

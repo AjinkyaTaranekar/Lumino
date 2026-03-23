@@ -1,6 +1,6 @@
 # Adaptive Job Matching System
 
-A transparent, graph-based job matching platform where every match decision is fully explainable. Unlike black-box vector similarity or opaque ML models, every match score traces back to explicit paths in a Neo4j knowledge graph — no magic numbers.
+A transparent, graph-based job matching platform where every match decision is fully explainable. Unlike black-box vector similarity or opaque ML models, every match score traces back to explicit paths in a Neo4j knowledge graph - no magic numbers.
 
 ---
 
@@ -14,16 +14,16 @@ A transparent, graph-based job matching platform where every match decision is f
 5. Click any job to see the combined match graph visualized interactively
 
 **For Recruiters**
-1. Post a job (PDF or paste text) — LLM extracts skill requirements, domain requirements, work styles, and company culture
+1. Post a job (PDF or paste text) - LLM extracts skill requirements, domain requirements, work styles, and company culture
 2. Browse "Find Candidates" to see all job seekers ranked against your specific job
 3. Explore the combined graph view for any candidate to see exactly why they matched
 
 **Matching Engine**
-- **Skills (65%)** — weighted intersection via `MATCHES` edges in the graph; importance-weighted (`must_have=1.0`, `nice_to_have=0.5`); seniority factor applied when years of experience is specified
-- **Domain (35%)** — set intersection of domain expertise vs. job domain requirements
-- **Culture bonus** — ratio of job work styles that match user preferences (displayed separately, not in total score)
-- **Preference bonus** — remote policy + company size preference satisfaction (displayed separately)
-- Every score is traceable through explicit graph paths — "User → HAS\_SKILL → Python → MATCHES → JobSkillRequirement"
+- **Skills (65%)** - weighted intersection via `MATCHES` edges in the graph; importance-weighted (`must_have=1.0`, `nice_to_have=0.5`); seniority factor applied when years of experience is specified
+- **Domain (35%)** - set intersection of domain expertise vs. job domain requirements
+- **Culture bonus** - ratio of job work styles that match user preferences (displayed separately, not in total score)
+- **Preference bonus** - remote policy + company size preference satisfaction (displayed separately)
+- Every score is traceable through explicit graph paths - "User → HAS\_SKILL → Python → MATCHES → JobSkillRequirement"
 
 ---
 
@@ -31,7 +31,7 @@ A transparent, graph-based job matching platform where every match decision is f
 
 | Layer | Technology |
 |---|---|
-| **LLM** | Groq API — LLaMA 3.3 70B Versatile |
+| **LLM** | Groq API - LLaMA 3.3 70B Versatile |
 | **Graph DB** | Neo4j 5.15 Community (Docker) + APOC plugin |
 | **Backend** | FastAPI + Uvicorn (Python 3.13) |
 | **Graph viz** | pyvis + NetworkX (self-contained inline HTML) |
@@ -230,7 +230,7 @@ Job └─HAS_CULTURE_REQUIREMENTS─► JobCultureRequirements └─HAS_WORK_S
 
 **Recruiter scoping.** Each job is tagged with the `recruiter_id` of who posted it. Recruiters only see their own job listings in the candidate browser.
 
-**Self-contained visualizations.** pyvis graphs use `cdn_resources="in_line"` — the entire vis.js bundle is embedded in each HTML file, making them fully portable with no external dependencies.
+**Self-contained visualizations.** pyvis graphs use `cdn_resources="in_line"` - the entire vis.js bundle is embedded in each HTML file, making them fully portable with no external dependencies.
 
 **LLM as structured extractor only.** Groq LLaMA 3.3 70B is used exclusively for extracting structured entities (skills, domains, work styles) from free-text resumes and job postings. All matching logic is deterministic Cypher, not LLM-driven.
 
@@ -244,4 +244,4 @@ Job └─HAS_CULTURE_REQUIREMENTS─► JobCultureRequirements └─HAS_WORK_S
 | **Recruiter** | Post jobs, browse & rank candidates, explore match graphs |
 | **Admin** | Manage users and jobs (delete, inspect) |
 
-> Authentication is session-based (localStorage) for demo purposes. No passwords — enter any ID and select a role.
+> Authentication is session-based (localStorage) for demo purposes. No passwords - enter any ID and select a role.

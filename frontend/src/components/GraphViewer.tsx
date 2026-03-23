@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { AlertCircle, RefreshCw, Maximize2, Network } from 'lucide-react'
+import { AlertCircle, Maximize2, Network, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface GraphViewerProps {
   /** Called to (re-)generate the graph on the backend. Returns a promise. */
@@ -41,11 +41,11 @@ function GraphSkeleton() {
       ))}
       {/* Nodes */}
       {[
-        { cx: 200, cy: 70,  r: 22, d: '0s'   },
+        { cx: 200, cy: 70, r: 22, d: '0s' },
         { cx: 110, cy: 160, r: 16, d: '0.2s' },
         { cx: 290, cy: 160, r: 16, d: '0.4s' },
         { cx: 200, cy: 210, r: 13, d: '0.6s' },
-        { cx: 55,  cy: 230, r: 10, d: '0.8s' },
+        { cx: 55, cy: 230, r: 10, d: '0.8s' },
         { cx: 345, cy: 230, r: 10, d: '1.0s' },
       ].map((n, i) => (
         <circle key={i} cx={n.cx} cy={n.cy} r={n.r} fill="#E2E8F0">
@@ -66,11 +66,11 @@ export default function GraphViewer({
   height = '100%',
   title = 'Knowledge Graph',
 }: GraphViewerProps) {
-  const [status,    setStatus]    = useState<Status>('generating')
-  const [error,     setError]     = useState<string | null>(null)
-  const [stepIdx,   setStepIdx]   = useState(0)
-  const iframeRef                 = useRef<HTMLIFrameElement>(null)
-  const stepTimer                 = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [status, setStatus] = useState<Status>('generating')
+  const [error, setError] = useState<string | null>(null)
+  const [stepIdx, setStepIdx] = useState(0)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const run = useCallback(() => {
     setStatus('generating')
@@ -90,7 +90,7 @@ export default function GraphViewer({
       .then(() => {
         if (stepTimer.current) clearTimeout(stepTimer.current)
         setStepIdx(STEPS.length - 1)
-        // Mount the iframe now — it will fire onLoad when the HTML is ready
+        // Mount the iframe now - it will fire onLoad when the HTML is ready
         setStatus('loading')
       })
       .catch((err: unknown) => {
@@ -173,15 +173,14 @@ export default function GraphViewer({
               {/* Steps */}
               <div className="space-y-1.5">
                 {STEPS.map((step, idx) => {
-                  const done    = idx < stepIdx
+                  const done = idx < stepIdx
                   const current = idx === stepIdx
                   return (
                     <div key={step} className="flex items-center gap-2">
-                      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                        done    ? 'bg-blue-500' :
-                        current ? 'ring-2 ring-blue-400 ring-offset-1 bg-blue-50' :
-                                  'bg-slate-100'
-                      }`}>
+                      <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${done ? 'bg-blue-500' :
+                          current ? 'ring-2 ring-blue-400 ring-offset-1 bg-blue-50' :
+                            'bg-slate-100'
+                        }`}>
                         {done && (
                           <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10">
                             <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.6"
@@ -190,9 +189,8 @@ export default function GraphViewer({
                         )}
                         {current && <span className="w-1 h-1 rounded-full bg-blue-500 animate-pulse" />}
                       </div>
-                      <span className={`text-[11px] transition-colors duration-300 ${
-                        done || current ? 'text-indigo-950 font-medium' : 'text-slate-400'
-                      }`}>
+                      <span className={`text-[11px] transition-colors duration-300 ${done || current ? 'text-indigo-950 font-medium' : 'text-slate-400'
+                        }`}>
                         {step}
                       </span>
                     </div>
@@ -220,7 +218,7 @@ export default function GraphViewer({
           </div>
         )}
 
-        {/* iframe — mount once POST completes; onLoad transitions to 'ready' */}
+        {/* iframe - mount once POST completes; onLoad transitions to 'ready' */}
         {(status === 'loading' || status === 'ready') && (
           <iframe
             ref={iframeRef}

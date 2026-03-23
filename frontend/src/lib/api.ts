@@ -1,18 +1,18 @@
 import type {
-  BatchMatchResponse,
   BatchCandidateResponse,
+  BatchMatchResponse,
   ClarificationsResponse,
-  ResolveFlagResponse,
-  IngestUserResponse,
-  IngestJobResponse,
-  Job,
-  UserListItem,
-  UserDescribeResponse,
-  GraphVersion,
-  RollbackResponse,
-  EditSessionResponse,
   EditSessionMessage,
+  EditSessionResponse,
   GraphMutation,
+  GraphVersion,
+  IngestJobResponse,
+  IngestUserResponse,
+  Job,
+  ResolveFlagResponse,
+  RollbackResponse,
+  UserDescribeResponse,
+  UserListItem,
 } from './types';
 
 const BASE = '/api/v1';
@@ -61,14 +61,14 @@ async function postForm<T>(path: string, formData: FormData): Promise<T> {
 }
 
 export const api = {
-  // Ingestion — text
+  // Ingestion - text
   ingestUser: (userId: string, profileText: string) =>
     post<IngestUserResponse>('/users/ingest', { user_id: userId, profile_text: profileText }),
 
   ingestJob: (jobId: string, jobText: string, recruiterId?: string) =>
     post<IngestJobResponse>('/jobs/ingest', { job_id: jobId, job_text: jobText, recruiter_id: recruiterId }),
 
-  // Ingestion — PDF (multipart)
+  // Ingestion - PDF (multipart)
   uploadUserPdf(userId: string, file: File): Promise<IngestUserResponse> {
     const fd = new FormData();
     fd.append('user_id', userId);
@@ -104,7 +104,7 @@ export const api = {
   generateJobViz: (jobId: string) => post<unknown>(`/jobs/${jobId}/visualize`, {}),
   generateMatchViz: (userId: string, jobId: string) => post<unknown>(`/users/${userId}/matches/${jobId}/visualize`, {}),
 
-  // Iframe src URLs (relative — proxied by Vite)
+  // Iframe src URLs (relative - proxied by Vite)
   userVizUrl: (userId: string) => `${BASE}/users/${userId}/visualize`,
   jobVizUrl: (jobId: string) => `${BASE}/jobs/${jobId}/visualize`,
   matchVizUrl: (userId: string, jobId: string) => `${BASE}/users/${userId}/matches/${jobId}/visualize`,
@@ -127,11 +127,11 @@ export const api = {
   describeUser: (userId: string) => get<UserDescribeResponse>(`/users/${userId}/describe`),
   getCompleteness: (userId: string) => get<unknown>(`/users/${userId}/completeness`),
 
-  // Admin — delete
+  // Admin - delete
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),
   deleteJob: (jobId: string) => del<unknown>(`/jobs/${jobId}`),
 
-  // Graph editing — sessions
+  // Graph editing - sessions
   startEditSession: (entityType: 'user' | 'job', entityId: string, recruiterId?: string) => {
     const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`;
     return post<EditSessionResponse>(`${base}/graph/edit/start`, recruiterId ? { recruiter_id: recruiterId } : {});

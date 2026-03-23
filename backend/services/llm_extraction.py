@@ -21,7 +21,7 @@ from models.taxonomies import SKILL_TAXONOMY, DOMAIN_TAXONOMY
 
 logger = logging.getLogger(__name__)
 
-# Pre-compute JSON schemas once at module load — included in every system prompt
+# Pre-compute JSON schemas once at module load - included in every system prompt
 # so the model knows exactly what structure to return.
 _USER_SCHEMA = json.dumps(UserProfileExtraction.model_json_schema(), indent=2)
 _JOB_SCHEMA = json.dumps(JobPostingExtraction.model_json_schema(), indent=2)
@@ -92,22 +92,22 @@ class LLMExtractionService:
         """
         system_msg = (
             "You are a senior engineering manager and technical recruiter conducting a rigorous, "
-            "evidence-based analysis of a candidate profile. Your job is NOT to be flattering — "
+            "evidence-based analysis of a candidate profile. Your job is NOT to be flattering - "
             "it is to extract structured data AND produce a brutally honest assessment of what "
             "this person can actually do versus what they merely claim.\n\n"
             "EXTRACTION RULES:\n"
             "1. For each skill, assess evidence_strength honestly: did they just list it, or do "
             "   they have concrete project evidence? 'expert' level requires multiple production projects.\n"
             "2. For each project, extract HOW each skill was specifically used (not just that it was used). "
-            "   Capture contribution_type honestly — 'sole_engineer' only if they clearly built it alone.\n"
+            "   Capture contribution_type honestly - 'sole_engineer' only if they clearly built it alone.\n"
             "3. For each experience, extract concrete accomplishments with metrics where present. "
-            "   If the profile is vague, reflect that vagueness — do NOT invent specifics.\n"
+            "   If the profile is vague, reflect that vagueness - do NOT invent specifics.\n"
             "4. For the critical assessment: think like a skeptical EM reading this resume before "
             "   a hiring committee. What would concern you? What is well-evidenced? "
             "   What level is this person REALLY at (not what their title says)?\n"
             "5. Flag inflated skills: if someone claims 'expert' in 15 technologies, that's a red flag.\n"
             "6. overall_signal 'misleading' if claims are materially unsupported by evidence.\n\n"
-            "INTERPRETATION FLAGS — THIS IS CRITICAL:\n"
+            "INTERPRETATION FLAGS - THIS IS CRITICAL:\n"
             "For EVERY field where you made an inference (rather than reading it directly), "
             "create an interpretation_flag. A flag must be created when:\n"
             "  - Years of experience was calculated/inferred (not stated explicitly)\n"
@@ -125,7 +125,7 @@ class LLMExtractionService:
             "Testing & QA, Analytics & Visualization, Other\n"
             "- domain.family must be one of: FinTech, Healthcare, E-commerce, SaaS, "
             "Enterprise, Gaming, Education, Other\n"
-            "- Return an empty list [] for any section with no data — never omit keys.\n"
+            "- Return an empty list [] for any section with no data - never omit keys.\n"
             "- Return ONLY valid JSON matching this exact schema:\n\n"
             f"{_USER_SCHEMA}"
         )
@@ -134,7 +134,7 @@ class LLMExtractionService:
             "Analyze this professional profile. Extract all structured data, produce a critical "
             "assessment through the lens of a skeptical engineering manager, AND generate "
             "interpretation_flags for every uncertain inference.\n\n"
-            "For each project, describe HOW each skill was used — not just that it was used. "
+            "For each project, describe HOW each skill was used - not just that it was used. "
             "For each skill, honestly assess evidence_strength. "
             "In the assessment, be direct about red flags, inflated claims, and genuine strengths.\n\n"
             "Remember: every inference you make (not directly stated) needs an interpretation_flag "
@@ -185,7 +185,7 @@ class LLMExtractionService:
         Generate a structured, evidence-based explanation of a user-job match.
 
         Uses rich_context (skill evidence, 5W+H usage, critical assessment, domain depth)
-        to produce a detailed, actionable analysis — not just name-matching.
+        to produce a detailed, actionable analysis - not just name-matching.
 
         Returns a dict with:
           verdict, headline, why_they_fit, critical_gaps, nice_to_have_gaps,
@@ -226,7 +226,7 @@ class LLMExtractionService:
             if outcomes:
                 how_parts.append(f"outcome: {'; '.join(outcomes[:1])}")
 
-            how_str = " — " + " | ".join(how_parts) if how_parts else ""
+            how_str = " - " + " | ".join(how_parts) if how_parts else ""
             skill_lines.append(
                 f"  • {name} [{imp}]: {level}, {years_str}{min_str}, {ev_label}{how_str}"
             )
@@ -288,7 +288,7 @@ class LLMExtractionService:
         if perspective == "seeker":
             person_instr = (
                 "Write in SECOND PERSON (you/your). "
-                "Tone: honest and constructive — help them understand their fit and what to prepare. "
+                "Tone: honest and constructive - help them understand their fit and what to prepare. "
                 "E.g. 'Your Python expertise is well-evidenced... however, Kubernetes is a critical gap you'll need to address.'"
             )
             output_guidance = (
@@ -299,7 +299,7 @@ class LLMExtractionService:
         else:
             person_instr = (
                 f"Write in THIRD PERSON about candidate '{user_id}'. "
-                "Tone: professional recruiter/hiring manager lens — direct, honest, evidence-based. "
+                "Tone: professional recruiter/hiring manager lens - direct, honest, evidence-based. "
                 f"E.g. '{user_id} demonstrates production-proven Python skills...'"
             )
             output_guidance = (
@@ -311,18 +311,18 @@ class LLMExtractionService:
         system_msg = (
             "You are a senior engineering manager generating a detailed, evidence-based job match analysis. "
             "You have access to the candidate's actual graph data: how skills were used, at what scale, "
-            "with what evidence quality — not just which skill names match. "
+            "with what evidence quality - not just which skill names match. "
             "Your analysis must go beyond surface-level name matching to assess genuine fit.\n\n"
             "Return ONLY valid JSON matching this exact schema:\n"
             "{\n"
             '  "verdict": "Strong match" | "Good match" | "Moderate match" | "Weak match" | "Not recommended",\n'
             '  "headline": "1 sentence: who this person is and why they do/do not fit this specific role",\n'
-            '  "why_they_fit": ["skill or domain with specific evidence and context — not just names"],\n'
+            '  "why_they_fit": ["skill or domain with specific evidence and context - not just names"],\n'
             '  "critical_gaps": ["must-have gaps with explanation of impact on this role"],\n'
             '  "nice_to_have_gaps": ["lower priority gaps"],\n'
             '  "seniority_fit": "1-2 sentences: assessed level vs what the role needs",\n'
             '  "honest_take": "2-3 sentences: evidence-backed assessment of genuine strengths and concerns",\n'
-            '  "recommendation": "Hire | Proceed to technical screen | Conditional consider | Pass — with 1 sentence rationale",\n'
+            '  "recommendation": "Hire | Proceed to technical screen | Conditional consider | Pass - with 1 sentence rationale",\n'
             '  "interview_focus": ["specific technical areas to probe if proceeding"]\n'
             "}"
         )
@@ -340,7 +340,7 @@ class LLMExtractionService:
             + ("\n".join(skill_lines) or "  None")
             + "\n\n"
             "═══ CRITICAL GAPS (must-have skills not in profile) ═══\n"
-            + ("\n".join(must_gap_lines) or "  None — all must-haves covered")
+            + ("\n".join(must_gap_lines) or "  None - all must-haves covered")
             + "\n\n"
             f"Nice-to-have gaps: {nice_gap_str}\n\n"
             "═══ MATCHED DOMAINS ═══\n"
@@ -357,7 +357,7 @@ class LLMExtractionService:
             + "\n\n"
             f"{person_instr}\n"
             f"{output_guidance}\n\n"
-            "Generate the structured match explanation. Be specific — use actual skill names, "
+            "Generate the structured match explanation. Be specific - use actual skill names, "
             "evidence levels, and context from the data above. Do NOT be generic."
         )
 
@@ -407,7 +407,7 @@ class LLMExtractionService:
             "- remote_policy must be one of: 'remote', 'hybrid', 'onsite'\n"
             "- company_size must be one of: 'startup', 'mid-size', 'enterprise'\n"
             "- importance must be one of: 'must_have' (required/mandatory skills) or 'optional' (nice-to-have/bonus skills)\n"
-            "- Return an empty list [] for any section with no data — never omit keys."
+            "- Return an empty list [] for any section with no data - never omit keys."
         )
 
         user_msg = (
@@ -430,14 +430,14 @@ class LLMExtractionService:
         )
         extracted = JobPostingExtraction.model_validate_json(raw_json)
         logger.info(
-            f"Extracted job: {extracted.title} at {extracted.company} — "
+            f"Extracted job: {extracted.title} at {extracted.company} - "
             f"{len(extracted.skill_requirements)} skill requirements"
         )
         return extracted
 
     async def describe_user_from_graph(self, user_id: str, neo4j_client) -> dict:
         """
-        Query the user's complete graph — technical AND human portrait nodes — and
+        Query the user's complete graph - technical AND human portrait nodes - and
         generate a rich natural-language description alongside a computed completeness score.
 
         Returns a dict with:
@@ -607,7 +607,7 @@ class LLMExtractionService:
             "experiences": experiences,
             "assessment": assessment[0] if assessment else {},
             "patterns": [p for p in patterns if p.get("pattern")],
-            # Human portrait — included only if data exists
+            # Human portrait - included only if data exists
             "anecdotes": [a for a in anecdotes if a.get("name")],
             "motivations": [m for m in motivations if m.get("category")],
             "values": [v for v in values if v.get("name")],
@@ -618,28 +618,28 @@ class LLMExtractionService:
 
         system_msg = (
             "You are a senior engineering manager writing an honest, insightful professional profile "
-            "of a candidate based on their complete knowledge graph — both technical skills and "
+            "of a candidate based on their complete knowledge graph - both technical skills and "
             "the human portrait captured through the deep interview.\n\n"
             "This profile is shown to the candidate themselves so they understand how they are perceived "
-            "by recruiters. Be specific, evidence-based, and honest — not flattering.\n\n"
+            "by recruiters. Be specific, evidence-based, and honest - not flattering.\n\n"
             "If motivations, values, goals, or culture identity data exist in the graph, incorporate them. "
             "These reveal WHO this person is beyond their resume.\n"
-            "If anecdotes exist, reference the stories — they are stronger evidence than skill claims.\n"
+            "If anecdotes exist, reference the stories - they are stronger evidence than skill claims.\n"
             "If behavioral insights exist, note them honestly.\n\n"
             "Return a JSON object with these exact keys:\n"
             "{\n"
             "  \"identity\": \"1-sentence professional identity statement\",\n"
             "  \"career_arc\": \"2-3 sentences describing their career progression and trajectory\",\n"
-            "  \"who_they_are\": \"2-3 sentences on what drives them, how they work, and what they care about — "
+            "  \"who_they_are\": \"2-3 sentences on what drives them, how they work, and what they care about - "
             "based on motivations/values/culture data if available, otherwise omit or note as unknown\",\n"
-            "  \"core_strengths\": [\"strength 1 with evidence — cite anecdotes where available\"],\n"
+            "  \"core_strengths\": [\"strength 1 with evidence - cite anecdotes where available\"],\n"
             "  \"domain_expertise\": \"paragraph about domain depth and industry context\",\n"
             "  \"technical_profile\": \"paragraph about technical skills, depth vs breadth, evidence quality\",\n"
             "  \"honest_assessment\": \"paragraph: what they can genuinely do, what level they are at, "
             "what they have not yet demonstrated\",\n"
-            "  \"gaps_and_concerns\": [\"specific gap or concern with evidence — be direct\"],\n"
+            "  \"gaps_and_concerns\": [\"specific gap or concern with evidence - be direct\"],\n"
             "  \"best_suited_for\": \"what kind of role, team, company size, culture, and problem type "
-            "this person is best matched with — use culture identity data if present\",\n"
+            "this person is best matched with - use culture identity data if present\",\n"
             "  \"interview_ready_summary\": \"what a recruiter needs to know before interviewing in 2-3 sentences\"\n"
             "}\n"
             "Return ONLY valid JSON."
@@ -683,7 +683,7 @@ class LLMExtractionService:
         behavioral_insights: list,
     ):
         """
-        Compute the DigitalTwinCompleteness score — deterministic, no LLM.
+        Compute the DigitalTwinCompleteness score - deterministic, no LLM.
 
         Technical depth scoring (contributes 50% of overall):
           Skills evidence quality:  40% of tech score
@@ -764,7 +764,7 @@ class LLMExtractionService:
         culture_active           = has_culture
 
         # ── Profile verification (check critical flags in SQLite via approximation) ─
-        # We don't have SQLite here — will be enriched by the route if needed.
+        # We don't have SQLite here - will be enriched by the route if needed.
         # Approximate: assume verified if assessment exists and evidenced > claimed.
         profile_verified = has_assessment and evidenced >= claimed_only
 
@@ -773,7 +773,7 @@ class LLMExtractionService:
 
         if claimed_only > 0:
             missing.append(
-                f"{claimed_only} skill(s) have only 'claimed' evidence — "
+                f"{claimed_only} skill(s) have only 'claimed' evidence - "
                 f"their matching weight is reduced to 30%. "
                 f"Add projects or anecdotes to strengthen them."
             )
@@ -802,7 +802,7 @@ class LLMExtractionService:
             )
         if not has_culture:
             missing.append(
-                "Culture identity incomplete — culture fit scoring is disabled for your matches. "
+                "Culture identity incomplete - culture fit scoring is disabled for your matches. "
                 "This is 15% of your total match score."
             )
         if not has_assessment:
@@ -810,7 +810,7 @@ class LLMExtractionService:
                 "Critical assessment not generated. Re-ingest your profile to produce it."
             )
         if total_projects == 0:
-            missing.append("No projects in your profile — skill evidence cannot be project-backed.")
+            missing.append("No projects in your profile - skill evidence cannot be project-backed.")
         elif with_impact == 0:
             missing.append(
                 "None of your projects have measurable impact. "
@@ -820,7 +820,7 @@ class LLMExtractionService:
         # ── Next action ────────────────────────────────────────────────────────
         if human_pct < 20:
             next_action = (
-                "Start the deep profile interview — your human portrait is nearly empty. "
+                "Start the deep profile interview - your human portrait is nearly empty. "
                 "Culture fit scoring and motivation matching are currently disabled for you."
             )
         elif not has_motivation:
@@ -845,7 +845,7 @@ class LLMExtractionService:
         elif with_anecdotes < total_skills:
             next_action = (
                 f"Add anecdotes for {total_skills - with_anecdotes} more skill(s). "
-                f"Recruiters see the story — not just the skill name."
+                f"Recruiters see the story - not just the skill name."
             )
         else:
             next_action = (
@@ -890,7 +890,7 @@ class LLMExtractionService:
         Compute digital twin completeness without calling the LLM.
 
         Runs only the graph queries needed for the deterministic scoring model.
-        Much faster than describe_user_from_graph() — suitable for dashboard polling
+        Much faster than describe_user_from_graph() - suitable for dashboard polling
         and profile progress UIs that don't need the full LLM-generated description.
         """
         skills = await neo4j_client.run_query(

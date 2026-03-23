@@ -1,5 +1,5 @@
 """
-Graph visualization service — generates an interactive pyvis HTML file.
+Graph visualization service - generates an interactive pyvis HTML file.
 
 Fetches the full subgraph for a user (all nodes up to depth 6) from Neo4j
 and renders it as a force-directed graph using pyvis.
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 # Darker hub nodes get white font; lighter leaf nodes get dark (#0f172a) font.
 NODE_TYPE_COLORS: dict[str, str] = {
     # ── User technical nodes ───────────────────────────────────────────────────
-    "User": "#3B82F6",              # blue-500  — anchor node
+    "User": "#3B82F6",              # blue-500  - anchor node
     "SkillCategory": "#6366F1",     # indigo-500
     "SkillFamily": "#818CF8",       # indigo-400
-    "Skill": "#A5B4FC",             # indigo-300 — leaf, weight-scaled size
+    "Skill": "#A5B4FC",             # indigo-300 - leaf, weight-scaled size
     "ProjectCategory": "#059669",   # emerald-600
     "Project": "#34D399",           # emerald-400
     "DomainCategory": "#7C3AED",    # violet-600
@@ -42,12 +42,12 @@ NODE_TYPE_COLORS: dict[str, str] = {
     "PatternCategory": "#EA580C",   # orange-600
     "ProblemSolvingPattern": "#FB923C", # orange-400
     # ── User human-portrait nodes (digital twin) ───────────────────────────────
-    "Anecdote": "#E11D48",          # rose-600  — personal story
-    "Motivation": "#F97316",        # orange-500 — what drives them
-    "Value": "#8B5CF6",             # violet-500 — core beliefs
-    "Goal": "#10B981",              # emerald-500 — aspirations
-    "CultureIdentity": "#0EA5E9",   # sky-500   — how they work
-    "BehavioralInsight": "#F59E0B", # amber-500 — observed patterns
+    "Anecdote": "#E11D48",          # rose-600  - personal story
+    "Motivation": "#F97316",        # orange-500 - what drives them
+    "Value": "#8B5CF6",             # violet-500 - core beliefs
+    "Goal": "#10B981",              # emerald-500 - aspirations
+    "CultureIdentity": "#0EA5E9",   # sky-500   - how they work
+    "BehavioralInsight": "#F59E0B", # amber-500 - observed patterns
     # ── Job nodes ─────────────────────────────────────────────────────────────
     "Job": "#DC2626",               # red-600
     "JobSkillRequirements": "#1D4ED8",  # blue-700
@@ -105,7 +105,7 @@ NODE_SIZES: dict[str, int] = {
 DEFAULT_NODE_COLOR = "#94A3B8"  # slate-400
 DEFAULT_NODE_SIZE = 12
 
-# APOC labelFilter strings — blocks traversal INTO these node types
+# APOC labelFilter strings - blocks traversal INTO these node types
 # Used in apoc.path.subgraphAll to prevent cross-user contamination via MATCHES edges
 _USER_LABEL_FILTER = (
     "-Job|-JobSkillRequirements|-JobSkillFamily|-JobSkillRequirement"
@@ -133,7 +133,7 @@ USER_NODE_TYPES: frozenset[str] = frozenset({
     "ExperienceCategory", "Experience",
     "PreferenceCategory", "Preference",
     "PatternCategory", "ProblemSolvingPattern",
-    # Digital twin — human portrait nodes
+    # Digital twin - human portrait nodes
     "Anecdote", "Motivation", "Value", "Goal",
     "CultureIdentity", "BehavioralInsight",
 })
@@ -381,15 +381,15 @@ class VisualizationService:
         Generate a combined user+job pyvis graph showing match results.
 
         Colour coding:
-          Green  (#27AE60) — matched Skill / JobSkillRequirement nodes
-          Orange (#E67E22) — missing job requirements (gap)
-          All others       — normal NODE_TYPE_COLORS
+          Green  (#27AE60) - matched Skill / JobSkillRequirement nodes
+          Orange (#E67E22) - missing job requirements (gap)
+          All others       - normal NODE_TYPE_COLORS
 
         MATCHES edges are drawn in bright green at double width.
         Output: graph_match_{user_id}_{job_id}.html
         """
-        MATCH_COLOR = "#16A34A"      # green-600 — readable on white
-        MISSING_COLOR = "#D97706"    # amber-600 — readable on white
+        MATCH_COLOR = "#16A34A"      # green-600 - readable on white
+        MISSING_COLOR = "#D97706"    # amber-600 - readable on white
         MATCH_EDGE_COLOR = "#22C55E" # green-500
 
         # Fetch both subgraphs with label filters to prevent cross-entity contamination
@@ -537,10 +537,10 @@ class VisualizationService:
         Return sets of element IDs for coloring the match graph, plus MATCHES edges.
 
         Returns:
-          matched_user_ids  — Skill elementIds connected via MATCHES to this job
-          matched_job_ids   — JobSkillRequirement elementIds matched by this user
-          missing_ids       — JobSkillRequirement elementIds NOT matched by this user
-          matches_edges     — list of {source_id, target_id} for MATCHES edges
+          matched_user_ids  - Skill elementIds connected via MATCHES to this job
+          matched_job_ids   - JobSkillRequirement elementIds matched by this user
+          missing_ids       - JobSkillRequirement elementIds NOT matched by this user
+          matches_edges     - list of {source_id, target_id} for MATCHES edges
         """
         # Matched pairs
         matched_records = await self.client.run_query(
@@ -723,7 +723,7 @@ class VisualizationService:
 
             tc = score_color(r.total_score)
             match_graph_url = f"/api/v1/users/{user_id}/matches/{r.job_id}/visualize"
-            company_display = r.company or "—"
+            company_display = r.company or "-"
 
             cards_html += f"""
 <div style="background:#16213e;border:1px solid #333;border-radius:10px;
@@ -786,7 +786,7 @@ class VisualizationService:
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Job Recommendations — {user_id}</title>
+  <title>Job Recommendations - {user_id}</title>
 </head>
 <body style="margin:0;padding:0;background:#1a1a2e;color:#fff;
              font-family:'Segoe UI',Arial,sans-serif;min-height:100vh;">
@@ -840,7 +840,7 @@ class VisualizationService:
     ) -> tuple[list[dict], list[dict]]:
         """Subgraph extraction using APOC (preferred)."""
         query_params = {"node_id": node_id}
-        # Build APOC config — include labelFilter only when provided
+        # Build APOC config - include labelFilter only when provided
         apoc_config = "maxLevel: 6"
         if label_filter:
             apoc_config += f", labelFilter: '{label_filter}'"

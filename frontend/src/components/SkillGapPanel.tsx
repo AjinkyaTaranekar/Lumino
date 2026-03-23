@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
 import type { MatchResult } from '../lib/types'
 
@@ -9,9 +9,9 @@ interface SkillGapPanelProps {
 }
 
 export default function SkillGapPanel({ userId, jobId, onSkillClick }: SkillGapPanelProps) {
-  const [match,   setMatch]   = useState<MatchResult | null>(null)
+  const [match, setMatch] = useState<MatchResult | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error,   setError]   = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     api.getMatchDetail(userId, jobId)
@@ -21,8 +21,8 @@ export default function SkillGapPanel({ userId, jobId, onSkillClick }: SkillGapP
   }, [userId, jobId])
 
   if (loading) return <div className="px-4 py-3 text-xs text-slate-400">Loading skill gap…</div>
-  if (error)   return <div className="px-4 py-3 text-xs text-red-500" role="alert">Failed to load: {error}</div>
-  if (!match)  return null
+  if (error) return <div className="px-4 py-3 text-xs text-red-500" role="alert">Failed to load: {error}</div>
+  if (!match) return null
 
   const matched = match.matched_skills || []
   const missing = match.missing_skills || []
@@ -42,7 +42,7 @@ export default function SkillGapPanel({ userId, jobId, onSkillClick }: SkillGapP
 
       {missing.length > 0 && (
         <div>
-          <p className="text-xs font-semibold mb-1.5 text-amber-600">Missing skills — click to discuss</p>
+          <p className="text-xs font-semibold mb-1.5 text-amber-600">Missing skills - click to discuss</p>
           <div className="flex flex-wrap gap-1" role="list" aria-label="Missing skills">
             {missing.map(s => (
               <button

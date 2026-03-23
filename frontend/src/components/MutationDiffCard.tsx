@@ -1,5 +1,5 @@
+import { Check, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Check, X } from 'lucide-react'
 import type { GraphMutation, GraphMutationProposal } from '../lib/types'
 
 interface SectionProps {
@@ -50,7 +50,7 @@ function renderNode(node: unknown): string {
   if (typeof node === 'object' && node !== null) {
     const { label, name, ...rest } = node as Record<string, unknown>
     const extras = Object.entries(rest).map(([k, v]) => `${k}=${v}`).join(', ')
-    return `[${label}] ${name}${extras ? ` — ${extras}` : ''}`
+    return `[${label}] ${name}${extras ? ` - ${extras}` : ''}`
   }
   return String(node)
 }
@@ -58,7 +58,7 @@ function renderNode(node: unknown): string {
 function renderEdge(edge: unknown): string {
   if (typeof edge === 'object' && edge !== null) {
     const { from, rel, to } = edge as Record<string, unknown>
-    return `${from} —[${rel}]→ ${to}`
+    return `${from} -[${rel}]→ ${to}`
   }
   return String(edge)
 }
@@ -72,10 +72,10 @@ interface MutationDiffCardProps {
 export default function MutationDiffCard({ proposal, onApply, onReject }: MutationDiffCardProps) {
   const { mutations, reasoning } = proposal
 
-  const [addSel,  setAddSel]  = useState<Set<number>>(() => new Set((mutations.add_nodes    || []).map((_, i) => i)))
-  const [updSel,  setUpdSel]  = useState<Set<number>>(() => new Set((mutations.update_nodes || []).map((_, i) => i)))
-  const [remSel,  setRemSel]  = useState<Set<number>>(() => new Set((mutations.remove_nodes || []).map((_, i) => i)))
-  const [edgeSel, setEdgeSel] = useState<Set<number>>(() => new Set((mutations.add_edges    || []).map((_, i) => i)))
+  const [addSel, setAddSel] = useState<Set<number>>(() => new Set((mutations.add_nodes || []).map((_, i) => i)))
+  const [updSel, setUpdSel] = useState<Set<number>>(() => new Set((mutations.update_nodes || []).map((_, i) => i)))
+  const [remSel, setRemSel] = useState<Set<number>>(() => new Set((mutations.remove_nodes || []).map((_, i) => i)))
+  const [edgeSel, setEdgeSel] = useState<Set<number>>(() => new Set((mutations.add_edges || []).map((_, i) => i)))
 
   function toggleSet(set: Set<number>, setter: React.Dispatch<React.SetStateAction<Set<number>>>, i: number) {
     setter(prev => {
@@ -87,18 +87,18 @@ export default function MutationDiffCard({ proposal, onApply, onReject }: Mutati
 
   function handleApply() {
     onApply({
-      add_nodes:    (mutations.add_nodes    || []).filter((_, i) => addSel.has(i)),
+      add_nodes: (mutations.add_nodes || []).filter((_, i) => addSel.has(i)),
       update_nodes: (mutations.update_nodes || []).filter((_, i) => updSel.has(i)),
       remove_nodes: (mutations.remove_nodes || []).filter((_, i) => remSel.has(i)),
-      add_edges:    (mutations.add_edges    || []).filter((_, i) => edgeSel.has(i)),
+      add_edges: (mutations.add_edges || []).filter((_, i) => edgeSel.has(i)),
     })
   }
 
   const hasAny = (
-    (mutations.add_nodes?.length    || 0) +
+    (mutations.add_nodes?.length || 0) +
     (mutations.update_nodes?.length || 0) +
     (mutations.remove_nodes?.length || 0) +
-    (mutations.add_edges?.length    || 0)
+    (mutations.add_edges?.length || 0)
   ) > 0
 
   return (
@@ -109,10 +109,10 @@ export default function MutationDiffCard({ proposal, onApply, onReject }: Mutati
 
       {hasAny ? (
         <>
-          <Section title="Add nodes"    items={mutations.add_nodes}    colorClass="text-emerald-600" renderItem={renderNode}        selected={addSel}  onToggle={i => toggleSet(addSel,  setAddSel,  i)} />
-          <Section title="Update nodes" items={mutations.update_nodes} colorClass="text-amber-600"   renderItem={renderNode}        selected={updSel}  onToggle={i => toggleSet(updSel,  setUpdSel,  i)} />
-          <Section title="Remove nodes" items={mutations.remove_nodes} colorClass="text-red-500"     renderItem={s => String(s)}    selected={remSel}  onToggle={i => toggleSet(remSel,  setRemSel,  i)} />
-          <Section title="Add edges"    items={mutations.add_edges}    colorClass="text-blue-500"    renderItem={renderEdge}        selected={edgeSel} onToggle={i => toggleSet(edgeSel, setEdgeSel, i)} />
+          <Section title="Add nodes" items={mutations.add_nodes} colorClass="text-emerald-600" renderItem={renderNode} selected={addSel} onToggle={i => toggleSet(addSel, setAddSel, i)} />
+          <Section title="Update nodes" items={mutations.update_nodes} colorClass="text-amber-600" renderItem={renderNode} selected={updSel} onToggle={i => toggleSet(updSel, setUpdSel, i)} />
+          <Section title="Remove nodes" items={mutations.remove_nodes} colorClass="text-red-500" renderItem={s => String(s)} selected={remSel} onToggle={i => toggleSet(remSel, setRemSel, i)} />
+          <Section title="Add edges" items={mutations.add_edges} colorClass="text-blue-500" renderItem={renderEdge} selected={edgeSel} onToggle={i => toggleSet(edgeSel, setEdgeSel, i)} />
 
           <div className="flex gap-2 mt-3">
             <button

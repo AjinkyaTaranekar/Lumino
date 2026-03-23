@@ -1,10 +1,10 @@
-# Implementation Plan: Issue #4 — Edit User Profile & Job Model Graphs
+# Implementation Plan: Issue #4 - Edit User Profile & Job Model Graphs
 
 This document breaks the work into four self-contained phases. Each phase ends with a working, mergeable state. Phases build on each other but never leave the app in a broken state mid-phase.
 
 ---
 
-## Phase 1 — SQLite Foundation & Checkpointing
+## Phase 1 - SQLite Foundation & Checkpointing
 
 **Goal**: Introduce SQLite, wire it into startup, and ship a working snapshot/rollback system independent of any UI or LLM changes. Proves the persistence layer before anything else touches it.
 
@@ -20,9 +20,9 @@ This document breaks the work into four self-contained phases. Each phase ends w
   - `graph_snapshots`
 - [ ] Wire `SQLiteClient.init_schema()` into FastAPI startup in `main.py` alongside Neo4j constraint init
 - [ ] Create `services/checkpoint_service.py`
-  - `create_checkpoint(entity_type, entity_id, session_id, label)` — serializes full Neo4j subgraph to JSON, writes to `graph_snapshots`
-  - `list_versions(entity_type, entity_id)` — reads from SQLite, returns last 10, ordered by `created_at DESC`
-  - `rollback(entity_type, entity_id, version_id)` — loads snapshot from SQLite, `DETACH DELETE` entity subgraph in Neo4j, re-inserts nodes + edges, re-runs match linking, re-generates visualization
+  - `create_checkpoint(entity_type, entity_id, session_id, label)` - serializes full Neo4j subgraph to JSON, writes to `graph_snapshots`
+  - `list_versions(entity_type, entity_id)` - reads from SQLite, returns last 10, ordered by `created_at DESC`
+  - `rollback(entity_type, entity_id, version_id)` - loads snapshot from SQLite, `DETACH DELETE` entity subgraph in Neo4j, re-inserts nodes + edges, re-runs match linking, re-generates visualization
 - [ ] Add Pydantic models to `models/schemas.py`:
   - `GraphVersion`, `GraphSnapshotResponse`
 - [ ] Add API routes to `api/routes.py`:
@@ -41,9 +41,9 @@ This document breaks the work into four self-contained phases. Each phase ends w
 
 ---
 
-## Phase 2 — Node Expertise Weights
+## Phase 2 - Node Expertise Weights
 
-**Goal**: Compute and store `weight` on `Skill` and `Domain` nodes. Update visualization to reflect weights as node size. No new pages needed — purely a backend + visualization enhancement visible on the existing `UserModel` page.
+**Goal**: Compute and store `weight` on `Skill` and `Domain` nodes. Update visualization to reflect weights as node size. No new pages needed - purely a backend + visualization enhancement visible on the existing `UserModel` page.
 
 ### Backend tasks
 
@@ -76,9 +76,9 @@ This document breaks the work into four self-contained phases. Each phase ends w
 
 ---
 
-## Phase 3 — LLM Edit Agent & Backend Edit Endpoints
+## Phase 3 - LLM Edit Agent & Backend Edit Endpoints
 
-**Goal**: Ship the full backend edit flow — sessions, First Principles chat, mutation proposals, apply/reject — all backed by SQLite. No frontend yet; testable via API directly (curl / Postman).
+**Goal**: Ship the full backend edit flow - sessions, First Principles chat, mutation proposals, apply/reject - all backed by SQLite. No frontend yet; testable via API directly (curl / Postman).
 
 ### Backend tasks
 
@@ -137,9 +137,9 @@ This document breaks the work into four self-contained phases. Each phase ends w
 
 ---
 
-## Phase 4 — Frontend Edit UI
+## Phase 4 - Frontend Edit UI
 
-**Goal**: Build the edit pages and connect them to the Phase 3 endpoints. Users can chat, see mutation diffs, accept/reject, view version history, and roll back — all from the browser.
+**Goal**: Build the edit pages and connect them to the Phase 3 endpoints. Users can chat, see mutation diffs, accept/reject, view version history, and roll back - all from the browser.
 
 ### Frontend tasks
 
@@ -173,7 +173,7 @@ This document breaks the work into four self-contained phases. Each phase ends w
 
 - [ ] `frontend/src/components/VersionHistory.jsx`
   - Fetches `GET /graph/versions` on open
-  - Lists versions as: `<timestamp> — <label>` (max 10)
+  - Lists versions as: `<timestamp> - <label>` (max 10)
   - "Rollback" button on each row → confirmation modal → `POST /rollback/{version_id}` → graph reload
 
 - [ ] `frontend/src/components/SkillGapPanel.jsx`

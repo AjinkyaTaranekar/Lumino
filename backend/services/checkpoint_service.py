@@ -1,4 +1,4 @@
-"""Checkpoint service — serializes Neo4j subgraphs to SQLite and restores them."""
+"""Checkpoint service - serializes Neo4j subgraphs to SQLite and restores them."""
 
 import json
 import logging
