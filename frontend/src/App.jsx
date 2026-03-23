@@ -10,6 +10,7 @@ import JobModel from './pages/recruiter/JobModel'
 import CandidatesBrowser from './pages/recruiter/CandidatesBrowser'
 import Candidates from './pages/recruiter/Candidates'
 import AdminDashboard from './pages/admin/AdminDashboard'
+import Analytics from './pages/admin/Analytics'
 import EditGraph from './pages/user/EditGraph'
 import EditJobGraph from './pages/recruiter/EditJobGraph'
 import Clarification from './pages/user/Clarification'
@@ -40,6 +41,7 @@ export default function App() {
 
       {/* Admin routes */}
       <Route path="/admin" element={<ProtectedRoute role="admin"><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/admin/analytics" element={<ProtectedRoute role="admin"><Analytics /></ProtectedRoute>} />
 
       {/* Default redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />

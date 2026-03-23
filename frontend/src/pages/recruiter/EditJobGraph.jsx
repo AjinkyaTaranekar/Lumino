@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
-import Layout from '../../components/Layout'
 import GraphViewer from '../../components/GraphViewer'
 import ChatPanel from '../../components/ChatPanel'
 import VersionHistory from '../../components/VersionHistory'
@@ -100,10 +99,9 @@ export default function EditJobGraph() {
   }
 
   return (
-    <Layout>
-      <div className="flex flex-col h-full bg-surface-bg">
+    <div className="flex flex-col h-full bg-slate-50">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-surface-border bg-surface-card flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white flex-shrink-0">
           <button
             onClick={() => navigate(`/recruiter/model/${jobId}`)}
             className="btn-ghost btn-sm flex items-center gap-2"
@@ -111,7 +109,7 @@ export default function EditJobGraph() {
             <ArrowLeft className="w-4 h-4" /> Back to Job Model
           </button>
 
-          <h1 className="text-base font-semibold text-content-primary">
+          <h1 className="text-base font-semibold text-indigo-950">
             Edit Job Graph — {jobId}
           </h1>
 
@@ -156,10 +154,10 @@ export default function EditJobGraph() {
           </div>
 
           {/* Chat — 40% */}
-          <div className="flex flex-col w-2/5 flex-shrink-0 border-l border-surface-border bg-surface-card">
+          <div className="flex flex-col w-2/5 flex-shrink-0 border-l border-slate-200 bg-white">
             {initError ? (
               <div className="flex items-center justify-center h-full p-6">
-                <div className="alert-error text-center">
+                <div className="flex items-start gap-2 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm text-center">
                   Failed to start edit session: {initError}
                 </div>
               </div>
@@ -174,7 +172,6 @@ export default function EditJobGraph() {
             )}
           </div>
         </div>
-      </div>
-    </Layout>
+    </div>
   )
 }

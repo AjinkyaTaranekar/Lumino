@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Edit3, Layers } from 'lucide-react';
-import Layout from '../../components/Layout';
+
 import GraphViewer from '../../components/GraphViewer';
 import { api } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
@@ -24,16 +24,15 @@ export default function UserModel() {
   const iframeSrc = api.userVizUrl(userId);
 
   return (
-    <Layout>
-      <div className="flex flex-col h-full bg-surface-bg">
+    <div className="flex flex-col h-full bg-slate-50">
 
         {/* Topbar */}
-        <div className="flex items-center justify-between px-5 py-3 bg-surface-card border-b border-surface-border flex-shrink-0 gap-4">
+        <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-200 flex-shrink-0 gap-4">
 
           {/* Left: back button */}
           <button
             onClick={() => navigate('/user/dashboard')}
-            className="flex items-center gap-1.5 text-sm text-content-muted hover:text-content-primary transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-indigo-950 transition-colors flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -41,12 +40,12 @@ export default function UserModel() {
 
           {/* Center: title + stats */}
           <div className="flex items-center gap-3 min-w-0">
-            <h1 className="text-sm font-semibold text-content-primary truncate">
+            <h1 className="text-sm font-semibold text-indigo-950 truncate">
               Knowledge Graph — <span className="text-primary-500">{userId}</span>
             </h1>
             {stats && (
               <div className="hidden sm:flex items-center gap-2">
-                <Layers className="w-3.5 h-3.5 text-content-muted flex-shrink-0" />
+                <Layers className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="badge badge-blue text-xs">
                     {stats.categories} categories
@@ -83,8 +82,8 @@ export default function UserModel() {
 
         {/* Mobile stats row */}
         {stats && (
-          <div className="sm:hidden flex items-center gap-2 px-4 py-2 bg-surface-card border-b border-surface-border flex-wrap">
-            <Layers className="w-3.5 h-3.5 text-content-muted" />
+          <div className="sm:hidden flex items-center gap-2 px-4 py-2 bg-white border-b border-slate-200 flex-wrap">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
             <span className="badge badge-blue text-xs">{stats.categories} categories</span>
             <span className="badge badge-gray text-xs">{stats.families} families</span>
             <span className="badge badge-green text-xs">{stats.leaves} skills</span>
@@ -100,7 +99,6 @@ export default function UserModel() {
             height="100%"
           />
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 }

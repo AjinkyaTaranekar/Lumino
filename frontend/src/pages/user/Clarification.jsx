@@ -4,21 +4,20 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Layout from '../../components/Layout'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 
 const IMPACT_META = {
-  critical: { badge: 'badge-red',    label: 'Critical',  icon: AlertTriangle },
-  important: { badge: 'badge-orange', label: 'Important', icon: Info },
-  minor:    { badge: 'badge-gray',   label: 'Minor',     icon: HelpCircle },
+  critical:  { badgeCls: 'bg-red-50 text-red-600 border-red-100',    label: 'Critical',  icon: AlertTriangle },
+  important: { badgeCls: 'bg-amber-50 text-amber-700 border-amber-100', label: 'Important', icon: Info },
+  minor:     { badgeCls: 'bg-slate-100 text-slate-500 border-slate-200', label: 'Minor',  icon: HelpCircle },
 }
 
 function ImpactBadge({ impact }) {
   const m = IMPACT_META[impact] || IMPACT_META.minor
   const Icon = m.icon
   return (
-    <span className={`badge ${m.badge}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${m.badgeCls}`}>
       <Icon size={10} /> {m.label}
     </span>
   )
@@ -28,11 +27,11 @@ function ProgressBar({ resolved, total }) {
   const pct = total === 0 ? 100 : Math.round((resolved / total) * 100)
   return (
     <div>
-      <div className="flex justify-between text-xs mb-1.5 text-content-muted">
+      <div className="flex justify-between text-xs mb-1.5 text-slate-400">
         <span>{resolved} of {total} resolved</span>
         <span>{pct}%</span>
       </div>
-      <div className="rounded-full h-2 bg-gray-100 overflow-hidden">
+      <div className="rounded-full h-2 bg-slate-100 overflow-hidden">
         <div
           className="h-2 rounded-full transition-all duration-500"
           style={{ width: `${pct}%`, background: pct === 100 ? '#10b981' : '#137fec' }}
@@ -107,50 +106,52 @@ function QuestionCard({ q, onResolved }) {
 
   if (phase === 'done') {
     const statusLabel = { confirmed: 'Confirmed ✓', corrected: 'Corrected ✓', skipped: 'Skipped' }
-    const statusColor = { confirmed: 'text-success-600', corrected: 'text-warning-600', skipped: 'text-content-muted' }
+    const statusColor = { confirmed: 'text-emerald-600', corrected: 'text-amber-600', skipped: 'text-slate-400' }
     return (
-      <div className="card p-4 opacity-60 flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-prism border border-slate-100 p-4 opacity-60 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <ImpactBadge impact={q.resolution_impact} />
-          <span className="text-sm text-content-muted">{q.field}</span>
+          <span className="text-sm text-slate-400">{q.field}</span>
         </div>
-        <span className={`text-xs font-semibold ${statusColor[q.status] || 'text-content-muted'}`}>
+        <span className={`text-xs font-semibold ${statusColor[q.status] || 'text-slate-400'}`}>
           {statusLabel[q.status] || q.status}
         </span>
       </div>
     )
   }
 
-  const m = IMPACT_META[q.resolution_impact] || IMPACT_META.minor
+  const borderColor = q.resolution_impact === 'critical'
+    ? 'border-l-red-400'
+    : q.resolution_impact === 'important'
+    ? 'border-l-amber-400'
+    : 'border-l-slate-300'
+
+  const headerBg = q.resolution_impact === 'critical'
+    ? 'bg-red-50'
+    : q.resolution_impact === 'important'
+    ? 'bg-amber-50'
+    : 'bg-slate-50'
 
   return (
-    <div className={`card overflow-hidden border-l-4 ${
-      q.resolution_impact === 'critical' ? 'border-l-danger-400'
-      : q.resolution_impact === 'important' ? 'border-l-warning-400'
-      : 'border-l-gray-300'
-    }`}>
+    <div className={`bg-white rounded-2xl shadow-prism border border-slate-100 overflow-hidden border-l-4 ${borderColor}`}>
       {/* Header */}
-      <div className={`px-5 py-3 flex items-center justify-between ${
-        q.resolution_impact === 'critical' ? 'bg-danger-50'
-        : q.resolution_impact === 'important' ? 'bg-warning-50'
-        : 'bg-surface-raised'
-      }`}>
+      <div className={`px-5 py-3 flex items-center justify-between ${headerBg}`}>
         <div className="flex items-center gap-2">
           <ImpactBadge impact={q.resolution_impact} />
-          <code className="text-xs text-content-muted bg-white rounded px-1.5 py-0.5 border border-surface-border">{q.field}</code>
+          <code className="text-xs text-slate-400 bg-white rounded px-1.5 py-0.5 border border-slate-200">{q.field}</code>
         </div>
-        <button onClick={handleSkip} className="text-xs text-content-muted hover:text-content-primary transition-colors">
+        <button onClick={handleSkip} className="text-xs text-slate-400 hover:text-indigo-950 transition-colors">
           Skip
         </button>
       </div>
 
       <div className="px-5 py-5 space-y-4">
         {/* From resume */}
-        <div className="rounded-lg px-4 py-3 bg-surface-raised border border-surface-border">
-          <p className="text-xs font-medium text-content-muted mb-1.5 flex items-center gap-1.5">
+        <div className="rounded-lg px-4 py-3 bg-slate-50 border border-slate-200">
+          <p className="text-xs font-medium text-slate-400 mb-1.5 flex items-center gap-1.5">
             <FileText size={11} /> From your resume
           </p>
-          <p className="text-sm italic text-content-primary">"{q.raw_text}"</p>
+          <p className="text-sm italic text-indigo-950">"{q.raw_text}"</p>
         </div>
 
         {/* AI interpretation */}
@@ -158,20 +159,26 @@ function QuestionCard({ q, onResolved }) {
           <p className="text-xs font-medium text-primary-600 mb-1 flex items-center gap-1.5">
             <Sparkles size={11} /> AI interpreted this as
           </p>
-          <p className="text-sm text-content-primary">{q.interpreted_as}</p>
-          <p className="text-xs text-content-muted mt-1">{q.ambiguity_reason}</p>
+          <p className="text-sm text-indigo-950">{q.interpreted_as}</p>
+          <p className="text-xs text-slate-400 mt-1">{q.ambiguity_reason}</p>
         </div>
 
         {/* Phase: idle */}
         {phase === 'idle' && (
           <>
-            <p className="text-sm font-medium text-content-primary">{q.clarification_question}</p>
-            <p className="text-xs text-content-muted">Tell us in your own words, or confirm the AI was right.</p>
+            <p className="text-sm font-medium text-indigo-950">{q.clarification_question}</p>
+            <p className="text-xs text-slate-400">Tell us in your own words, or confirm the AI was right.</p>
             <div className="flex gap-2">
-              <button onClick={handleConfirmOriginal} className="btn-success btn-sm">
+              <button
+                onClick={handleConfirmOriginal}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 transition-all"
+              >
                 <CheckCircle2 size={13} /> AI was right
               </button>
-              <button onClick={() => setPhase('typing')} className="btn-secondary btn-sm">
+              <button
+                onClick={() => setPhase('typing')}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all"
+              >
                 <MessageSquare size={13} /> Let me describe it
               </button>
             </div>
@@ -182,32 +189,36 @@ function QuestionCard({ q, onResolved }) {
         {phase === 'typing' && (
           <>
             {followUp && (
-              <div className="alert-warning rounded-lg">
-                <AlertTriangle size={13} className="flex-shrink-0" />
+              <div className="flex items-start gap-2 p-4 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-sm">
+                <AlertTriangle size={13} className="flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="font-medium text-xs">Your previous answer was too vague:</p>
                   <p className="text-sm mt-0.5">{followUp}</p>
                 </div>
               </div>
             )}
-            {!followUp && <p className="text-sm text-content-primary">{q.clarification_question}</p>}
+            {!followUp && <p className="text-sm text-indigo-950">{q.clarification_question}</p>}
             <textarea
               value={answer}
               onChange={e => setAnswer(e.target.value)}
               placeholder="Be specific — what exactly? How many? What was your role?"
               rows={4}
               autoFocus
-              className="input resize-none"
+              className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white text-indigo-950 resize-none"
             />
-            {err && <p className="text-xs text-danger-500">{err}</p>}
+            {err && <p className="text-xs text-red-500">{err}</p>}
             <div className="flex gap-2">
-              <button onClick={() => { setPhase('idle'); setFollowUp(null); setAnswer('') }} className="btn-secondary btn-sm">
+              <button
+                onClick={() => { setPhase('idle'); setFollowUp(null); setAnswer('') }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all"
+              >
                 ← Back
               </button>
               <button
                 onClick={handleInterpret}
                 disabled={!answer.trim()}
-                className="btn-primary flex-1">
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all disabled:opacity-40"
+              >
                 See how I interpreted this <ArrowRight size={14} />
               </button>
             </div>
@@ -217,42 +228,49 @@ function QuestionCard({ q, onResolved }) {
         {/* Phase: interpreting */}
         {phase === 'interpreting' && (
           <div className="flex flex-col items-center py-6 gap-3">
-            <div className="spinner" />
-            <p className="text-sm text-content-muted">Interpreting your answer…</p>
+            <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-200 border-t-primary-500" />
+            <p className="text-sm text-slate-400">Interpreting your answer…</p>
           </div>
         )}
 
         {/* Phase: confirming */}
         {phase === 'confirming' && interpretation && (
           <>
-            <div className="rounded-lg px-4 py-3 bg-surface-raised border border-surface-border">
-              <p className="text-xs font-medium text-content-muted mb-1">What you said</p>
-              <p className="text-sm italic text-content-primary">"{answer}"</p>
+            <div className="rounded-lg px-4 py-3 bg-slate-50 border border-slate-200">
+              <p className="text-xs font-medium text-slate-400 mb-1">What you said</p>
+              <p className="text-sm italic text-indigo-950">"{answer}"</p>
             </div>
 
-            <div className="rounded-lg px-4 py-3 bg-success-50 border border-success-200">
-              <p className="text-xs font-medium text-success-600 mb-1 flex items-center gap-1.5">
+            <div className="rounded-lg px-4 py-3 bg-emerald-50 border border-emerald-200">
+              <p className="text-xs font-medium text-emerald-600 mb-1 flex items-center gap-1.5">
                 <Sparkles size={11} /> I understood this as
               </p>
-              <p className="text-sm font-medium text-content-primary">{interpretation.interpreted_value}</p>
-              <p className="text-xs text-content-muted mt-1">{interpretation.explanation}</p>
+              <p className="text-sm font-medium text-indigo-950">{interpretation.interpreted_value}</p>
+              <p className="text-xs text-slate-400 mt-1">{interpretation.explanation}</p>
               <div className="flex items-center gap-1.5 mt-2">
-                <span className="text-xs text-content-muted">Confidence:</span>
+                <span className="text-xs text-slate-400">Confidence:</span>
                 <span className={`text-xs font-semibold capitalize ${
-                  interpretation.confidence === 'high' ? 'text-success-600'
-                  : interpretation.confidence === 'medium' ? 'text-warning-600'
-                  : 'text-danger-500'
+                  interpretation.confidence === 'high' ? 'text-emerald-600'
+                  : interpretation.confidence === 'medium' ? 'text-amber-600'
+                  : 'text-red-500'
                 }`}>{interpretation.confidence}</span>
               </div>
             </div>
 
-            <p className="text-sm font-medium text-content-primary">Is this the right interpretation to save?</p>
-            {err && <p className="text-xs text-danger-500">{err}</p>}
+            <p className="text-sm font-medium text-indigo-950">Is this the right interpretation to save?</p>
+            {err && <p className="text-xs text-red-500">{err}</p>}
             <div className="flex gap-2">
-              <button onClick={() => { setPhase('typing'); setInterp(null) }} className="btn-secondary btn-sm">
+              <button
+                onClick={() => { setPhase('typing'); setInterp(null) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all"
+              >
                 <RefreshCw size={13} /> Rephrase
               </button>
-              <button onClick={handleConfirm} disabled={saving} className="btn-success flex-1">
+              <button
+                onClick={handleConfirm}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-all disabled:opacity-60"
+              >
                 {saving ? <Loader size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
                 {saving ? 'Saving…' : 'Yes, save this to my graph'}
               </button>
@@ -288,9 +306,9 @@ export default function Clarification() {
 
   function onResolved(updated) {
     setData(prev => {
-      const questions      = prev.questions.map(q => q.flag_id === updated.flag_id ? { ...q, ...updated } : q)
-      const pending        = questions.filter(q => q.status === 'pending').length
-      const resolved       = questions.filter(q => q.status !== 'pending').length
+      const questions       = prev.questions.map(q => q.flag_id === updated.flag_id ? { ...q, ...updated } : q)
+      const pending         = questions.filter(q => q.status === 'pending').length
+      const resolved        = questions.filter(q => q.status !== 'pending').length
       const criticalPending = questions.filter(q => q.status === 'pending' && q.resolution_impact === 'critical').length
       return { ...prev, questions, pending, resolved, graph_verified: criticalPending === 0 && questions.length > 0 }
     })
@@ -300,105 +318,105 @@ export default function Clarification() {
   const criticalPending = data?.questions.filter(q => q.status === 'pending' && q.resolution_impact === 'critical').length ?? 0
 
   if (loading) return (
-    <Layout>
-      <div className="flex items-center justify-center h-64">
-        <div className="spinner" />
-      </div>
-    </Layout>
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-2 border-slate-200 border-t-primary-500" />
+    </div>
   )
 
   if (error) return (
-    <Layout>
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        <p className="text-sm text-danger-500">{error}</p>
-      </div>
-    </Layout>
+    <div className="p-8 max-w-2xl">
+      <p className="text-sm text-red-500">{error}</p>
+    </div>
   )
 
   return (
-    <Layout>
-      <div className="max-w-2xl mx-auto px-6 py-10">
+    <div className="p-8 max-w-3xl">
 
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-1">
-            <ShieldCheck size={22} className={data?.graph_verified ? 'text-success-500' : 'text-warning-500'} />
-            <h1 className="text-2xl font-bold text-content-primary">Verify Your Profile</h1>
-          </div>
-          <p className="text-sm text-content-muted">
-            The AI made {data?.total_flags ?? 0} interpretations from your resume.
-            Review each one to ensure your knowledge graph is accurate.
-          </p>
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <ShieldCheck size={22} className={data?.graph_verified ? 'text-emerald-500' : 'text-amber-500'} />
+          <h1 className="text-4xl font-extrabold font-display text-indigo-950 tracking-tight">Verify Your Profile</h1>
         </div>
-
-        {data?.graph_verified && (
-          <div className="alert-success mb-5">
-            <CheckCircle2 size={18} className="flex-shrink-0" />
-            <div>
-              <p className="font-semibold text-sm">Graph verified</p>
-              <p className="text-xs mt-0.5">All critical interpretations confirmed. You are your graph.</p>
-            </div>
-          </div>
-        )}
-
-        {!data?.graph_verified && criticalPending > 0 && (
-          <div className="alert-warning mb-5">
-            <AlertTriangle size={15} className="flex-shrink-0" />
-            {criticalPending} critical {criticalPending === 1 ? 'question' : 'questions'} affect your match scores.
-          </div>
-        )}
-
-        <div className="mb-5"><ProgressBar resolved={data?.resolved ?? 0} total={data?.total_flags ?? 0} /></div>
-
-        {/* Impact counts */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          {['critical', 'important', 'minor'].map(impact => {
-            const count = data?.questions.filter(q => q.resolution_impact === impact && q.status === 'pending').length ?? 0
-            const m = IMPACT_META[impact]
-            return (
-              <div key={impact} className="card p-3 text-center">
-                <p className={`text-xl font-bold ${
-                  impact === 'critical' ? 'text-danger-500' : impact === 'important' ? 'text-warning-600' : 'text-content-muted'
-                }`}>{count}</p>
-                <p className="text-xs text-content-muted mt-0.5">{m.label} left</p>
-              </div>
-            )
-          })}
-        </div>
-
-        {(data?.resolved ?? 0) > 0 && (
-          <div className="flex gap-1 p-1 rounded-xl bg-surface-raised border border-surface-border mb-5">
-            {['pending', 'all'].map(f => (
-              <button key={f} onClick={() => setFilter(f)}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                  filter === f ? 'bg-white shadow-card text-content-primary' : 'text-content-muted hover:text-content-primary'
-                }`}>
-                {f === 'pending' ? `Pending (${data?.pending ?? 0})` : `All (${data?.total_flags ?? 0})`}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {visible.length === 0 ? (
-          <div className="text-center py-12 card">
-            <CheckCircle2 size={32} className="mx-auto mb-3 text-success-400" />
-            <p className="font-medium text-content-primary">All caught up!</p>
-            <p className="text-sm text-content-muted mt-1">No pending questions.</p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {visible.map(q => <QuestionCard key={q.flag_id} q={q} onResolved={onResolved} />)}
-          </div>
-        )}
-
-        <div className="flex gap-3 mt-8">
-          <button onClick={() => navigate('/user/model')} className="btn-secondary">
-            <ChevronLeft size={15} /> View Graph
-          </button>
-          <button onClick={() => navigate('/user/dashboard')} className="btn-primary flex-1">
-            Browse Jobs <ChevronRight size={15} />
-          </button>
-        </div>
+        <p className="text-lg text-slate-500 mt-2 leading-relaxed">
+          The AI made {data?.total_flags ?? 0} interpretations from your resume.
+          Review each one to ensure your knowledge graph is accurate.
+        </p>
       </div>
-    </Layout>
+
+      {data?.graph_verified && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm mb-5">
+          <CheckCircle2 size={18} className="flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-sm">Graph verified</p>
+            <p className="text-xs mt-0.5">All critical interpretations confirmed. You are your graph.</p>
+          </div>
+        </div>
+      )}
+
+      {!data?.graph_verified && criticalPending > 0 && (
+        <div className="flex items-center gap-2 p-4 rounded-xl bg-amber-50 border border-amber-100 text-amber-700 text-sm mb-5">
+          <AlertTriangle size={15} className="flex-shrink-0" />
+          {criticalPending} critical {criticalPending === 1 ? 'question' : 'questions'} affect your match scores.
+        </div>
+      )}
+
+      <div className="mb-5"><ProgressBar resolved={data?.resolved ?? 0} total={data?.total_flags ?? 0} /></div>
+
+      {/* Impact counts */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {['critical', 'important', 'minor'].map(impact => {
+          const count = data?.questions.filter(q => q.resolution_impact === impact && q.status === 'pending').length ?? 0
+          const m = IMPACT_META[impact]
+          return (
+            <div key={impact} className="bg-white rounded-2xl shadow-prism border border-slate-100 p-3 text-center">
+              <p className={`text-xl font-bold ${
+                impact === 'critical' ? 'text-red-500' : impact === 'important' ? 'text-amber-600' : 'text-slate-400'
+              }`}>{count}</p>
+              <p className="text-xs text-slate-400 mt-0.5">{m.label} left</p>
+            </div>
+          )
+        })}
+      </div>
+
+      {(data?.resolved ?? 0) > 0 && (
+        <div className="flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 mb-5">
+          {['pending', 'all'].map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+                filter === f ? 'bg-white shadow-sm text-indigo-950' : 'text-slate-400 hover:text-indigo-950'
+              }`}>
+              {f === 'pending' ? `Pending (${data?.pending ?? 0})` : `All (${data?.total_flags ?? 0})`}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visible.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-2xl shadow-prism border border-slate-100">
+          <CheckCircle2 size={32} className="mx-auto mb-3 text-emerald-400" />
+          <p className="font-medium text-indigo-950">All caught up!</p>
+          <p className="text-sm text-slate-400 mt-1">No pending questions.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {visible.map(q => <QuestionCard key={q.flag_id} q={q} onResolved={onResolved} />)}
+        </div>
+      )}
+
+      <div className="flex gap-3 mt-8">
+        <button
+          onClick={() => navigate('/user/model')}
+          className="flex items-center gap-1.5 px-5 py-3 border border-slate-200 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition-all"
+        >
+          <ChevronLeft size={15} /> View Graph
+        </button>
+        <button
+          onClick={() => navigate('/user/dashboard')}
+          className="flex-1 flex items-center justify-center gap-1.5 px-5 py-3 bg-primary-500 text-white rounded-xl font-bold hover:bg-primary-600 transition-all"
+        >
+          Browse Jobs <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
   )
 }

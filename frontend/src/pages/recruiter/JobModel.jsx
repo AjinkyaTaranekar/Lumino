@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
-import Layout from '../../components/Layout'
 import GraphViewer from '../../components/GraphViewer'
 import { ArrowLeft, RefreshCw, Users, Edit3 } from 'lucide-react'
 
@@ -13,10 +12,9 @@ export default function JobModel() {
   const iframeSrc = api.jobVizUrl(jobId)
 
   return (
-    <Layout>
-      <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-slate-50">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-surface-card flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-white flex-shrink-0">
           <button
             onClick={() => navigate(-1)}
             className="btn-ghost btn-sm flex items-center gap-2"
@@ -24,7 +22,7 @@ export default function JobModel() {
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
 
-          <h1 className="text-base font-semibold text-content-primary">
+          <h1 className="text-base font-semibold text-indigo-950">
             Job Model — {jobId}
           </h1>
 
@@ -51,7 +49,7 @@ export default function JobModel() {
         </div>
 
         {/* Graph area */}
-        <div className="flex-1 p-4 bg-surface-bg">
+        <div className="flex-1 p-4 bg-slate-50">
           <GraphViewer
             key={key}
             generateFn={() => api.generateJobViz(jobId)}
@@ -59,7 +57,6 @@ export default function JobModel() {
             height="100%"
           />
         </div>
-      </div>
-    </Layout>
+    </div>
   )
 }

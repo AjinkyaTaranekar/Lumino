@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Save, ChevronDown, ChevronUp } from 'lucide-react';
-import Layout from '../../components/Layout';
+
 import GraphViewer from '../../components/GraphViewer';
 import ChatPanel from '../../components/ChatPanel';
 import VersionHistory from '../../components/VersionHistory';
@@ -183,23 +183,22 @@ export default function EditGraph() {
   const iframeSrc = api.userVizUrl(userId);
 
   return (
-    <Layout>
-      <div className="flex flex-col h-full bg-surface-bg">
+    <div className="flex flex-col h-full bg-slate-50">
 
         {/* Topbar */}
-        <div className="flex items-center justify-between px-5 py-3 bg-surface-card border-b border-surface-border flex-shrink-0 gap-3">
+        <div className="flex items-center justify-between px-5 py-3 bg-white border-b border-slate-200 flex-shrink-0 gap-3">
 
           {/* Left */}
           <button
             onClick={() => navigate('/user/model')}
-            className="flex items-center gap-1.5 text-sm text-content-muted hover:text-content-primary transition-colors flex-shrink-0"
+            className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-indigo-950 transition-colors flex-shrink-0"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Graph
           </button>
 
           {/* Center */}
-          <h1 className="text-sm font-semibold text-content-primary truncate min-w-0">
+          <h1 className="text-sm font-semibold text-indigo-950 truncate min-w-0">
             Edit Knowledge Graph —{' '}
             <span className="text-primary-500">{userId}</span>
           </h1>
@@ -245,7 +244,7 @@ export default function EditGraph() {
         <div className="flex flex-1 overflow-hidden">
 
           {/* Left panel: graph + optional skill gap (60%) */}
-          <div className="flex flex-col min-w-0 border-r border-surface-border" style={{ width: '60%' }}>
+          <div className="flex flex-col min-w-0 border-r border-slate-200" style={{ width: '60%' }}>
             <div className="flex-1 p-3 min-h-0">
               <GraphViewer
                 key={graphKey}
@@ -257,9 +256,9 @@ export default function EditGraph() {
 
             {/* Skill gap collapsible */}
             {jobId && (
-              <div className="flex-shrink-0 border-t border-surface-border">
+              <div className="flex-shrink-0 border-t border-slate-200">
                 <button
-                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-content-secondary hover:bg-surface-hover transition-colors bg-surface-card"
+                  className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors bg-white"
                   onClick={() => setShowGap(g => !g)}
                 >
                   <span>Skills Gap vs. selected job</span>
@@ -284,7 +283,7 @@ export default function EditGraph() {
           <div className="flex flex-col flex-shrink-0" style={{ width: '40%' }}>
             {initError ? (
               <div className="flex items-center justify-center h-full px-6">
-                <div className="alert-error text-sm">
+                <div className="flex items-start gap-2 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm text-sm">
                   Failed to start session: {initError}
                 </div>
               </div>
@@ -300,7 +299,6 @@ export default function EditGraph() {
             )}
           </div>
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 }
