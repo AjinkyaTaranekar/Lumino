@@ -27,8 +27,11 @@ export function AuthProvider({ children }) {
     setSession(null)
   }, [])
 
+  // `user` is an alias for session, for compatibility with migrated Lumino components
+  const user = session
+
   return (
-    <AuthContext.Provider value={{ session, login, logout }}>
+    <AuthContext.Provider value={{ session, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   )
