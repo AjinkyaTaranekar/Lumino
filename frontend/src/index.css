@@ -5,6 +5,15 @@
 @tailwind utilities;
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root {
