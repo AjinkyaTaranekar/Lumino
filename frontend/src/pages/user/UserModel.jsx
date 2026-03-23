@@ -1,65 +1,106 @@
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { api } from '../../lib/api'
-import Layout from '../../components/Layout'
-import GraphViewer from '../../components/GraphViewer'
-import { ArrowLeft, RefreshCw, Edit3 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, RefreshCw, Edit3, Layers } from 'lucide-react';
+import Layout from '../../components/Layout';
+import GraphViewer from '../../components/GraphViewer';
+import { api } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function UserModel() {
-  const { session } = useAuth()
-  const navigate    = useNavigate()
-  const [key, setKey] = useState(0)  // increment to force GraphViewer re-mount
+  const { session } = useAuth();
+  const navigate = useNavigate();
+  const userId = session?.userId;
 
-  const iframeSrc = api.userVizUrl(session.userId)
+  const [graphKey, setGraphKey] = useState(0);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    api.getUserStats(userId)
+      .then(setStats)
+      .catch(() => {});
+  }, [userId]);
+
+  const iframeSrc = api.userVizUrl(userId);
 
   return (
     <Layout>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-surface-bg">
+
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
-             style={{ background: '#16213e', borderColor: '#0f3460' }}>
+        <div className="flex items-center justify-between px-5 py-3 bg-surface-card border-b border-surface-border flex-shrink-0 gap-4">
+
+          {/* Left: back button */}
           <button
             onClick={() => navigate('/user/dashboard')}
-            className="flex items-center gap-2 text-sm transition-colors"
-            style={{ color: '#8892a4' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-            onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-            <ArrowLeft size={16} /> Back to Dashboard
+            className="flex items-center gap-1.5 text-sm text-content-muted hover:text-content-primary transition-colors flex-shrink-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
           </button>
 
-          <h1 className="text-base font-semibold" style={{ color: '#e0e0e0' }}>
-            Knowledge Graph — {session.userId}
-          </h1>
+          {/* Center: title + stats */}
+          <div className="flex items-center gap-3 min-w-0">
+            <h1 className="text-sm font-semibold text-content-primary truncate">
+              Knowledge Graph — <span className="text-primary-500">{userId}</span>
+            </h1>
+            {stats && (
+              <div className="hidden sm:flex items-center gap-2">
+                <Layers className="w-3.5 h-3.5 text-content-muted flex-shrink-0" />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="badge badge-blue text-xs">
+                    {stats.categories} categories
+                  </span>
+                  <span className="badge badge-gray text-xs">
+                    {stats.families} families
+                  </span>
+                  <span className="badge badge-green text-xs">
+                    {stats.leaves} skills
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
 
-          <button
-            onClick={() => setKey(k => k + 1)}
-            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: '#0f3460', color: '#8892a4', border: '1px solid #0f3460' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-            onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-            <RefreshCw size={12} /> Refresh
-          </button>
-          <button
-            onClick={() => navigate('/user/edit-graph')}
-            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition-colors"
-            style={{ background: '#e94560', color: '#fff' }}
-            onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-            onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-            <Edit3 size={12} /> Edit Graph
-          </button>
+          {/* Right: action buttons */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setGraphKey(k => k + 1)}
+              className="btn-secondary btn-sm flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </button>
+            <button
+              onClick={() => navigate('/user/edit-graph')}
+              className="btn-primary btn-sm flex items-center gap-1.5"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              Edit Graph
+            </button>
+          </div>
         </div>
 
+        {/* Mobile stats row */}
+        {stats && (
+          <div className="sm:hidden flex items-center gap-2 px-4 py-2 bg-surface-card border-b border-surface-border flex-wrap">
+            <Layers className="w-3.5 h-3.5 text-content-muted" />
+            <span className="badge badge-blue text-xs">{stats.categories} categories</span>
+            <span className="badge badge-gray text-xs">{stats.families} families</span>
+            <span className="badge badge-green text-xs">{stats.leaves} skills</span>
+          </div>
+        )}
+
         {/* Graph area */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 min-h-0">
           <GraphViewer
-            key={key}
-            generateFn={() => api.generateUserViz(session.userId)}
+            key={graphKey}
+            generateFn={() => api.generateUserViz(userId)}
             iframeSrc={iframeSrc}
             height="100%"
           />
         </div>
       </div>
     </Layout>
-  )
+  );
 }

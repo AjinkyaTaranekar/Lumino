@@ -9,15 +9,15 @@ import VersionHistory from '../../components/VersionHistory'
 import { ArrowLeft, Save, ChevronDown } from 'lucide-react'
 
 export default function EditJobGraph() {
-  const { jobId } = useParams()
+  const { jobId }   = useParams()
   const { session } = useAuth()
-  const navigate = useNavigate()
+  const navigate    = useNavigate()
 
-  const [sessionId, setSessionId] = useState(null)
-  const [graphKey, setGraphKey] = useState(0)
-  const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [initError, setInitError] = useState(null)
+  const [sessionId, setSessionId]     = useState(null)
+  const [graphKey, setGraphKey]       = useState(0)
+  const [messages, setMessages]       = useState([])
+  const [loading, setLoading]         = useState(false)
+  const [initError, setInitError]     = useState(null)
   const [showVersions, setShowVersions] = useState(false)
 
   useEffect(() => {
@@ -57,11 +57,15 @@ export default function EditJobGraph() {
       setGraphKey(k => k + 1)
       setMessages(prev => [...prev, {
         role: 'system',
-        content: `✓ Applied: +${res.nodes_added} nodes, ~${res.nodes_updated} updated, -${res.nodes_removed} removed. Checkpoint saved.`,
+        content: `Applied: +${res.nodes_added} nodes, ~${res.nodes_updated} updated, -${res.nodes_removed} removed. Checkpoint saved.`,
         proposal: null,
       }])
     } catch (err) {
-      alert(`Failed to apply mutations: ${err.message}`)
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: `Failed to apply mutations: ${err.message}`,
+        proposal: null,
+      }])
     }
   }
 
@@ -80,56 +84,57 @@ export default function EditJobGraph() {
 
   async function handleSaveCheckpoint() {
     try {
-      await api.saveCheckpoint('job', jobId, `manual_${new Date().toISOString().slice(0,10)}`)
-      alert('Checkpoint saved!')
+      await api.saveCheckpoint('job', jobId, `manual_${new Date().toISOString().slice(0, 10)}`)
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: 'Checkpoint saved successfully.',
+        proposal: null,
+      }])
     } catch (err) {
-      alert(`Failed: ${err.message}`)
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: `Failed to save checkpoint: ${err.message}`,
+        proposal: null,
+      }])
     }
   }
 
   return (
     <Layout>
-      <div className="flex flex-col h-full" style={{ background: '#1a1a2e' }}>
+      <div className="flex flex-col h-full bg-surface-bg">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-3 border-b flex-shrink-0"
-             style={{ background: '#16213e', borderColor: '#0f3460' }}>
+        <div className="flex items-center justify-between px-6 py-3 border-b border-surface-border bg-surface-card flex-shrink-0">
           <button
             onClick={() => navigate(`/recruiter/model/${jobId}`)}
-            className="flex items-center gap-2 text-sm"
-            style={{ color: '#8892a4' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-            onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-            <ArrowLeft size={16} /> Back to Job Model
+            className="btn-ghost btn-sm flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back to Job Model
           </button>
 
-          <h1 className="text-base font-semibold" style={{ color: '#e0e0e0' }}>
+          <h1 className="text-base font-semibold text-content-primary">
             Edit Job Graph — {jobId}
           </h1>
 
           <div className="flex items-center gap-2">
             <button
               onClick={handleSaveCheckpoint}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: '#27AE60', color: '#fff' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#1e8449'}
-              onMouseLeave={e => e.currentTarget.style.background = '#27AE60'}>
-              <Save size={12} /> Save Checkpoint
+              className="btn-success btn-sm flex items-center gap-1.5"
+            >
+              <Save className="w-3.5 h-3.5" /> Save Checkpoint
             </button>
             <div className="relative">
               <button
                 onClick={() => setShowVersions(v => !v)}
-                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
-                style={{ background: '#0f3460', color: '#8892a4', border: '1px solid #0f3460' }}
-                onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-                onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-                Versions <ChevronDown size={12} />
+                className="btn-secondary btn-sm flex items-center gap-1.5"
+              >
+                Versions <ChevronDown className="w-3.5 h-3.5" />
               </button>
               {showVersions && (
-                <div className="absolute right-0 top-8 z-50">
+                <div className="absolute right-0 top-9 z-50">
                   <VersionHistory
                     entityType="job"
                     entityId={jobId}
-                    onRollback={() => setGraphKey(k => k + 1)}
+                    onRollback={() => { setGraphKey(k => k + 1); setShowVersions(false) }}
                     onClose={() => setShowVersions(false)}
                   />
                 </div>
@@ -138,9 +143,10 @@ export default function EditJobGraph() {
           </div>
         </div>
 
-        {/* Main content */}
+        {/* Main two-panel layout */}
         <div className="flex flex-1 overflow-hidden">
-          <div style={{ width: '60%', minWidth: 0 }} className="p-3">
+          {/* Graph — 60% */}
+          <div className="w-3/5 min-w-0 p-3">
             <GraphViewer
               key={graphKey}
               generateFn={() => api.generateJobViz(jobId)}
@@ -148,12 +154,14 @@ export default function EditJobGraph() {
               height="100%"
             />
           </div>
-          <div className="flex flex-col border-l flex-shrink-0"
-               style={{ width: '40%', borderColor: '#0f3460' }}>
+
+          {/* Chat — 40% */}
+          <div className="flex flex-col w-2/5 flex-shrink-0 border-l border-surface-border bg-surface-card">
             {initError ? (
-              <div className="flex items-center justify-center h-full text-sm"
-                   style={{ color: '#e94560' }}>
-                Failed to start session: {initError}
+              <div className="flex items-center justify-center h-full p-6">
+                <div className="alert-error text-center">
+                  Failed to start edit session: {initError}
+                </div>
               </div>
             ) : (
               <ChatPanel

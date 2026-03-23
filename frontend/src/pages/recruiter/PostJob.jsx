@@ -3,29 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
-import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle } from 'lucide-react'
-
-function StatCard({ label, value }) {
-  return (
-    <div className="rounded-xl p-4 text-center" style={{ background: '#0f3460' }}>
-      <p className="text-2xl font-bold mb-0.5" style={{ color: '#e94560' }}>{value}</p>
-      <p className="text-xs" style={{ color: '#8892a4' }}>{label}</p>
-    </div>
-  )
-}
+import { Upload, FileText, CheckCircle } from 'lucide-react'
 
 export default function PostJob() {
   const { session } = useAuth()
   const navigate    = useNavigate()
   const fileRef     = useRef(null)
 
-  const [jobId, setJobId]     = useState('')
-  const [tab, setTab]         = useState('pdf')
-  const [file, setFile]       = useState(null)
-  const [text, setText]       = useState('')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState(null)
-  const [error, setError]     = useState(null)
+  const [jobId, setJobId]       = useState('')
+  const [tab, setTab]           = useState('pdf')
+  const [file, setFile]         = useState(null)
+  const [text, setText]         = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [result, setResult]     = useState(null)
+  const [error, setError]       = useState(null)
   const [dragging, setDragging] = useState(false)
 
   async function handleAnalyse() {
@@ -59,47 +50,50 @@ export default function PostJob() {
     else setError('Only PDF files are accepted.')
   }
 
-  const tabStyle = (t) => ({
-    padding: '8px 20px',
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: 'pointer',
-    background: tab === t ? '#e94560' : 'transparent',
-    color: tab === t ? '#fff' : '#8892a4',
-    border: 'none',
-  })
-
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-6 py-10">
-        <h1 className="text-2xl font-bold mb-1" style={{ color: '#e0e0e0' }}>Post a Job</h1>
-        <p className="text-sm mb-8" style={{ color: '#8892a4' }}>
-          We'll extract skill requirements, domains, and work styles to build the job model.
+        <h1 className="text-2xl font-bold text-content-primary mb-1">Post a Job</h1>
+        <p className="text-sm text-content-secondary mb-8">
+          Paste or upload a job description — Lumino will extract skills, domain requirements,
+          and work-style preferences to build your job model.
         </p>
 
         {/* Job ID */}
         <div className="mb-5">
-          <label className="block text-sm font-medium mb-2" style={{ color: '#8892a4' }}>
-            Job ID (unique identifier)
-          </label>
+          <label className="label" htmlFor="jobId">Job ID (unique identifier)</label>
           <input
+            id="jobId"
             type="text"
             value={jobId}
             onChange={e => { setJobId(e.target.value); setError(null) }}
             placeholder="e.g. job-senior-ml-01"
-            className="w-full px-4 py-3 rounded-lg text-sm outline-none"
-            style={{ background: '#16213e', border: '1px solid #0f3460', color: '#e0e0e0' }}
-            onFocus={e => e.target.style.borderColor = '#e94560'}
-            onBlur={e => e.target.style.borderColor = '#0f3460'}
+            className="input mt-1"
           />
         </div>
 
         {/* Tab toggle */}
-        <div className="flex gap-1 p-1 rounded-xl mb-5 inline-flex"
-             style={{ background: '#16213e', border: '1px solid #0f3460' }}>
-          <button style={tabStyle('pdf')}  onClick={() => setTab('pdf')}>Upload PDF</button>
-          <button style={tabStyle('text')} onClick={() => setTab('text')}>Paste Text</button>
+        <div className="inline-flex rounded-lg border border-surface-border bg-surface-bg p-1 gap-1 mb-5">
+          <button
+            className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+              tab === 'pdf'
+                ? 'bg-surface-card text-content-primary shadow-sm border border-surface-border'
+                : 'text-content-muted hover:text-content-secondary'
+            }`}
+            onClick={() => setTab('pdf')}
+          >
+            Upload PDF
+          </button>
+          <button
+            className={`px-5 py-2 rounded-md text-sm font-medium transition-colors ${
+              tab === 'text'
+                ? 'bg-surface-card text-content-primary shadow-sm border border-surface-border'
+                : 'text-content-muted hover:text-content-secondary'
+            }`}
+            onClick={() => setTab('text')}
+          >
+            Paste Text
+          </button>
         </div>
 
         {/* PDF drop zone */}
@@ -109,25 +103,34 @@ export default function PostJob() {
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            className="rounded-xl p-10 text-center cursor-pointer"
-            style={{
-              border: `2px dashed ${dragging ? '#e94560' : file ? '#27ae60' : '#0f3460'}`,
-              background: dragging ? 'rgba(233,69,96,0.05)' : '#16213e',
-            }}>
-            <input ref={fileRef} type="file" accept=".pdf" className="hidden"
-                   onChange={e => setFile(e.target.files[0] || null)} />
+            className={`rounded-xl p-10 text-center cursor-pointer border-2 border-dashed transition-colors ${
+              dragging
+                ? 'border-primary-500 bg-primary-50'
+                : file
+                ? 'border-success-500 bg-success-50'
+                : 'border-surface-border bg-surface-bg hover:border-primary-500 hover:bg-primary-50'
+            }`}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf"
+              className="hidden"
+              onChange={e => setFile(e.target.files[0] || null)}
+            />
             {file ? (
               <>
-                <FileText size={36} className="mx-auto mb-3" color="#27ae60" />
-                <p className="text-sm font-medium" style={{ color: '#27ae60' }}>{file.name}</p>
-                <p className="text-xs mt-1" style={{ color: '#8892a4' }}>Click to change</p>
+                <FileText className="w-9 h-9 mx-auto mb-3 text-success-500" />
+                <p className="text-sm font-medium text-success-600">{file.name}</p>
+                <p className="text-xs mt-1 text-content-muted">Click to change</p>
               </>
             ) : (
               <>
-                <UploadIcon size={36} className="mx-auto mb-3" color="#0f3460" />
-                <p className="text-sm font-medium" style={{ color: '#e0e0e0' }}>
+                <Upload className="w-9 h-9 mx-auto mb-3 text-content-subtle" />
+                <p className="text-sm font-medium text-content-secondary">
                   Drop your PDF here or click to browse
                 </p>
+                <p className="text-xs mt-1 text-content-muted">PDF files only</p>
               </>
             )}
           </div>
@@ -135,65 +138,83 @@ export default function PostJob() {
 
         {/* Text paste */}
         {tab === 'text' && (
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder="Paste job description here..."
-            rows={12}
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
-            style={{ background: '#16213e', border: '1px solid #0f3460', color: '#e0e0e0' }}
-            onFocus={e => e.target.style.borderColor = '#e94560'}
-            onBlur={e => e.target.style.borderColor = '#0f3460'}
-          />
+          <div>
+            <label className="label" htmlFor="jobText">Job Description</label>
+            <textarea
+              id="jobText"
+              value={text}
+              onChange={e => setText(e.target.value)}
+              placeholder="Paste job description here…"
+              rows={12}
+              className="input mt-1 resize-none"
+            />
+          </div>
         )}
 
         {error && (
-          <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-lg"
-               style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.3)' }}>
-            <AlertCircle size={16} color="#e74c3c" />
-            <p className="text-sm" style={{ color: '#e74c3c' }}>{error}</p>
-          </div>
+          <div className="alert-error mt-4">{error}</div>
         )}
 
         <button
           onClick={handleAnalyse}
           disabled={loading}
-          className="w-full mt-5 py-3 rounded-xl font-semibold text-sm disabled:opacity-50"
-          style={{ background: '#e94560', color: '#fff' }}
-          onMouseEnter={e => !loading && (e.currentTarget.style.background = '#c73652')}
-          onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-          {loading ? 'Analysing…' : 'Analyse Job Posting'}
+          className="btn-primary btn-lg w-full mt-5 flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <span className="spinner-sm" />
+              Analysing…
+            </>
+          ) : (
+            'Analyse Job Posting'
+          )}
         </button>
 
         {/* Result */}
         {result && (
-          <div className="mt-8 fade-in">
-            <div className="flex items-center gap-2 mb-5">
-              <CheckCircle size={18} color="#27ae60" />
-              <p className="font-semibold text-sm" style={{ color: '#27ae60' }}>
-                Job posting processed successfully
-              </p>
+          <div className="card p-6 mt-8 space-y-5 fade-in">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-5 h-5 text-success-500 shrink-0" />
+              <div>
+                <p className="font-semibold text-content-primary">Job posting processed successfully</p>
+                <p className="text-sm text-content-secondary">
+                  Requirements extracted for <span className="font-mono font-medium">{result.resolvedJobId}</span>.
+                </p>
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3 mb-6">
-              <StatCard label="Skill Reqs"     value={result.skill_requirements_extracted  || 0} />
-              <StatCard label="Domain Reqs"    value={result.domain_requirements_extracted || 0} />
-              <StatCard label="Work Styles"    value={result.work_styles_extracted || 0} />
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-primary-50 border border-primary-100 p-4 text-center">
+                <p className="text-2xl font-bold text-primary-500">
+                  {result.skill_requirements_extracted ?? 0}
+                </p>
+                <p className="text-xs text-content-secondary mt-1">Skills Extracted</p>
+              </div>
+              <div className="rounded-lg bg-success-50 border border-success-100 p-4 text-center">
+                <p className="text-2xl font-bold text-success-600">
+                  {result.domain_requirements_extracted ?? 0}
+                </p>
+                <p className="text-xs text-content-secondary mt-1">Domain Reqs</p>
+              </div>
+              <div className="rounded-lg bg-warning-50 border border-warning-100 p-4 text-center">
+                <p className="text-2xl font-bold text-warning-600">
+                  {result.work_styles_extracted ?? 0}
+                </p>
+                <p className="text-xs text-content-secondary mt-1">Work Styles</p>
+              </div>
             </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => navigate(`/recruiter/model/${result.resolvedJobId}`)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                style={{ background: '#0f3460', color: '#e0e0e0', border: '1px solid #0f3460' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#1a3a7a'}
-                onMouseLeave={e => e.currentTarget.style.background = '#0f3460'}>
+                className="btn-secondary flex-1"
+              >
                 View Job Model
               </button>
               <button
                 onClick={() => navigate(`/recruiter/candidates/${result.resolvedJobId}`)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                style={{ background: '#e94560', color: '#fff' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-                onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
+                className="btn-primary flex-1"
+              >
                 Find Candidates →
               </button>
             </div>

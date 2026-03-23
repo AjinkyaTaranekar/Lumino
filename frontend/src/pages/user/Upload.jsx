@@ -3,13 +3,16 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
-import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, BookOpen, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react'
+import {
+  Upload as UploadIcon, FileText, CheckCircle, AlertCircle,
+  BookOpen, ShieldCheck, ShieldAlert, AlertTriangle, Network, BarChart3
+} from 'lucide-react'
 
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-xl p-5 text-center" style={{ background: '#0f3460' }}>
-      <p className="text-3xl font-bold mb-1" style={{ color: '#e94560' }}>{value}</p>
-      <p className="text-xs" style={{ color: '#8892a4' }}>{label}</p>
+    <div className="text-center p-4 rounded-xl bg-primary-50 border border-primary-100">
+      <p className="text-2xl font-bold text-primary-600">{value}</p>
+      <p className="text-xs text-content-muted mt-0.5">{label}</p>
     </div>
   )
 }
@@ -19,12 +22,12 @@ export default function Upload() {
   const navigate    = useNavigate()
   const fileRef     = useRef(null)
 
-  const [tab, setTab]         = useState('pdf')   // 'pdf' | 'text'
-  const [file, setFile]       = useState(null)
-  const [text, setText]       = useState('')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult]   = useState(null)
-  const [error, setError]     = useState(null)
+  const [tab,      setTab]      = useState('pdf')
+  const [file,     setFile]     = useState(null)
+  const [text,     setText]     = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [result,   setResult]   = useState(null)
+  const [error,    setError]    = useState(null)
   const [dragging, setDragging] = useState(false)
 
   async function handleAnalyse() {
@@ -56,40 +59,39 @@ export default function Upload() {
     else setError('Only PDF files are accepted.')
   }
 
-  const tabStyle = (t) => ({
-    padding: '8px 20px',
-    borderRadius: 8,
-    fontSize: 13,
-    fontWeight: 500,
-    cursor: 'pointer',
-    background: tab === t ? '#e94560' : 'transparent',
-    color: tab === t ? '#fff' : '#8892a4',
-    border: 'none',
-  })
-
   return (
     <Layout>
       <div className="max-w-xl mx-auto px-6 py-10">
-        <div className="flex items-start justify-between mb-1">
-          <h1 className="text-2xl font-bold" style={{ color: '#e0e0e0' }}>Upload Your Resume</h1>
+
+        {/* Header */}
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <h1 className="text-2xl font-bold text-content-primary">Upload Your Resume</h1>
+            <p className="text-sm text-content-muted mt-1">
+              We'll extract your skills, domains, and experience to build your knowledge graph.
+            </p>
+          </div>
           <Link
             to="/user/guidelines"
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg flex-shrink-0"
-            style={{ color: '#8892a4', border: '1px solid #0f3460', background: '#16213e' }}
-            onMouseEnter={e => { e.currentTarget.style.color = '#e94560'; e.currentTarget.style.borderColor = '#e94560' }}
-            onMouseLeave={e => { e.currentTarget.style.color = '#8892a4'; e.currentTarget.style.borderColor = '#0f3460' }}>
-            <BookOpen size={12} /> Resume tips
+            className="btn-secondary btn-sm flex-shrink-0 mt-1">
+            <BookOpen size={13} /> Tips
           </Link>
         </div>
-        <p className="text-sm mb-8" style={{ color: '#8892a4' }}>
-          We'll extract your skills, domains, and experience to build your knowledge graph.
-        </p>
 
         {/* Tab toggle */}
-        <div className="flex gap-1 p-1 rounded-xl mb-6 inline-flex"
-             style={{ background: '#16213e', border: '1px solid #0f3460' }}>
-          <button style={tabStyle('pdf')}   onClick={() => setTab('pdf')}>Upload PDF</button>
-          <button style={tabStyle('text')}  onClick={() => setTab('text')}>Paste Text</button>
+        <div className="flex gap-1 p-1 rounded-xl bg-surface-raised border border-surface-border mb-6 mt-6">
+          {['pdf', 'text'].map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                tab === t
+                  ? 'bg-white text-content-primary shadow-card'
+                  : 'text-content-muted hover:text-content-primary'
+              }`}>
+              {t === 'pdf' ? 'Upload PDF' : 'Paste Text'}
+            </button>
+          ))}
         </div>
 
         {/* PDF drop zone */}
@@ -99,28 +101,30 @@ export default function Upload() {
             onDragOver={e => { e.preventDefault(); setDragging(true) }}
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
-            className="rounded-xl p-10 text-center cursor-pointer transition-colors"
-            style={{
-              border: `2px dashed ${dragging ? '#e94560' : file ? '#27ae60' : '#0f3460'}`,
-              background: dragging ? 'rgba(233,69,96,0.05)' : '#16213e',
-            }}>
+            className={`rounded-xl p-10 text-center cursor-pointer transition-all border-2 border-dashed ${
+              dragging
+                ? 'border-primary-400 bg-primary-50'
+                : file
+                  ? 'border-success-400 bg-success-50'
+                  : 'border-surface-border bg-white hover:border-primary-300 hover:bg-primary-50/40'
+            }`}>
             <input ref={fileRef} type="file" accept=".pdf" className="hidden"
                    onChange={e => setFile(e.target.files[0] || null)} />
             {file ? (
               <>
-                <FileText size={40} className="mx-auto mb-3" color="#27ae60" />
-                <p className="font-medium text-sm" style={{ color: '#27ae60' }}>{file.name}</p>
-                <p className="text-xs mt-1" style={{ color: '#8892a4' }}>
+                <FileText size={40} className="mx-auto mb-3 text-success-500" />
+                <p className="font-semibold text-sm text-success-600">{file.name}</p>
+                <p className="text-xs text-content-muted mt-1">
                   {(file.size / 1024).toFixed(0)} KB · Click to change
                 </p>
               </>
             ) : (
               <>
-                <UploadIcon size={40} className="mx-auto mb-3" color="#0f3460" />
-                <p className="font-medium text-sm" style={{ color: '#e0e0e0' }}>
+                <UploadIcon size={40} className="mx-auto mb-3 text-content-subtle" />
+                <p className="font-semibold text-sm text-content-primary">
                   Drop your PDF here or click to browse
                 </p>
-                <p className="text-xs mt-1" style={{ color: '#8892a4' }}>Supports PDF resume files</p>
+                <p className="text-xs text-content-muted mt-1">Supports PDF resume files</p>
               </>
             )}
           </div>
@@ -133,129 +137,90 @@ export default function Upload() {
             onChange={e => setText(e.target.value)}
             placeholder="Paste your resume or profile text here..."
             rows={12}
-            className="w-full px-4 py-3 rounded-xl text-sm outline-none resize-none"
-            style={{
-              background: '#16213e',
-              border: '1px solid #0f3460',
-              color: '#e0e0e0',
-            }}
-            onFocus={e => e.target.style.borderColor = '#e94560'}
-            onBlur={e => e.target.style.borderColor = '#0f3460'}
+            className="input resize-none"
           />
         )}
 
         {/* Error */}
         {error && (
-          <div className="mt-4 flex items-center gap-2 px-4 py-3 rounded-lg"
-               style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.3)' }}>
-            <AlertCircle size={16} color="#e74c3c" />
-            <p className="text-sm" style={{ color: '#e74c3c' }}>{error}</p>
+          <div className="alert-error mt-4">
+            <AlertCircle size={15} className="flex-shrink-0" />
+            {error}
           </div>
         )}
 
-        {/* Analyse button */}
+        {/* CTA */}
         <button
           onClick={handleAnalyse}
           disabled={loading}
-          className="w-full mt-5 py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-50"
-          style={{ background: '#e94560', color: '#fff' }}
-          onMouseEnter={e => !loading && (e.currentTarget.style.background = '#c73652')}
-          onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-          {loading ? 'Analysing…' : 'Analyse Profile'}
+          className="btn-primary btn-lg w-full mt-5">
+          {loading ? (
+            <><div className="spinner-sm" /> Analysing…</>
+          ) : 'Analyse Profile'}
         </button>
 
-        {/* Result stats */}
+        {/* Result */}
         {result && (
-          <div className="mt-8 fade-in">
-            <div className="flex items-center gap-2 mb-5">
-              <CheckCircle size={18} color="#27ae60" />
-              <p className="font-semibold text-sm" style={{ color: '#27ae60' }}>
-                Profile successfully processed
-              </p>
+          <div className="mt-8 fade-in space-y-5">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={18} className="text-success-500" />
+              <p className="font-semibold text-sm text-success-600">Profile successfully processed</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <StatCard label="Skills"      value={result.skills_extracted  || 0} />
-              <StatCard label="Domains"     value={result.domains_extracted || 0} />
-              <StatCard label="Projects"    value={result.projects_extracted || 0} />
-              <StatCard label="Experiences" value={result.experiences_extracted || 0} />
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard label="Skills"       value={result.skills_extracted      || 0} />
+              <StatCard label="Domains"      value={result.domains_extracted     || 0} />
+              <StatCard label="Projects"     value={result.projects_extracted    || 0} />
+              <StatCard label="Experiences"  value={result.experiences_extracted || 0} />
             </div>
 
-            {/* Verification status banner */}
+            {/* Verification banner */}
             {result.interpretation_flags > 0 ? (
-              <div
-                className="rounded-xl px-4 py-4 mb-5"
-                style={{
-                  background: 'rgba(233,69,96,0.08)',
-                  border: '1px solid rgba(233,69,96,0.35)',
-                }}>
+              <div className="rounded-xl p-4 bg-warning-50 border border-warning-200">
                 <div className="flex items-start gap-3 mb-3">
-                  <ShieldAlert size={20} style={{ color: '#e94560', flexShrink: 0, marginTop: 2 }} />
+                  <ShieldAlert size={18} className="text-warning-600 flex-shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-sm" style={{ color: '#e94560' }}>
-                      Graph not yet verified — {result.interpretation_flags} AI interpretations need review
+                    <p className="font-semibold text-sm text-warning-700">
+                      {result.interpretation_flags} AI interpretations need review
                     </p>
-                    <p className="text-xs mt-1" style={{ color: '#8892a4' }}>
-                      The AI made inferences while reading your resume. Review them to ensure
-                      your knowledge graph is an exact digital twin of you.
+                    <p className="text-xs text-warning-600 mt-1">
+                      The AI made inferences from your resume. Review them to make your graph an exact digital twin.
                     </p>
                   </div>
                 </div>
                 {result.clarification_questions?.length > 0 && (
-                  <div className="mb-3 flex flex-col gap-2">
-                    <p className="text-xs font-semibold" style={{ color: '#8892a4' }}>
-                      Critical questions ({result.clarification_questions.length}):
-                    </p>
+                  <div className="space-y-1.5 mb-3">
                     {result.clarification_questions.map(q => (
-                      <div
-                        key={q.flag_id}
-                        className="rounded-lg px-3 py-2 flex items-start gap-2"
-                        style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(233,69,96,0.2)' }}>
-                        <AlertTriangle size={12} style={{ color: '#e94560', flexShrink: 0, marginTop: 2 }} />
-                        <p className="text-xs" style={{ color: '#e0e0e0' }}>{q.question}</p>
+                      <div key={q.flag_id} className="flex items-start gap-2 text-xs text-warning-700 bg-warning-100 rounded-lg px-3 py-2">
+                        <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                        {q.question}
                       </div>
                     ))}
                   </div>
                 )}
                 <button
                   onClick={() => navigate('/user/clarifications')}
-                  className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors"
-                  style={{ background: '#e94560', color: '#fff' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-                  Verify My Profile →
+                  className="btn-primary w-full">
+                  <ShieldCheck size={14} /> Verify My Profile
                 </button>
               </div>
             ) : (
-              <div
-                className="rounded-xl px-4 py-3 mb-5 flex items-center gap-3"
-                style={{
-                  background: 'rgba(39,174,96,0.08)',
-                  border: '1px solid rgba(39,174,96,0.3)',
-                }}>
-                <ShieldCheck size={18} style={{ color: '#27ae60' }} />
-                <p className="text-sm" style={{ color: '#27ae60' }}>
-                  Profile fully verified — no ambiguous interpretations detected.
-                </p>
+              <div className="alert-success">
+                <ShieldCheck size={15} className="flex-shrink-0" />
+                Profile fully verified — no ambiguous interpretations detected.
               </div>
             )}
 
             <div className="flex gap-3">
               <button
                 onClick={() => navigate('/user/model')}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-                style={{ background: '#0f3460', color: '#e0e0e0', border: '1px solid #0f3460' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#1a3a7a'}
-                onMouseLeave={e => e.currentTarget.style.background = '#0f3460'}>
-                View Knowledge Graph
+                className="btn-secondary flex-1">
+                <Network size={14} /> Knowledge Graph
               </button>
               <button
                 onClick={() => navigate('/user/dashboard')}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-colors"
-                style={{ background: result.graph_verified ? '#e94560' : '#0f3460', color: '#fff' }}
-                onMouseEnter={e => e.currentTarget.style.background = result.graph_verified ? '#c73652' : '#1a3a7a'}
-                onMouseLeave={e => e.currentTarget.style.background = result.graph_verified ? '#e94560' : '#0f3460'}>
-                Browse Jobs →
+                className="btn-primary flex-1">
+                <BarChart3 size={14} /> Browse Jobs →
               </button>
             </div>
           </div>

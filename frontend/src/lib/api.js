@@ -98,7 +98,8 @@ export const api = {
   skipFlag: (userId, flagId) => post(`/users/${userId}/clarifications/${flagId}/skip`, {}),
   interpretFlag: (userId, flagId, answer) =>
     post(`/users/${userId}/clarifications/${flagId}/interpret`, { answer }),
-  describeUser: (userId) => get(`/users/${userId}/describe`),
+  describeUser:      (userId) => get(`/users/${userId}/describe`),
+  getCompleteness:   (userId) => get(`/users/${userId}/completeness`),
 
   // Admin — delete
   deleteUser: (userId) => del(`/users/${userId}`),

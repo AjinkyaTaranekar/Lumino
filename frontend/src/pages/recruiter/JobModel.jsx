@@ -1,9 +1,9 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import Layout from '../../components/Layout'
 import GraphViewer from '../../components/GraphViewer'
 import { ArrowLeft, RefreshCw, Users, Edit3 } from 'lucide-react'
-import { useState } from 'react'
 
 export default function JobModel() {
   const { jobId } = useParams()
@@ -16,51 +16,42 @@ export default function JobModel() {
     <Layout>
       <div className="flex flex-col h-full">
         {/* Topbar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b flex-shrink-0"
-             style={{ background: '#16213e', borderColor: '#0f3460' }}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-surface-card flex-shrink-0">
           <button
-            onClick={() => navigate('/recruiter/post')}
-            className="flex items-center gap-2 text-sm"
-            style={{ color: '#8892a4' }}
-            onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-            onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-            <ArrowLeft size={16} /> Back
+            onClick={() => navigate(-1)}
+            className="btn-ghost btn-sm flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
           </button>
 
-          <h1 className="text-base font-semibold" style={{ color: '#e0e0e0' }}>
+          <h1 className="text-base font-semibold text-content-primary">
             Job Model — {jobId}
           </h1>
 
           <div className="flex gap-2">
             <button
               onClick={() => navigate(`/recruiter/candidates/${jobId}`)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: '#e94560', color: '#fff' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-              onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-              <Users size={12} /> Find Candidates
+              className="btn-primary btn-sm flex items-center gap-1.5"
+            >
+              <Users className="w-3.5 h-3.5" /> Find Candidates
             </button>
             <button
               onClick={() => navigate(`/recruiter/edit-job/${jobId}`)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: '#e94560', color: '#fff' }}
-              onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-              onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-              <Edit3 size={12} /> Edit Graph
+              className="btn-secondary btn-sm flex items-center gap-1.5"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit Graph
             </button>
             <button
               onClick={() => setKey(k => k + 1)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: '#0f3460', color: '#8892a4', border: '1px solid #0f3460' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#e0e0e0'}
-              onMouseLeave={e => e.currentTarget.style.color = '#8892a4'}>
-              <RefreshCw size={12} /> Refresh
+              className="btn-ghost btn-sm flex items-center gap-1.5"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </button>
           </div>
         </div>
 
         {/* Graph area */}
-        <div className="flex-1 p-4">
+        <div className="flex-1 p-4 bg-surface-bg">
           <GraphViewer
             key={key}
             generateFn={() => api.generateJobViz(jobId)}

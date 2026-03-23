@@ -1,193 +1,255 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { api } from '../../lib/api'
-import Layout from '../../components/Layout'
-import { User, RefreshCw, ChevronRight, AlertTriangle, CheckCircle2, Target, Briefcase, Code2, TrendingUp } from 'lucide-react'
-
-const C = {
-  card: '#16213e', border: '#0f3460', accent: '#e94560',
-  green: '#27ae60', yellow: '#f39c12', muted: '#8892a4', text: '#e0e0e0',
-}
-
-function Section({ icon: Icon, title, color, children }) {
-  return (
-    <div className="rounded-xl p-5" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={16} style={{ color: color || C.accent }} />
-        <h3 className="font-semibold text-sm" style={{ color: C.text }}>{title}</h3>
-      </div>
-      {children}
-    </div>
-  )
-}
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  CheckCircle,
+  AlertTriangle,
+  RefreshCw,
+  Star,
+  Target,
+  MessageSquare,
+  ChevronRight,
+  User,
+  TrendingUp,
+  Code2,
+  Briefcase,
+} from 'lucide-react';
+import Layout from '../../components/Layout';
+import { api } from '../../lib/api';
+import { useAuth } from '../../context/AuthContext';
 
 export default function UserProfile() {
-  const { session } = useAuth()
-  const navigate    = useNavigate()
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const userId = session?.userId;
 
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError]     = useState(null)
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  async function load() {
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await api.describeUser(session.userId)
-      setProfile(data)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+  const fetchProfile = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      try {
+        const data = await api.describeUser(userId);
+        setProfile(data);
+      } catch (err) {
+        setError('Failed to load profile. Please try again.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [userId]
+  );
+
+  useEffect(() => {
+    if (userId) fetchProfile();
+  }, [userId, fetchProfile]);
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[60vh] bg-surface-bg">
+          <div className="flex flex-col items-center gap-3">
+            <span className="spinner" />
+            <p className="text-content-secondary text-sm">Loading your profile…</p>
+          </div>
+        </div>
+      </Layout>
+    );
   }
 
-  useEffect(() => { load() }, [session.userId])
+  if (error) {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto py-16 px-4 bg-surface-bg min-h-screen">
+          <div className="alert-error">{error}</div>
+          <button className="btn-primary mt-4" onClick={() => fetchProfile()}>
+            Try Again
+          </button>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto px-6 py-10">
+      <div className="min-h-screen bg-surface-bg pb-12">
 
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <User size={20} style={{ color: C.accent }} />
-              <h1 className="text-2xl font-bold" style={{ color: C.text }}>Your Profile</h1>
+        {/* Hero Card */}
+        <div className="bg-gradient-to-br from-primary-700 to-primary-500 px-6 py-10 md:px-10">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+                  <User className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <p className="text-primary-100 text-xs font-semibold uppercase tracking-widest mb-1">
+                    Lumino Profile
+                  </p>
+                  <h1 className="text-2xl md:text-3xl font-bold text-white leading-tight">
+                    {profile?.identity ?? userId}
+                  </h1>
+                </div>
+              </div>
+              <button
+                onClick={() => fetchProfile(true)}
+                disabled={refreshing}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-medium transition-colors disabled:opacity-60 flex-shrink-0"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
             </div>
-            <p className="text-sm" style={{ color: C.muted }}>
-              How your knowledge graph describes you — honest, evidence-based.
-            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-3 mt-8">
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-primary-600 text-sm font-semibold hover:bg-primary-50 transition-colors shadow-sm"
+                onClick={() => navigate('/user/clarifications')}
+              >
+                Verify Profile
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/20 border border-white/40 text-white text-sm font-semibold hover:bg-white/30 transition-colors"
+                onClick={() => navigate('/user/edit-graph')}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Deep Dive Interview
+              </button>
+            </div>
           </div>
-          <button
-            onClick={load}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs"
-            style={{ background: C.card, color: C.muted, border: `1px solid ${C.border}` }}>
-            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
         </div>
 
-        {loading && (
-          <div className="flex items-center justify-center py-16">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 mx-auto mb-4"
-                   style={{ borderColor: C.accent, borderTopColor: 'transparent' }} />
-              <p className="text-sm" style={{ color: C.muted }}>Generating your profile…</p>
+        {/* Content */}
+        <div className="max-w-4xl mx-auto px-4 md:px-6 mt-8 space-y-6">
+
+          {/* Career Arc */}
+          {profile?.career_arc && (
+            <div className="card card-p fade-in">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="w-4 h-4 text-primary-500" />
+                <p className="section-title">Career Arc</p>
+              </div>
+              <p className="text-content-primary leading-relaxed">{profile.career_arc}</p>
             </div>
+          )}
+
+          {/* Technical Profile + Domain Expertise */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {profile?.technical_profile && (
+              <div className="card card-p fade-in">
+                <div className="flex items-center gap-2 mb-3">
+                  <Code2 className="w-4 h-4 text-primary-500" />
+                  <p className="section-title">Technical Profile</p>
+                </div>
+                <p className="text-content-secondary leading-relaxed text-sm">
+                  {profile.technical_profile}
+                </p>
+              </div>
+            )}
+            {profile?.domain_expertise && (
+              <div className="card card-p fade-in">
+                <div className="flex items-center gap-2 mb-3">
+                  <Briefcase className="w-4 h-4 text-primary-500" />
+                  <p className="section-title">Domain Expertise</p>
+                </div>
+                <p className="text-content-secondary leading-relaxed text-sm">
+                  {profile.domain_expertise}
+                </p>
+              </div>
+            )}
           </div>
-        )}
 
-        {error && (
-          <div className="rounded-xl px-4 py-3" style={{ background: 'rgba(231,76,60,0.1)', border: '1px solid rgba(231,76,60,0.3)' }}>
-            <p className="text-sm" style={{ color: '#e74c3c' }}>{error}</p>
+          {/* Core Strengths & Gaps */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {profile?.core_strengths?.length > 0 && (
+              <div className="card card-p fade-in">
+                <p className="section-title mb-3">Core Strengths</p>
+                <ul className="space-y-2.5">
+                  {profile.core_strengths.map((strength, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <CheckCircle className="w-4 h-4 text-success-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-content-primary text-sm">{strength}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {profile?.gaps_and_concerns?.length > 0 && (
+              <div className="card card-p fade-in">
+                <p className="section-title mb-3">Gaps &amp; Concerns</p>
+                <ul className="space-y-2.5">
+                  {profile.gaps_and_concerns.map((gap, i) => (
+                    <li key={i} className="flex items-start gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-warning-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-content-secondary text-sm">{gap}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
-        )}
 
-        {profile && !loading && (
-          <div className="space-y-4">
-
-            {/* Identity card */}
-            <div className="rounded-xl px-5 py-5"
-                 style={{ background: 'linear-gradient(135deg, #16213e 0%, #0f1a30 100%)', border: `1px solid ${C.accent}` }}>
-              <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: C.accent }}>
-                Professional Identity
-              </p>
-              <p className="text-lg font-bold leading-snug" style={{ color: C.text }}>
-                {profile.identity}
-              </p>
-            </div>
-
-            {/* Career arc */}
-            <Section icon={TrendingUp} title="Career Arc" color={C.yellow}>
-              <p className="text-sm leading-relaxed" style={{ color: '#c8d0dc' }}>
-                {profile.career_arc}
-              </p>
-            </Section>
-
-            {/* Technical profile */}
-            <Section icon={Code2} title="Technical Profile" color="#5b9bd5">
-              <p className="text-sm leading-relaxed" style={{ color: '#c8d0dc' }}>
-                {profile.technical_profile}
-              </p>
-            </Section>
-
-            {/* Domain expertise */}
-            <Section icon={Briefcase} title="Domain Expertise" color={C.yellow}>
-              <p className="text-sm leading-relaxed" style={{ color: '#c8d0dc' }}>
-                {profile.domain_expertise}
-              </p>
-            </Section>
-
-            {/* Honest assessment */}
-            <Section icon={CheckCircle2} title="Honest Assessment" color={C.green}>
-              <p className="text-sm leading-relaxed" style={{ color: '#c8d0dc' }}>
+          {/* Honest Assessment */}
+          {profile?.honest_assessment && (
+            <div className="card card-p fade-in">
+              <p className="section-title mb-3">Honest Assessment</p>
+              <p className="text-content-secondary leading-relaxed text-sm">
                 {profile.honest_assessment}
               </p>
-            </Section>
+            </div>
+          )}
 
-            {/* Core strengths */}
-            {profile.core_strengths?.length > 0 && (
-              <Section icon={Target} title="Core Strengths (evidenced)" color={C.green}>
-                <ul className="space-y-2">
-                  {profile.core_strengths.map((s, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: '#c8d0dc' }}>
-                      <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0" style={{ color: C.green }} />
-                      {s}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
+          {/* Best Suited For */}
+          {profile?.best_suited_for && (
+            <div className="card card-p fade-in bg-primary-50 border border-primary-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-primary-500" />
+                <p className="section-title">Best Suited For</p>
+              </div>
+              <p className="text-content-primary leading-relaxed">{profile.best_suited_for}</p>
+            </div>
+          )}
 
-            {/* Gaps and concerns */}
-            {profile.gaps_and_concerns?.length > 0 && (
-              <Section icon={AlertTriangle} title="Gaps & Concerns" color={C.accent}>
-                <ul className="space-y-2">
-                  {profile.gaps_and_concerns.map((g, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm" style={{ color: '#c8d0dc' }}>
-                      <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" style={{ color: C.accent }} />
-                      {g}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {/* Best suited for */}
-            <Section icon={Target} title="Best Suited For" color="#5b9bd5">
-              <p className="text-sm leading-relaxed" style={{ color: '#c8d0dc' }}>
-                {profile.best_suited_for}
-              </p>
-            </Section>
-
-            {/* Recruiter summary */}
-            <div className="rounded-xl px-5 py-4"
-                 style={{ background: 'rgba(91,155,213,0.08)', border: '1px solid rgba(91,155,213,0.3)' }}>
-              <p className="text-xs font-semibold mb-2" style={{ color: '#5b9bd5' }}>
-                What a recruiter sees before your interview
-              </p>
-              <p className="text-sm italic leading-relaxed" style={{ color: '#c8d0dc' }}>
+          {/* Interview Ready Summary */}
+          {profile?.interview_ready_summary && (
+            <div className="card card-p fade-in border-l-4 border-primary-500">
+              <div className="flex items-center gap-2 mb-3">
+                <Star className="w-4 h-4 text-primary-500" />
+                <p className="section-title">Interview Ready Summary</p>
+              </div>
+              <blockquote className="text-content-primary text-base leading-relaxed italic pl-2">
                 "{profile.interview_ready_summary}"
-              </p>
+              </blockquote>
             </div>
+          )}
 
-            {/* Actions */}
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => navigate('/user/clarifications')}
-                      className="flex-1 py-3 rounded-xl text-sm font-semibold"
-                      style={{ background: C.card, color: C.muted, border: `1px solid ${C.border}` }}>
-                Verify Profile
-              </button>
-              <button onClick={() => navigate('/user/edit-graph')}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
-                      style={{ background: C.accent, color: '#fff' }}>
-                Deep Dive Interview <ChevronRight size={14} />
-              </button>
-            </div>
+          {/* Bottom Actions */}
+          <div className="flex flex-wrap gap-3 pt-2 pb-4">
+            <button
+              className="btn-primary btn-lg"
+              onClick={() => navigate('/user/clarifications')}
+            >
+              Verify Profile
+              <ChevronRight className="w-4 h-4 ml-1" />
+            </button>
+            <button
+              className="btn-secondary btn-lg"
+              onClick={() => navigate('/user/edit-graph')}
+            >
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Deep Dive Interview
+            </button>
           </div>
-        )}
+        </div>
       </div>
     </Layout>
-  )
+  );
 }

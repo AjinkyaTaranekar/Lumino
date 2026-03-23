@@ -1,16 +1,34 @@
 import { useNavigate } from 'react-router-dom'
 import ScoreBar from './ScoreBar'
 import SkillBadge from './SkillBadge'
-import { ArrowRight, Globe, Building2 } from 'lucide-react'
+import { ArrowRight, Building2, Globe, MapPin } from 'lucide-react'
 
-function BonusBadge({ label, value }) {
-  const pct = Math.round(value * 100)
-  const color = value >= 0.7 ? '#27ae60' : value > 0 ? '#e67e22' : '#8892a4'
+const REMOTE_STYLES = {
+  remote: 'badge-green',
+  hybrid: 'badge-orange',
+  onsite: 'badge-blue',
+}
+
+function ScoreRing({ score }) {
+  const pct = Math.round(score * 100)
+  const color = score >= 0.7 ? '#10b981' : score >= 0.4 ? '#f59e0b' : '#ef4444'
+  const r = 18, circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
   return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs"
-          style={{ background: `${color}18`, color, border: `1px solid ${color}40` }}>
-      {label}: {pct}%
-    </span>
+    <div className="relative w-12 h-12 flex-shrink-0">
+      <svg viewBox="0 0 44 44" className="w-12 h-12 -rotate-90">
+        <circle cx="22" cy="22" r={r} fill="none" stroke="#f3f4f6" strokeWidth="4" />
+        <circle
+          cx="22" cy="22" r={r} fill="none"
+          stroke={color} strokeWidth="4"
+          strokeDasharray={`${dash} ${circ}`}
+          strokeLinecap="round"
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[11px] font-bold text-content-primary">{pct}%</span>
+      </div>
+    </div>
   )
 }
 
@@ -21,57 +39,60 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
     if (mode === 'seeker') {
       navigate(`/user/match/${result.job_id}`)
     } else {
-      // Recruiter viewing candidates: navigate to user match from recruiter side
       navigate(`/user/match/${result.job_id}`, { state: { viewAs: result.user_id } })
     }
   }
 
-  const title   = mode === 'seeker' ? result.job_title : result.user_id
-  const subtitle = mode === 'seeker'
-    ? [result.company, result.remote_policy].filter(Boolean).join(' · ')
-    : `Match score`
+  const title    = mode === 'seeker' ? (result.job_title || result.job_id) : result.user_id
+  const company  = mode === 'seeker' ? result.company : null
+  const remote   = mode === 'seeker' ? result.remote_policy : null
 
   return (
-    <div className="rounded-xl p-5 fade-in"
-         style={{ background: '#16213e', border: '1px solid #0f3460' }}>
+    <div className="card p-5 fade-in hover:shadow-card-md transition-shadow">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div className="flex items-center gap-3">
-          {/* Rank circle */}
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
-               style={{ background: rank <= 3 ? '#e94560' : '#0f3460', color: '#fff' }}>
-            {rank}
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm" style={{ color: '#e0e0e0' }}>{title}</h3>
-            {subtitle && (
-              <p className="text-xs mt-0.5" style={{ color: '#8892a4' }}>{subtitle}</p>
-            )}
-          </div>
+      <div className="flex items-start gap-4 mb-4">
+        {/* Rank */}
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+          rank <= 3 ? 'bg-primary-500 text-white' : 'bg-surface-raised text-content-muted'
+        }`}>
+          {rank}
         </div>
-        <button
-          onClick={handleExplore}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium flex-shrink-0 transition-colors"
-          style={{ background: '#e94560', color: '#fff' }}
-          onMouseEnter={e => e.currentTarget.style.background = '#c73652'}
-          onMouseLeave={e => e.currentTarget.style.background = '#e94560'}>
-          Explore <ArrowRight size={12} />
-        </button>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <h3 className="font-semibold text-content-primary text-sm truncate">{title}</h3>
+          {(company || remote) && (
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {company && (
+                <span className="flex items-center gap-1 text-xs text-content-muted">
+                  <Building2 size={11} /> {company}
+                </span>
+              )}
+              {remote && (
+                <span className={`badge ${REMOTE_STYLES[remote] || 'badge-gray'}`}>
+                  {remote}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Score ring */}
+        <ScoreRing score={result.total_score} />
       </div>
 
       {/* Score bars */}
       <div className="space-y-2 mb-4">
-        <ScoreBar label="Overall Match" score={result.total_score} large />
-        <div className="grid grid-cols-2 gap-3 mt-2">
-          <ScoreBar label="Skills (65%)" score={result.skill_score} />
-          <ScoreBar label="Domain (35%)" score={result.domain_score} />
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          <ScoreBar label="Skills" score={result.skill_score} />
+          <ScoreBar label="Domain" score={result.domain_score} />
+          {result.culture_fit_score != null && (
+            <ScoreBar label="Culture" score={result.culture_fit_score} />
+          )}
+          {result.soft_skill_score != null && result.soft_skill_score > 0 && (
+            <ScoreBar label="Soft Skills" score={result.soft_skill_score} />
+          )}
         </div>
-      </div>
-
-      {/* Bonus badges */}
-      <div className="flex gap-2 mb-3 flex-wrap">
-        <BonusBadge label="Culture fit"   value={result.culture_bonus} />
-        <BonusBadge label="Preferences"   value={result.preference_bonus} />
       </div>
 
       {/* Skill badges */}
@@ -82,7 +103,7 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
               <SkillBadge key={s} label={s} variant="match" />
             ))}
             {result.matched_skills.length > 6 && (
-              <SkillBadge label={`+${result.matched_skills.length - 6} more`} variant="neutral" />
+              <SkillBadge label={`+${result.matched_skills.length - 6}`} variant="neutral" />
             )}
           </div>
         )}
@@ -98,12 +119,17 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
         )}
       </div>
 
-      {/* Explanation */}
-      {result.explanation && (
-        <p className="mt-3 text-xs italic" style={{ color: '#8892a4' }}>
-          {result.explanation}
-        </p>
-      )}
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-4 pt-4 border-t border-surface-border">
+        {result.explanation ? (
+          <p className="text-xs text-content-muted italic line-clamp-1 flex-1 mr-3">
+            {result.explanation}
+          </p>
+        ) : <div />}
+        <button onClick={handleExplore} className="btn-primary btn-sm flex-shrink-0">
+          Explore <ArrowRight size={12} />
+        </button>
+      </div>
     </div>
   )
 }
