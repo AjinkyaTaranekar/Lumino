@@ -21,50 +21,69 @@ from database.neo4j_client import Neo4jClient
 
 logger = logging.getLogger(__name__)
 
-# Node colors by type
+# ── Lumino light-theme palette ────────────────────────────────────────────────
+# All colours chosen to be readable on a white/slate-50 background.
+# Darker hub nodes get white font; lighter leaf nodes get dark (#0f172a) font.
 NODE_TYPE_COLORS: dict[str, str] = {
     # ── User technical nodes ───────────────────────────────────────────────────
-    "User": "#E74C3C",
-    "SkillCategory": "#2980B9",
-    "SkillFamily": "#5DADE2",
-    "Skill": "#AED6F1",
-    "ProjectCategory": "#1E8449",
-    "Project": "#82E0AA",
-    "DomainCategory": "#8E44AD",
-    "DomainFamily": "#BB8FCE",
-    "Domain": "#D7BDE2",
-    "ExperienceCategory": "#D35400",
-    "Experience": "#F0B27A",
-    "PreferenceCategory": "#117A65",
-    "Preference": "#76D7C4",
-    "PatternCategory": "#7D6608",
-    "ProblemSolvingPattern": "#F9E79F",
+    "User": "#3B82F6",              # blue-500  — anchor node
+    "SkillCategory": "#6366F1",     # indigo-500
+    "SkillFamily": "#818CF8",       # indigo-400
+    "Skill": "#A5B4FC",             # indigo-300 — leaf, weight-scaled size
+    "ProjectCategory": "#059669",   # emerald-600
+    "Project": "#34D399",           # emerald-400
+    "DomainCategory": "#7C3AED",    # violet-600
+    "DomainFamily": "#A78BFA",      # violet-400
+    "Domain": "#C4B5FD",            # violet-300
+    "ExperienceCategory": "#D97706",# amber-600
+    "Experience": "#FBBF24",        # amber-400
+    "PreferenceCategory": "#0284C7",# sky-600
+    "Preference": "#38BDF8",        # sky-400
+    "PatternCategory": "#EA580C",   # orange-600
+    "ProblemSolvingPattern": "#FB923C", # orange-400
     # ── User human-portrait nodes (digital twin) ───────────────────────────────
-    "Anecdote": "#F1948A",          # warm pink — personal story
-    "Motivation": "#F39C12",        # amber — what drives them
-    "Value": "#E8DAEF",             # soft purple — core beliefs
-    "Goal": "#A9DFBF",              # mint — aspirations
-    "CultureIdentity": "#AED6F1",   # sky blue — how they work
-    "BehavioralInsight": "#FAD7A0", # peach — observed patterns
+    "Anecdote": "#E11D48",          # rose-600  — personal story
+    "Motivation": "#F97316",        # orange-500 — what drives them
+    "Value": "#8B5CF6",             # violet-500 — core beliefs
+    "Goal": "#10B981",              # emerald-500 — aspirations
+    "CultureIdentity": "#0EA5E9",   # sky-500   — how they work
+    "BehavioralInsight": "#F59E0B", # amber-500 — observed patterns
     # ── Job nodes ─────────────────────────────────────────────────────────────
-    "Job": "#C0392B",
-    "JobSkillRequirements": "#2471A3",
-    "JobSkillFamily": "#7FB3D3",
-    "JobSkillRequirement": "#BFD7ED",
-    "JobDomainRequirements": "#7D3C98",
-    "JobDomainFamily": "#BFA9D4",
-    "JobDomainRequirement": "#DDD0EA",
-    "JobCultureRequirements": "#148F77",
-    "WorkStyle": "#76D7C4",
+    "Job": "#DC2626",               # red-600
+    "JobSkillRequirements": "#1D4ED8",  # blue-700
+    "JobSkillFamily": "#3B82F6",    # blue-500
+    "JobSkillRequirement": "#93C5FD",   # blue-300
+    "JobDomainRequirements": "#6D28D9", # violet-700
+    "JobDomainFamily": "#8B5CF6",   # violet-500
+    "JobDomainRequirement": "#C4B5FD",  # violet-300
+    "JobCultureRequirements": "#047857",# emerald-700
+    "WorkStyle": "#34D399",         # emerald-400
     # ── Job deep-profile nodes (recruiter interview) ───────────────────────────
-    "TeamComposition": "#5D6D7E",   # slate — team structure
-    "RoleContext": "#85929E",       # grey-blue — role context
-    "HiringGoal": "#F0B27A",        # orange — hiring intent
-    "SoftSkillRequirement": "#FAD7A0", # peach — soft skill asks
-    "TeamCultureIdentity": "#A9DFBF",  # mint — team culture
-    "SuccessMetric": "#82E0AA",     # green — what success looks like
-    "InterviewSignal": "#F9E79F",   # yellow — signals to watch
+    "TeamComposition": "#334155",   # slate-700
+    "RoleContext": "#475569",        # slate-600
+    "HiringGoal": "#EA580C",        # orange-600
+    "SoftSkillRequirement": "#FBBF24",  # amber-400
+    "TeamCultureIdentity": "#10B981",   # emerald-500
+    "SuccessMetric": "#22C55E",     # green-500
+    "InterviewSignal": "#EAB308",   # yellow-500
 }
+
+# Nodes whose background is dark enough to warrant white label text
+_DARK_FONT_NODES: frozenset[str] = frozenset({
+    "User", "SkillCategory", "ProjectCategory", "DomainCategory",
+    "ExperienceCategory", "PreferenceCategory", "PatternCategory",
+    "Anecdote", "Value", "Goal", "CultureIdentity", "BehavioralInsight",
+    "Job", "JobSkillRequirements", "JobDomainRequirements", "JobCultureRequirements",
+    "TeamComposition", "RoleContext", "HiringGoal", "TeamCultureIdentity",
+    "SuccessMetric", "Motivation",
+})
+
+
+def _node_font(node_type: str) -> dict:
+    """Return vis.js font dict for a node type."""
+    color = "white" if node_type in _DARK_FONT_NODES else "#0f172a"
+    return {"color": color, "size": 11}
+
 
 NODE_SIZES: dict[str, int] = {
     "User": 40, "Job": 35,
@@ -83,7 +102,7 @@ NODE_SIZES: dict[str, int] = {
     "SuccessMetric": 14, "InterviewSignal": 12,
 }
 
-DEFAULT_NODE_COLOR = "#BDC3C7"
+DEFAULT_NODE_COLOR = "#94A3B8"  # slate-400
 DEFAULT_NODE_SIZE = 12
 
 # APOC labelFilter strings — blocks traversal INTO these node types
@@ -180,6 +199,7 @@ class VisualizationService:
                 title=title,
                 color=NODE_TYPE_COLORS.get(node_type, DEFAULT_NODE_COLOR),
                 size=size,
+                font=_node_font(node_type),
             )
 
         for edge in edges_data:
@@ -187,14 +207,14 @@ class VisualizationService:
             tgt = edge.get("target_id", "")
             rel = edge.get("rel_type", "")
             if src in G and tgt in G:
-                G.add_edge(src, tgt, title=rel, label=rel, color="#7F8C8D")
+                G.add_edge(src, tgt, title=rel, label=rel, color="#94A3B8")
 
         net = Network(
-            height="850px",
+            height="100vh",
             width="100%",
             directed=True,
-            bgcolor="#1a1a2e",
-            font_color="white",
+            bgcolor="#f8fafc",
+            font_color="#0f172a",
             notebook=False,
             cdn_resources="in_line",
         )
@@ -232,6 +252,11 @@ class VisualizationService:
             },
             "arrows": {
               "to": {"enabled": true, "scaleFactor": 0.5}
+            },
+            "font": {
+              "size": 9,
+              "color": "#64748B",
+              "strokeWidth": 0
             }
           }
         }
@@ -239,7 +264,7 @@ class VisualizationService:
 
         filepath = os.path.join(self.output_dir, f"graph_{user_id}.html")
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(net.generate_html())
+            f.write(self._post_process_html(net.generate_html()))
 
         logger.info(
             f"Generated graph for user {user_id}: "
@@ -275,11 +300,10 @@ class VisualizationService:
             G.add_node(
                 node_id,
                 label=label,
-                title=(
-                    f"{label}  ·  {node_type}"
-                ),
+                title=f"{label}  ·  {node_type}",
                 color=NODE_TYPE_COLORS.get(node_type, DEFAULT_NODE_COLOR),
                 size=NODE_SIZES.get(node_type, DEFAULT_NODE_SIZE),
+                font=_node_font(node_type),
             )
 
         for edge in edges_data:
@@ -287,14 +311,14 @@ class VisualizationService:
             tgt = edge.get("target_id", "")
             rel = edge.get("rel_type", "")
             if src in G and tgt in G:
-                G.add_edge(src, tgt, title=rel, label=rel, color="#7F8C8D")
+                G.add_edge(src, tgt, title=rel, label=rel, color="#94A3B8")
 
         net = Network(
-            height="850px",
+            height="100vh",
             width="100%",
             directed=True,
-            bgcolor="#1a1a2e",
-            font_color="white",
+            bgcolor="#f8fafc",
+            font_color="#0f172a",
             notebook=False,
             cdn_resources="in_line",
         )
@@ -332,6 +356,11 @@ class VisualizationService:
             },
             "arrows": {
               "to": {"enabled": true, "scaleFactor": 0.5}
+            },
+            "font": {
+              "size": 9,
+              "color": "#64748B",
+              "strokeWidth": 0
             }
           }
         }
@@ -339,7 +368,7 @@ class VisualizationService:
 
         filepath = os.path.join(self.output_dir, f"graph_job_{job_id}.html")
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(net.generate_html())
+            f.write(self._post_process_html(net.generate_html()))
 
         logger.info(
             f"Generated graph for job {job_id}: "
@@ -359,9 +388,9 @@ class VisualizationService:
         MATCHES edges are drawn in bright green at double width.
         Output: graph_match_{user_id}_{job_id}.html
         """
-        MATCH_COLOR = "#27AE60"
-        MISSING_COLOR = "#E67E22"
-        MATCH_EDGE_COLOR = "#2ECC71"
+        MATCH_COLOR = "#16A34A"      # green-600 — readable on white
+        MISSING_COLOR = "#D97706"    # amber-600 — readable on white
+        MATCH_EDGE_COLOR = "#22C55E" # green-500
 
         # Fetch both subgraphs with label filters to prevent cross-entity contamination
         user_nodes, user_edges = await self._fetch_graph_data(
@@ -396,22 +425,42 @@ class VisualizationService:
                 color = NODE_TYPE_COLORS.get(node_type, DEFAULT_NODE_COLOR)
                 tooltip_suffix = ""
 
+            # Font: matched/gap nodes are dark-background, so white text
+            if node_id in matched_user_ids or node_id in matched_job_ids or node_id in missing_ids:
+                node_font = {"color": "white", "size": 11}
+            else:
+                node_font = _node_font(node_type)
+
             G.add_node(
                 node_id,
                 label=label,
                 title=f"{label}  ·  {node_type}{tooltip_suffix}",
                 color=color,
                 size=NODE_SIZES.get(node_type, DEFAULT_NODE_SIZE),
+                font=node_font,
             )
+
+        for node in all_nodes:
+            node_id = node.get("id", "")
+            node_type = node.get("type", "default")
+            if node_id in matched_user_ids or node_id in matched_job_ids:
+                font = {"color": "white", "size": 11}
+            elif node_id in missing_ids:
+                font = {"color": "white", "size": 11}
+            else:
+                font = _node_font(node_type)
+            # Update font on already-added node
+            if node_id in G:
+                G.nodes[node_id]["font"] = font
 
         for edge in all_edges:
             src = edge.get("source_id", "")
             tgt = edge.get("target_id", "")
             rel = edge.get("rel_type", "")
             if src in G and tgt in G:
-                G.add_edge(src, tgt, title=rel, label=rel, color="#7F8C8D")
+                G.add_edge(src, tgt, title=rel, label=rel, color="#94A3B8")
 
-        # Add MATCHES edges (cross-graph, bright green)
+        # Add MATCHES edges (cross-graph, green)
         for me in matches_edges:
             src = me.get("source_id", "")
             tgt = me.get("target_id", "")
@@ -425,11 +474,11 @@ class VisualizationService:
                 )
 
         net = Network(
-            height="850px",
+            height="100vh",
             width="100%",
             directed=True,
-            bgcolor="#1a1a2e",
-            font_color="white",
+            bgcolor="#f8fafc",
+            font_color="#0f172a",
             notebook=False,
             cdn_resources="in_line",
         )
@@ -457,7 +506,8 @@ class VisualizationService:
           },
           "edges": {
             "smooth": {"enabled": true, "type": "dynamic"},
-            "arrows": {"to": {"enabled": true, "scaleFactor": 0.5}}
+            "arrows": {"to": {"enabled": true, "scaleFactor": 0.5}},
+            "font": {"size": 9, "color": "#64748B", "strokeWidth": 0}
           }
         }
         """)
@@ -466,9 +516,9 @@ class VisualizationService:
             self.output_dir, f"graph_match_{user_id}_{job_id}.html"
         )
 
-        # Inject legend before writing
+        html = self._post_process_html(net.generate_html())
         with open(filepath, "w", encoding="utf-8") as f:
-            f.write(net.generate_html())
+            f.write(html)
         self._inject_legend(filepath)
 
         total_nodes = len(user_nodes) + len(job_nodes)
@@ -530,25 +580,49 @@ class VisualizationService:
 
         return matched_user_ids, matched_job_ids, missing_ids, matches_edges
 
+    @staticmethod
+    def _post_process_html(html: str) -> str:
+        """
+        Patch the pyvis-generated HTML to match the Lumino light theme:
+        - Make the canvas fill 100 vh with no scrollbar or margin.
+        - Remove the hardcoded dark background from #mynetwork.
+        """
+        html = html.replace(
+            "background-color: #1a1a2e",
+            "background-color: #f8fafc",
+        )
+        html = html.replace(
+            "border: 1px solid lightgray",
+            "border: none",
+        )
+        # Reset body/html so the canvas truly fills the iframe
+        html = html.replace(
+            "<body>",
+            '<body style="margin:0;padding:0;background:#f8fafc;overflow:hidden;">',
+            1,
+        )
+        return html
+
     def _inject_legend(self, filepath: str) -> None:
-        """Inject a color legend div into the generated pyvis HTML file."""
+        """Inject a Lumino-styled color legend into the match graph HTML."""
         legend_html = """
 <div style="
-    position: fixed; top: 16px; left: 16px; z-index: 9999;
-    background: rgba(26,26,46,0.92); border: 1px solid #444;
-    border-radius: 8px; padding: 12px 16px; color: white;
-    font-family: sans-serif; font-size: 13px; line-height: 1.8;
-    pointer-events: none;">
-  <b style="font-size:14px;">Match Legend</b><br>
-  <span style="color:#27AE60;">&#9679;</span> Matched skill / domain<br>
-  <span style="color:#E67E22;">&#9679;</span> Gap (job requires, not in profile)<br>
-  <span style="color:#BDC3C7;">&#9679;</span> Hierarchy node<br>
-  <span style="color:#2ECC71;">&#9472;&#9472;</span> MATCHES edge
+    position: fixed; top: 12px; left: 12px; z-index: 9999;
+    background: white; border: 1px solid #e2e8f0;
+    border-radius: 10px; padding: 10px 14px;
+    font-family: Inter, system-ui, sans-serif; font-size: 12px;
+    line-height: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    pointer-events: none; color: #0f172a;">
+  <b style="font-size:12px; color:#0f172a; letter-spacing:0.05em; text-transform:uppercase;">Match Legend</b><br>
+  <span style="color:#16A34A; font-size:16px;">&#9679;</span> Matched skill / domain<br>
+  <span style="color:#D97706; font-size:16px;">&#9679;</span> Gap (required, not in profile)<br>
+  <span style="color:#94A3B8; font-size:16px;">&#9679;</span> Other node<br>
+  <span style="color:#22C55E; font-weight:bold;">&#9472;&#9472;</span> MATCHES edge
 </div>
 """
         with open(filepath, "r", encoding="utf-8") as f:
             html = f.read()
-        html = html.replace("<body>", "<body>" + legend_html, 1)
+        html = html.replace("<body", legend_html + "<body", 1)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(html)
 

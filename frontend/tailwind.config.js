@@ -1,23 +1,25 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
       colors: {
+        // LinkedIn-style primary blue palette
         primary: {
           50:  '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
           400: '#60a5fa',
-          500: '#137fec',
-          600: '#0e62b8',
-          700: '#0b4d90',
-          800: '#093b6e',
-          900: '#062a4f',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+          dark: '#2563EB',
         },
         surface: {
-          bg:    '#f6f7f8',
+          bg:    '#F8FAFC',
           card:  '#ffffff',
           raised: '#f0f4f8',
           border: '#e5e7eb',
@@ -33,6 +35,7 @@ export default {
         success: {
           50:  '#ecfdf5',
           100: '#d1fae5',
+          200: '#a7f3d0',
           500: '#10b981',
           600: '#059669',
           700: '#047857',
@@ -40,23 +43,27 @@ export default {
         warning: {
           50:  '#fffbeb',
           100: '#fef3c7',
+          200: '#fde68a',
           500: '#f59e0b',
           600: '#d97706',
         },
         danger: {
           50:  '#fef2f2',
           100: '#fee2e2',
+          200: '#fecaca',
           500: '#ef4444',
           600: '#dc2626',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans:    ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        display: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
       boxShadow: {
-        card:  '0 1px 3px 0 rgba(0,0,0,0.08), 0 1px 2px -1px rgba(0,0,0,0.04)',
+        card:    '0 1px 3px 0 rgba(0,0,0,0.08), 0 1px 2px -1px rgba(0,0,0,0.04)',
         'card-md': '0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05)',
         'card-lg': '0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05)',
+        prism:   '0 20px 40px rgba(24,20,69,0.06)',
       },
       borderRadius: {
         DEFAULT: '0.5rem',
@@ -64,12 +71,13 @@ export default {
         md: '0.5rem',
         lg: '0.75rem',
         xl: '1rem',
-        '2xl': '1.25rem',
+        '2xl': '1.5rem',
+        '3xl': '1.75rem',
       },
       animation: {
-        'fade-in': 'fadeInUp 0.25s ease-out',
-        'spin-slow': 'spin 1s linear infinite',
-        'fill-bar': 'fillBar 0.6s ease-out forwards',
+        'fade-in':    'fadeInUp 0.25s ease-out',
+        'spin-slow':  'spin 1s linear infinite',
+        'fill-bar':   'fillBar 0.6s ease-out forwards',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
       },
       keyframes: {
