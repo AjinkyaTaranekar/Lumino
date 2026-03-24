@@ -1,9 +1,16 @@
 import React, { Suspense, lazy } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import LuminoLayout from './components/LuminoLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import { useAuth } from './context/AuthContext';
 import { isOnboardingComplete } from './lib/onboarding';
+
+/** Redirects to a path with route params interpolated (e.g. "/jobs/:jobId/model") */
+function RedirectWithParams({ to }: { to: string }) {
+  const params = useParams<Record<string, string>>();
+  const target = to.replace(/:(\w+)/g, (_, key) => params[key] ?? key);
+  return <Navigate to={target} replace />;
+}
 
 /** Redirects to /dashboard if the user has already completed onboarding */
 function OnboardingRoute({ children }: { children: React.ReactNode }) {
@@ -257,9 +264,9 @@ export default function App() {
         {/* ── Legacy recruiter redirects ── */}
         <Route path="/recruiter/post" element={<Navigate to="/jobs/create" replace />} />
         <Route path="/recruiter/candidates" element={<Navigate to="/talent-pool" replace />} />
-        <Route path="/recruiter/candidates/:jobId" element={<Navigate to="/talent-pool/:jobId" replace />} />
-        <Route path="/recruiter/model/:jobId" element={<Navigate to="/jobs/:jobId/model" replace />} />
-        <Route path="/recruiter/edit-job/:jobId" element={<Navigate to="/jobs/:jobId/edit" replace />} />
+        <Route path="/recruiter/candidates/:jobId" element={<RedirectWithParams to="/talent-pool/:jobId" />} />
+        <Route path="/recruiter/model/:jobId" element={<RedirectWithParams to="/jobs/:jobId/model" />} />
+        <Route path="/recruiter/edit-job/:jobId" element={<RedirectWithParams to="/jobs/:jobId/edit" />} />
 
         {/* ── Admin routes ── */}
         <Route
