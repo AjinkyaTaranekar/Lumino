@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Upload,
   User as UserIcon,
-  Users,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -47,7 +46,6 @@ export function SideNavBar() {
     : user?.role === 'RECRUITER'
       ? [
         { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-        { label: 'Talent Pool', to: '/talent-pool', icon: Users },
         { label: 'Jobs', to: '/jobs', icon: Briefcase },
         { label: 'Post a Job', to: '/jobs/create', icon: Database },
       ]

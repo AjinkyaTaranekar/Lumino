@@ -40,7 +40,6 @@ const Guidelines = lazy(() => import('./pages/user/Guidelines'));
 const Interests = lazy(() => import('./pages/user/Interests'));
 
 // Recruiter pages
-const CandidatesBrowser = lazy(() => import('./pages/recruiter/CandidatesBrowser'));
 const Candidates = lazy(() => import('./pages/recruiter/Candidates'));
 const PostJob = lazy(() => import('./pages/recruiter/PostJob'));
 const JobModel = lazy(() => import('./pages/recruiter/JobModel'));
@@ -215,16 +214,7 @@ export default function App() {
         <Route path="/user/dashboard" element={<Navigate to="/dashboard" replace />} />
 
         {/* ── Recruiter routes ── */}
-        <Route
-          path="/talent-pool"
-          element={
-            <ProtectedRoute role="RECRUITER">
-              <LuminoLayout>
-                <CandidatesBrowser />
-              </LuminoLayout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/talent-pool" element={<Navigate to="/jobs" replace />} />
         <Route
           path="/talent-pool/:jobId"
           element={
