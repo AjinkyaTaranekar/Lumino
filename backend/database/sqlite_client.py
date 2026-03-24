@@ -69,6 +69,21 @@ class SQLiteClient:
 
                 CREATE INDEX IF NOT EXISTS idx_extraction_flags_user
                     ON extraction_flags(user_id, status);
+
+                CREATE TABLE IF NOT EXISTS analytics_events (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id         TEXT    NOT NULL,
+                    job_id          TEXT    NOT NULL,
+                    event_type      TEXT    NOT NULL,
+                    job_tags        TEXT    NOT NULL DEFAULT '[]',
+                    duration_ms     INTEGER,
+                    created_at      TEXT    NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_user
+                    ON analytics_events(user_id, created_at);
+                CREATE INDEX IF NOT EXISTS idx_analytics_job
+                    ON analytics_events(job_id);
                 """
             )
             await db.commit()

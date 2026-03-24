@@ -40,6 +40,8 @@ from models.taxonomies import (
     SOFT_SKILL_TO_PATTERN,
     BEHAVIORAL_RISK_TYPES,
     CULTURE_FIELD_MAP,
+    HYBRID_ALPHA,
+    HYBRID_BETA,
     normalize_work_style,
 )
 
@@ -47,21 +49,29 @@ logger = logging.getLogger(__name__)
 
 
 class MatchingEngine:
-    def __init__(self, client: Neo4jClient):
+    def __init__(self, client: Neo4jClient, analytics_service=None):
         self.client = client
+        self._analytics = analytics_service  # Optional[AnalyticsService]
 
     # ──────────────────────────────────────────────────────────────────────────
     # BATCH MATCHING
     # ──────────────────────────────────────────────────────────────────────────
 
     async def rank_all_jobs_for_user(self, user_id: str) -> BatchMatchResponse:
-        jobs = await self.client.run_query("MATCH (j:Job) RETURN j.id AS job_id")
+        jobs = await self.client.run_query(
+            "MATCH (j:Job) RETURN j.id AS job_id, coalesce(j.tags, []) AS tags"
+        )
         results: list[MatchResult] = []
         for job_record in jobs:
-            result = await self._score_user_job_pair(user_id, job_record["job_id"])
+            result = await self._score_user_job_pair(
+                user_id,
+                job_record["job_id"],
+                job_tags=list(job_record.get("tags") or []),
+            )
             if result is not None:
                 results.append(result)
-        results.sort(key=lambda r: r.total_score, reverse=True)
+        # Sort by hybrid_score so analytics preference influences ranking
+        results.sort(key=lambda r: r.hybrid_score, reverse=True)
         return BatchMatchResponse(
             user_id=user_id,
             results=results,
@@ -103,10 +113,11 @@ class MatchingEngine:
     # ──────────────────────────────────────────────────────────────────────────
 
     async def _score_user_job_pair(
-        self, user_id: str, job_id: str
+        self, user_id: str, job_id: str, job_tags: list[str] | None = None
     ) -> MatchResult | None:
         job_info = await self.client.run_query(
-            "MATCH (j:Job {id: $job_id}) RETURN j.title AS title, j.company AS company",
+            "MATCH (j:Job {id: $job_id}) RETURN j.title AS title, j.company AS company, "
+            "coalesce(j.tags, []) AS tags",
             {"job_id": job_id},
         )
         if not job_info:
@@ -117,6 +128,9 @@ class MatchingEngine:
         )
         if not user_check:
             return None
+
+        # Resolve job tags — prefer caller-supplied (avoids extra query in batch)
+        resolved_tags: list[str] = job_tags if job_tags is not None else list(job_info[0].get("tags") or [])
 
         skill_data        = await self._compute_skill_score(user_id, job_id)
         domain_data       = await self._compute_domain_score(user_id, job_id)
@@ -133,15 +147,26 @@ class MatchingEngine:
         culture_bonus     = culture_bonus_data.get("bonus", 0.0) or 0.0
         preference_bonus  = pref_data.get("bonus", 0.0) or 0.0
 
-        total_score = self._compute_total_score(
+        graph_score = self._compute_total_score(
             mandatory_score, optional_score, domain_score, soft_skill_score, culture_fit_score
         )
+
+        # ── Analytics interest score ───────────────────────────────────────────
+        interest_score = 0.5  # neutral default when no analytics data
+        interest_tags_matched: list[str] = []
+        if self._analytics and resolved_tags:
+            interest_score = await self._analytics.compute_interest_score_for_job(
+                user_id, resolved_tags
+            )
+            interest_tags_matched = await self._get_matched_interest_tags(user_id, resolved_tags)
+
+        hybrid_score = round(HYBRID_ALPHA * graph_score + HYBRID_BETA * interest_score, 4)
 
         return MatchResult(
             job_id=job_id,
             job_title=job_info[0]["title"] or "Unknown",
             company=job_info[0]["company"],
-            total_score=round(total_score, 4),
+            total_score=round(graph_score, 4),
             skill_score=round(mandatory_score, 4),
             optional_skill_score=round(optional_score, 4),
             domain_score=round(domain_score, 4),
@@ -158,7 +183,23 @@ class MatchingEngine:
                 mandatory_score, domain_score, soft_skill_score,
                 culture_fit_score, culture_bonus, preference_bonus
             ),
+            job_tags=resolved_tags,
+            interest_score=round(interest_score, 4),
+            interest_tags_matched=interest_tags_matched,
+            hybrid_score=hybrid_score,
         )
+
+    async def _get_matched_interest_tags(self, user_id: str, job_tags: list[str]) -> list[str]:
+        """Return which of the job's tags the user has a positive interest in (score > 0.5)."""
+        rows = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})-[r:HAS_INTEREST]->(t:JobTag)
+            WHERE t.name IN $tags AND r.score > 0.5
+            RETURN t.name AS tag
+            """,
+            {"user_id": user_id, "tags": job_tags},
+        )
+        return [row["tag"] for row in rows]
 
     def _compute_total_score(
         self,

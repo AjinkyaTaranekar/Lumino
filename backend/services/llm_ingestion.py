@@ -486,16 +486,20 @@ class LLMIngestionService:
     # ──────────────────────────────────────────────────────────────────────────
 
     async def ingest_job_posting(
-        self, job_id: str, extraction: JobPostingExtraction, recruiter_id: str | None = None
+        self, job_id: str, extraction: JobPostingExtraction, recruiter_id: str | None = None,
+        raw_text: str | None = None,
     ) -> None:
         """Write the job hierarchy into Neo4j from LLM extraction output."""
-        await self._create_job_node(job_id, extraction, recruiter_id)
+        await self._create_job_node(job_id, extraction, recruiter_id, raw_text=raw_text)
         await self._ingest_job_skills(job_id, extraction.skill_requirements)
         await self._ingest_job_domains(job_id, extraction.domain_requirements)
         await self._ingest_job_culture(job_id, extraction.work_styles)
         logger.info(f"LLM hierarchy written for job {job_id}")
 
-    async def _create_job_node(self, job_id: str, extraction: JobPostingExtraction, recruiter_id: str | None = None) -> None:
+    async def _create_job_node(
+        self, job_id: str, extraction: JobPostingExtraction,
+        recruiter_id: str | None = None, raw_text: str | None = None,
+    ) -> None:
         await self.client.run_write(
             """
             MERGE (j:Job {id: $job_id})
@@ -518,6 +522,12 @@ class LLMIngestionService:
                 "recruiter_id": recruiter_id,
             },
         )
+        # Store raw text for future retag operations (truncated to 8k chars)
+        if raw_text:
+            await self.client.run_write(
+                "MATCH (j:Job {id: $job_id}) SET j.raw_text = $raw_text",
+                {"job_id": job_id, "raw_text": raw_text[:8000]},
+            )
 
     async def _ingest_job_skills(self, job_id: str, requirements: list) -> None:
         for req in requirements:

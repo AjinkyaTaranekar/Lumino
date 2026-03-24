@@ -37,6 +37,7 @@ const Clarification = lazy(() => import('./pages/user/Clarification'));
 const UserProfile = lazy(() => import('./pages/user/UserProfile'));
 const MatchExplorer = lazy(() => import('./pages/user/MatchExplorer'));
 const Guidelines = lazy(() => import('./pages/user/Guidelines'));
+const Interests = lazy(() => import('./pages/user/Interests'));
 
 // Recruiter pages
 const CandidatesBrowser = lazy(() => import('./pages/recruiter/CandidatesBrowser'));
@@ -109,6 +110,16 @@ export default function App() {
             <ProtectedRoute role="USER">
               <LuminoLayout>
                 <Trajectory />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user/interests"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <Interests />
               </LuminoLayout>
             </ProtectedRoute>
           }

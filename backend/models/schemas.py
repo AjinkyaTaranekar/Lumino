@@ -571,6 +571,23 @@ class MatchResult(BaseModel):
         description="Risk signals from BehavioralInsight nodes that conflict with dealbreaker soft skills"
     )
     explanation: str
+    # Analytics / hybrid signals
+    job_tags: List[str] = Field(
+        default_factory=list,
+        description="Semantic tags extracted from the job posting (remote-first, high-paying, etc.)"
+    )
+    interest_score: float = Field(
+        default=0.5,
+        description="User interest score for this job based on behavioral analytics (0=disinterested, 1=high interest)"
+    )
+    interest_tags_matched: List[str] = Field(
+        default_factory=list,
+        description="Job tags that match the user's interest profile"
+    )
+    hybrid_score: float = Field(
+        default=0.0,
+        description="Final hybrid score: alpha*graph_score + beta*interest_score"
+    )
 
 
 class BatchMatchResponse(BaseModel):
@@ -611,6 +628,46 @@ class IngestionStats(BaseModel):
     domains_extracted: int = 0
     projects_extracted: int = 0
     experiences_extracted: int = 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ANALYTICS SCHEMAS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class RecordEventRequest(BaseModel):
+    job_id: str = Field(description="Job the event is associated with")
+    event_type: str = Field(
+        description=(
+            "One of: job_applied, job_liked, job_bookmarked, job_clicked, "
+            "job_viewed, job_disliked, job_dismissed"
+        )
+    )
+    duration_ms: Optional[int] = Field(
+        default=None,
+        description="Duration the job was visible/viewed in milliseconds (for job_viewed events)"
+    )
+
+
+class InterestTag(BaseModel):
+    tag: str
+    category: Optional[str] = None
+    score: float = Field(description="Normalised interest score 0.0–1.0")
+    interaction_count: int = Field(default=0)
+    confidence: Literal["low", "medium", "high"] = "low"
+    last_updated: Optional[str] = None
+
+
+class InterestProfileResponse(BaseModel):
+    user_id: str
+    tags: List[InterestTag]
+    total_interactions: int
+
+
+class AdjustInterestRequest(BaseModel):
+    score: float = Field(
+        ge=0.0, le=1.0,
+        description="Manually override the interest score for this tag (0.0 = disinterested, 1.0 = highly interested)"
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

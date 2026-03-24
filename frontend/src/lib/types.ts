@@ -51,6 +51,43 @@ export interface MatchResult {
   missing_domains: string[];
   behavioral_risk_flags?: string[];
   explanation: string;
+  // Analytics / hybrid signals
+  job_tags?: string[];
+  interest_score?: number;
+  interest_tags_matched?: string[];
+  hybrid_score?: number;
+}
+
+// ─── Analytics Types ──────────────────────────────────────────────────────────
+
+export type AnalyticsEventType =
+  | 'job_applied'
+  | 'job_liked'
+  | 'job_bookmarked'
+  | 'job_clicked'
+  | 'job_viewed'
+  | 'job_disliked'
+  | 'job_dismissed';
+
+export interface RecordEventRequest {
+  job_id: string;
+  event_type: AnalyticsEventType;
+  duration_ms?: number;
+}
+
+export interface InterestTag {
+  tag: string;
+  category?: string;
+  score: number;
+  interaction_count: number;
+  confidence: 'low' | 'medium' | 'high';
+  last_updated?: string;
+}
+
+export interface InterestProfileResponse {
+  user_id: string;
+  tags: InterestTag[];
+  total_interactions: number;
 }
 
 export interface BatchMatchResponse {
@@ -181,6 +218,12 @@ export interface Job {
   title?: string;
   company?: string;
   remote_policy?: 'remote' | 'hybrid' | 'onsite';
+  company_size?: string;
+  experience_years_min?: number;
+  tags?: string[];
+  key_skills?: string[];
+  domains?: string[];
+  description_preview?: string | null;
 }
 
 export interface UserListItem {

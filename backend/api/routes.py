@@ -14,6 +14,10 @@ Endpoints:
   GET  /users                             - list all users
   GET  /jobs                              - list all jobs
   GET  /health                            - Neo4j connectivity check
+  POST   /users/{user_id}/events              - record analytics event (view/like/dislike/bookmark/apply)
+  GET    /users/{user_id}/interests           - get user interest profile (tag scores)
+  PATCH  /users/{user_id}/interests/{tag}     - manually override tag interest score
+  DELETE /users/{user_id}/interests/{tag}     - remove a tag from interest profile
 """
 
 import io
@@ -39,7 +43,11 @@ from models.schemas import (
     GraphVersion,
     IngestJobRequest,
     IngestUserRequest,
+    AdjustInterestRequest,
+    InterestProfileResponse,
+    InterestTag,
     MatchResult,
+    RecordEventRequest,
     RejectMutationsRequest,
     ResolveFlagRequest,
     ResolveFlagResponse,
@@ -47,6 +55,8 @@ from models.schemas import (
     SendMessageRequest,
     StartEditRequest,
 )
+from services.analytics_service import AnalyticsService
+from services.job_tag_extractor import JobTagExtractor
 from services.checkpoint_service import CheckpointService
 from services.clarification_service import ClarificationService
 from services.graph_edit_service import GraphEditService
@@ -190,6 +200,7 @@ async def upload_job_pdf(
 async def get_all_matches_for_user(
     user_id: str,
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Compute match scores for ALL jobs in the database for the given user.
@@ -204,7 +215,8 @@ async def get_all_matches_for_user(
 
     Every score component is traceable via graph paths at /matches/{job_id}/paths.
     """
-    engine = MatchingEngine(db)
+    analytics = AnalyticsService(sqlite, db)
+    engine = MatchingEngine(db, analytics_service=analytics)
     return await engine.rank_all_jobs_for_user(user_id)
 
 
@@ -218,12 +230,14 @@ async def get_single_match(
     user_id: str,
     job_id: str,
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Compute detailed match score between a specific user and job.
     Includes matched/missing skill lists and human-readable explanation.
     """
-    engine = MatchingEngine(db)
+    analytics = AnalyticsService(sqlite, db)
+    engine = MatchingEngine(db, analytics_service=analytics)
     result = await engine._score_user_job_pair(user_id, job_id)
     if result is None:
         raise HTTPException(
@@ -574,28 +588,46 @@ async def list_users(db: Neo4jClient = Depends(get_neo4j)):
     )
 
 
+_LIST_JOBS_RETURN = """
+OPTIONAL MATCH (j)-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+               -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)
+               -[:REQUIRES_SKILL]->(sr:JobSkillRequirement)
+WHERE sr.importance = 'must_have'
+OPTIONAL MATCH (j)-[:HAS_DOMAIN_REQUIREMENTS]->(:JobDomainRequirements)
+               -[:HAS_DOMAIN_FAMILY_REQ]->(:JobDomainFamily)
+               -[:REQUIRES_DOMAIN]->(dr:JobDomainRequirement)
+WITH j,
+     collect(DISTINCT sr.name)[0..8] AS key_skills,
+     collect(DISTINCT dr.name)[0..4] AS domains
+RETURN j.id                   AS id,
+       j.title                AS title,
+       j.company              AS company,
+       j.remote_policy        AS remote_policy,
+       j.company_size         AS company_size,
+       j.experience_years_min AS experience_years_min,
+       coalesce(j.tags, [])   AS tags,
+       key_skills,
+       domains,
+       CASE WHEN j.raw_text IS NOT NULL THEN left(j.raw_text, 300) ELSE null END
+                              AS description_preview
+ORDER BY j.title
+"""
+
+
 @router.get("/jobs", tags=["utility"], summary="List all jobs")
 async def list_jobs(recruiter_id: str | None = None, db: Neo4jClient = Depends(get_neo4j)):
-    """Return job IDs, titles, and companies. Pass recruiter_id to filter to that recruiter's jobs only."""
+    """
+    Return rich job listings: title, company, remote policy, company_size,
+    experience level, tags, key required skills, domains, and a 300-char
+    description preview (from stored raw_text if available).
+    Pass recruiter_id to filter to that recruiter's jobs only.
+    """
     if recruiter_id:
         return await db.run_query(
-            """
-            MATCH (j:Job)
-            WHERE j.recruiter_id = $recruiter_id
-            RETURN j.id AS id, j.title AS title, j.company AS company,
-                   j.remote_policy AS remote_policy
-            ORDER BY j.title
-            """,
+            "MATCH (j:Job) WHERE j.recruiter_id = $recruiter_id " + _LIST_JOBS_RETURN,
             {"recruiter_id": recruiter_id},
         )
-    return await db.run_query(
-        """
-        MATCH (j:Job)
-        RETURN j.id AS id, j.title AS title, j.company AS company,
-               j.remote_policy AS remote_policy
-        ORDER BY j.title
-        """
-    )
+    return await db.run_query("MATCH (j:Job) " + _LIST_JOBS_RETURN)
 
 
 @router.get("/users/{user_id}/graph-stats", tags=["utility"])
@@ -1224,3 +1256,202 @@ async def health_check(db: Neo4jClient = Depends(get_neo4j)):
         return {"status": "healthy", "neo4j": "connected"}
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Neo4j unreachable: {e}")
+
+
+# ── Analytics ──────────────────────────────────────────────────────────────────
+
+@router.post(
+    "/users/{user_id}/events",
+    tags=["analytics"],
+    summary="Record a user interaction event",
+)
+async def record_event(
+    user_id: str,
+    request: RecordEventRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Record a user interaction event (view, click, like, dislike, bookmark, apply).
+
+    Events drive the interest profile:
+      job_applied    +3.0  — strongest positive signal
+      job_liked      +2.0
+      job_bookmarked +1.5
+      job_clicked    +1.0  — CTR on the job card
+      job_viewed     +0.5  — dwell ≥ 5s
+      job_disliked   -2.0  — explicit negative
+      job_dismissed  -0.5  — fast scroll-past
+
+    After recording, the user's interest profile is immediately recomputed.
+    """
+    try:
+        analytics = AnalyticsService(sqlite, db)
+        await analytics.record_event(
+            user_id=user_id,
+            job_id=request.job_id,
+            event_type=request.event_type,
+            duration_ms=request.duration_ms,
+        )
+        return {"status": "recorded", "user_id": user_id, "event_type": request.event_type}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Event recording failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/interests",
+    response_model=InterestProfileResponse,
+    tags=["analytics"],
+    summary="Get user interest profile",
+)
+async def get_interest_profile(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Return the user's derived interest profile: tags they gravitate toward
+    based on their job interaction history (views, likes, bookmarks, applies).
+
+    Tags are scored 0.0–1.0 where:
+      0.5 = neutral / no data
+      >0.5 = interest
+      <0.5 = disinterest
+
+    Confidence levels:
+      high   = ≥10 interactions contributing to this tag
+      medium = 3–9 interactions
+      low    = 1–2 interactions
+    """
+    analytics = AnalyticsService(sqlite, db)
+    tags_raw = await analytics.get_interest_profile(user_id)
+
+    # Count total interactions for this user
+    total_rows = await sqlite.fetchall(
+        "SELECT COUNT(*) AS cnt FROM analytics_events WHERE user_id = ?",
+        (user_id,),
+    )
+    total_interactions = total_rows[0]["cnt"] if total_rows else 0
+
+    tags = [
+        InterestTag(
+            tag=r["tag"],
+            category=r.get("category"),
+            score=r["score"],
+            interaction_count=r.get("interaction_count") or 0,
+            confidence=r.get("confidence") or "low",
+            last_updated=r.get("last_updated"),
+        )
+        for r in tags_raw
+    ]
+
+    return InterestProfileResponse(
+        user_id=user_id,
+        tags=tags,
+        total_interactions=total_interactions,
+    )
+
+
+@router.patch(
+    "/users/{user_id}/interests/{tag}",
+    tags=["analytics"],
+    summary="Manually set interest score for a tag",
+)
+async def adjust_interest(
+    user_id: str,
+    tag: str,
+    request: AdjustInterestRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Explicitly set the interest score for a tag, overriding analytics derivation.
+
+    This is a permanent override — it will survive interest profile recomputations.
+    Use score=0.5 to reset to neutral, or DELETE to remove entirely.
+
+    Score semantics:
+      0.0 = active disinterest (show fewer jobs with this tag)
+      0.5 = neutral (no preference)
+      1.0 = high interest (prioritise jobs with this tag)
+    """
+    analytics = AnalyticsService(sqlite, db)
+    await analytics.adjust_interest(user_id, tag, request.score)
+    return {"status": "updated", "user_id": user_id, "tag": tag, "score": request.score}
+
+
+@router.delete(
+    "/users/{user_id}/interests/{tag}",
+    tags=["analytics"],
+    summary="Remove a tag from user interest profile",
+)
+async def remove_interest(
+    user_id: str,
+    tag: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Remove a tag from the user's interest profile entirely.
+    Future interactions with jobs carrying this tag will re-add it naturally.
+    """
+    analytics = AnalyticsService(sqlite, db)
+    await analytics.remove_interest(user_id, tag)
+    return {"status": "removed", "user_id": user_id, "tag": tag}
+
+
+# ── Job Tag Management ─────────────────────────────────────────────────────────
+
+@router.post(
+    "/jobs/{job_id}/retag",
+    tags=["tags"],
+    summary="Re-extract semantic tags for a job",
+)
+async def retag_job(
+    job_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Re-run LLM tag extraction for an existing job posting.
+
+    Uses the stored raw_text if available (set during ingest). For jobs ingested
+    before tag support was added, reconstructs a description from the extracted
+    skill/domain/culture graph data and runs tag extraction on that.
+
+    Useful for:
+    - Jobs ingested before the tagging feature was added
+    - Refreshing tags after the job graph has been edited
+    """
+    extractor = JobTagExtractor(db)
+    tags = await extractor.retag_job(job_id)
+    if not tags and not await db.run_query("MATCH (j:Job {id: $id}) RETURN j.id", {"id": job_id}):
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return {"job_id": job_id, "tags": tags, "count": len(tags)}
+
+
+@router.post(
+    "/jobs/retag-all",
+    tags=["tags"],
+    summary="Re-tag all untagged jobs (bulk)",
+)
+async def retag_all_untagged_jobs(
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Re-tag all jobs that currently have no semantic tags.
+
+    Processes every Job node where j.tags is null or empty.
+    Use this once after deploying the analytics feature to backfill tags
+    for existing job postings.
+    """
+    extractor = JobTagExtractor(db)
+    results = await extractor.retag_all_untagged()
+    total_tagged = sum(1 for tags in results.values() if tags)
+    return {
+        "jobs_processed": len(results),
+        "jobs_tagged": total_tagged,
+        "results": results,
+    }

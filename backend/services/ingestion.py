@@ -17,6 +17,7 @@ from database.sqlite_client import SQLiteClient
 from services.llm_extraction import LLMExtractionService
 from services.llm_ingestion import LLMIngestionService
 from services.clarification_service import ClarificationService
+from services.job_tag_extractor import JobTagExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class IngestionService:
         self._sqlite = sqlite_client
         self._llm_extractor = LLMExtractionService()
         self._llm_ingester = LLMIngestionService(neo4j_client)
+        self._tag_extractor = JobTagExtractor(neo4j_client)
 
     async def ingest_user(self, user_id: str, profile_text: str) -> dict:
         """
@@ -92,9 +94,10 @@ class IngestionService:
         logger.info(f"Ingesting job: {job_id}")
 
         extraction = await self._llm_extractor.extract_job_posting(job_text)
-        await self._llm_ingester.ingest_job_posting(job_id, extraction, recruiter_id)
+        await self._llm_ingester.ingest_job_posting(job_id, extraction, recruiter_id, raw_text=job_text)
         skill_links = await self._llm_ingester.link_job_skill_matches(job_id)
         domain_links = await self._llm_ingester.link_job_domain_matches(job_id)
+        job_tags = await self._tag_extractor.extract_and_store_tags(job_id, job_text)
 
         result = {
             "job_id": job_id,
@@ -106,6 +109,7 @@ class IngestionService:
             "work_styles_extracted": len(extraction.work_styles),
             "skill_matches_linked": skill_links,
             "domain_matches_linked": domain_links,
+            "tags_extracted": job_tags,
         }
         logger.info(f"Job ingestion complete: {result}")
         return result

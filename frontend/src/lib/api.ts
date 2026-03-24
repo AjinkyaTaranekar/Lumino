@@ -1,4 +1,5 @@
 import type {
+  AnalyticsEventType,
   BatchCandidateResponse,
   BatchMatchResponse,
   ClarificationsResponse,
@@ -8,6 +9,7 @@ import type {
   GraphVersion,
   IngestJobResponse,
   IngestUserResponse,
+  InterestProfileResponse,
   Job,
   ResolveFlagResponse,
   RollbackResponse,
@@ -41,6 +43,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path, { method: 'DELETE' });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(detail.detail || `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(detail.detail || `HTTP ${res.status}`);
@@ -126,6 +141,26 @@ export const api = {
     post<unknown>(`/users/${userId}/clarifications/${flagId}/interpret`, { answer }),
   describeUser: (userId: string) => get<UserDescribeResponse>(`/users/${userId}/describe`),
   getCompleteness: (userId: string) => get<unknown>(`/users/${userId}/completeness`),
+
+  // Analytics
+  recordEvent: (userId: string, jobId: string, eventType: AnalyticsEventType, durationMs?: number) =>
+    post<{ status: string }>(`/users/${userId}/events`, {
+      job_id: jobId,
+      event_type: eventType,
+      duration_ms: durationMs,
+    }),
+  getInterestProfile: (userId: string) =>
+    get<InterestProfileResponse>(`/users/${userId}/interests`),
+  adjustInterest: (userId: string, tag: string, score: number) =>
+    patch<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`, { score }),
+  removeInterest: (userId: string, tag: string) =>
+    del<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`),
+
+  // Job tag management
+  retagJob: (jobId: string) =>
+    post<{ job_id: string; tags: string[]; count: number }>(`/jobs/${jobId}/retag`, {}),
+  retagAllJobs: () =>
+    post<{ jobs_processed: number; jobs_tagged: number; results: Record<string, string[]> }>('/jobs/retag-all', {}),
 
   // Admin - delete
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),

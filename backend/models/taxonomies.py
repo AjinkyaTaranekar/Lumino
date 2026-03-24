@@ -181,6 +181,59 @@ BEHAVIORAL_RISK_TYPES: frozenset[str] = frozenset({
     "push_back", "avoidance", "deflection", "inconsistency",
 })
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ANALYTICS & JOB TAGS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class AnalyticsEventType(str, Enum):
+    """User interaction events tracked for interest profile derivation."""
+    JOB_APPLIED    = "job_applied"
+    JOB_LIKED      = "job_liked"
+    JOB_BOOKMARKED = "job_bookmarked"
+    JOB_CLICKED    = "job_clicked"
+    JOB_VIEWED     = "job_viewed"
+    JOB_DISLIKED   = "job_disliked"
+    JOB_DISMISSED  = "job_dismissed"
+
+
+# Interest weights per event type — how much each action shifts the user's tag preferences
+ANALYTICS_EVENT_WEIGHTS: dict[str, float] = {
+    AnalyticsEventType.JOB_APPLIED:    3.0,
+    AnalyticsEventType.JOB_LIKED:      2.0,
+    AnalyticsEventType.JOB_BOOKMARKED: 1.5,
+    AnalyticsEventType.JOB_CLICKED:    1.0,
+    AnalyticsEventType.JOB_VIEWED:     0.5,
+    AnalyticsEventType.JOB_DISLIKED:  -2.0,
+    AnalyticsEventType.JOB_DISMISSED: -0.5,
+}
+
+# Hybrid scoring blend: graph score (fit) vs analytics score (preference)
+HYBRID_ALPHA: float = 0.75  # graph score weight
+HYBRID_BETA:  float = 0.25  # analytics interest score weight
+
+# Tag taxonomy — what the LLM extracts per job posting
+JOB_TAG_TAXONOMY: dict[str, list[str]] = {
+    "work_style": [
+        "remote-first", "hybrid", "onsite", "async-friendly", "fast-paced", "flexible-hours",
+    ],
+    "compensation": [
+        "high-paying", "equity-heavy", "competitive-salary", "below-market", "generous-benefits",
+    ],
+    "culture": [
+        "growth-driven", "mentorship-heavy", "flat-hierarchy", "results-oriented",
+        "startup-energy", "enterprise-stability", "inclusive", "collaborative",
+    ],
+    "tech": [
+        "cutting-edge-stack", "legacy-modernization", "greenfield", "research-heavy",
+        "open-source", "data-intensive", "ml-forward",
+    ],
+    "impact": [
+        "high-impact", "consumer-scale", "social-mission", "b2b", "b2c",
+        "developer-tools", "infra-focused",
+    ],
+}
+
 # Mapping from CultureIdentity fields to TeamCultureIdentity fields for culture fit scoring
 CULTURE_FIELD_MAP = {
     # (user_field, user_value, job_field, job_value) → compatible
