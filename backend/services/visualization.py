@@ -41,6 +41,21 @@ NODE_TYPE_COLORS: dict[str, str] = {
     "Preference": "#38BDF8",        # sky-400
     "PatternCategory": "#EA580C",   # orange-600
     "ProblemSolvingPattern": "#FB923C", # orange-400
+    # ── User extended profile nodes ────────────────────────────────────────────
+    "EducationCategory": "#0369A1", # sky-700
+    "Education": "#38BDF8",         # sky-400 - degree/diploma
+    "CertificationCategory": "#0F766E", # teal-700
+    "Certification": "#2DD4BF",     # teal-400 - cert/license
+    "AchievementCategory": "#B45309", # amber-700
+    "Achievement": "#FCD34D",       # amber-300 - award/prize
+    "PublicationCategory": "#7E22CE", # purple-800
+    "Publication": "#C084FC",       # purple-400 - paper/article
+    "CourseworkCategory": "#1D4ED8", # blue-700
+    "Course": "#60A5FA",            # blue-400 - course
+    "LanguageCategory": "#065F46",  # emerald-900
+    "Language": "#6EE7B7",          # emerald-300 - spoken language
+    "VolunteerCategory": "#9D174D", # pink-800
+    "VolunteerWork": "#F9A8D4",     # pink-300 - volunteer/community
     # ── User human-portrait nodes (digital twin) ───────────────────────────────
     "Anecdote": "#E11D48",          # rose-600  - personal story
     "Motivation": "#F97316",        # orange-500 - what drives them
@@ -76,6 +91,9 @@ _DARK_FONT_NODES: frozenset[str] = frozenset({
     "Job", "JobSkillRequirements", "JobDomainRequirements", "JobCultureRequirements",
     "TeamComposition", "RoleContext", "HiringGoal", "TeamCultureIdentity",
     "SuccessMetric", "Motivation",
+    # Extended profile category nodes (dark backgrounds)
+    "EducationCategory", "CertificationCategory", "AchievementCategory",
+    "PublicationCategory", "CourseworkCategory", "LanguageCategory", "VolunteerCategory",
 })
 
 
@@ -93,6 +111,14 @@ NODE_SIZES: dict[str, int] = {
     "Skill": 14, "Domain": 14, "Project": 16,
     "Experience": 14, "Preference": 12,
     "ProblemSolvingPattern": 12,
+    # Extended profile nodes
+    "EducationCategory": 22, "Education": 16,
+    "CertificationCategory": 22, "Certification": 14,
+    "AchievementCategory": 20, "Achievement": 14,
+    "PublicationCategory": 20, "Publication": 14,
+    "CourseworkCategory": 18, "Course": 12,
+    "LanguageCategory": 18, "Language": 12,
+    "VolunteerCategory": 18, "VolunteerWork": 13,
     # User human-portrait nodes
     "Anecdote": 16, "Motivation": 16, "Value": 14,
     "Goal": 16, "CultureIdentity": 18, "BehavioralInsight": 12,
@@ -122,6 +148,13 @@ _JOB_LABEL_FILTER = (
     "|-PreferenceCategory|-Preference"
     "|-PatternCategory|-ProblemSolvingPattern"
     "|-Anecdote|-Motivation|-Value|-Goal|-CultureIdentity|-BehavioralInsight"
+    "|-EducationCategory|-Education"
+    "|-CertificationCategory|-Certification"
+    "|-AchievementCategory|-Achievement"
+    "|-PublicationCategory|-Publication"
+    "|-CourseworkCategory|-Course"
+    "|-LanguageCategory|-Language"
+    "|-VolunteerCategory|-VolunteerWork"
 )
 
 # Types that belong exclusively to the user hierarchy
@@ -133,6 +166,14 @@ USER_NODE_TYPES: frozenset[str] = frozenset({
     "ExperienceCategory", "Experience",
     "PreferenceCategory", "Preference",
     "PatternCategory", "ProblemSolvingPattern",
+    # Extended profile nodes
+    "EducationCategory", "Education",
+    "CertificationCategory", "Certification",
+    "AchievementCategory", "Achievement",
+    "PublicationCategory", "Publication",
+    "CourseworkCategory", "Course",
+    "LanguageCategory", "Language",
+    "VolunteerCategory", "VolunteerWork",
     # Digital twin - human portrait nodes
     "Anecdote", "Motivation", "Value", "Goal",
     "CultureIdentity", "BehavioralInsight",
@@ -854,7 +895,7 @@ class VisualizationService:
             WITH n
             RETURN DISTINCT
                 elementId(n) AS id,
-                coalesce(n.name, n.title, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
+                coalesce(n.name, n.title, n.degree, n.role, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
                 labels(n)[0] AS type,
                 n.weight AS weight,
                 n.years AS years,
@@ -895,7 +936,7 @@ class VisualizationService:
             WITH DISTINCT n
             RETURN
                 elementId(n) AS id,
-                coalesce(n.name, n.title, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
+                coalesce(n.name, n.title, n.degree, n.role, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
                 labels(n)[0] AS type,
                 n.weight AS weight,
                 n.years AS years,

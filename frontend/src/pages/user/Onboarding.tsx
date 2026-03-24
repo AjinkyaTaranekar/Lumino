@@ -269,6 +269,10 @@ function ResultsStep({ result, onNext, hasFlags }: ResultsStepProps) {
     { label: 'Domains', value: result.domains_extracted, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Projects', value: result.projects_extracted, color: 'text-violet-600', bg: 'bg-violet-50' },
     { label: 'Experiences', value: result.experiences_extracted, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    ...(result.education_extracted ? [{ label: 'Education', value: result.education_extracted, color: 'text-sky-600', bg: 'bg-sky-50' }] : []),
+    ...(result.certifications_extracted ? [{ label: 'Certifications', value: result.certifications_extracted, color: 'text-teal-600', bg: 'bg-teal-50' }] : []),
+    ...(result.achievements_extracted ? [{ label: 'Achievements', value: result.achievements_extracted, color: 'text-amber-600', bg: 'bg-amber-50' }] : []),
+    ...(result.publications_extracted ? [{ label: 'Publications', value: result.publications_extracted, color: 'text-purple-600', bg: 'bg-purple-50' }] : []),
   ]
 
   return (

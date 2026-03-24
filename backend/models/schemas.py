@@ -151,6 +151,83 @@ class ExtractedExperience(BaseModel):
     )
 
 
+class ExtractedEducation(BaseModel):
+    degree: str = Field(description="Degree type, e.g. 'Bachelor of Science', 'Master of Engineering', 'PhD', 'Associate', 'High School Diploma'")
+    field_of_study: Optional[str] = Field(default=None, description="Major or field, e.g. 'Computer Science', 'Electrical Engineering', 'Data Science'")
+    institution: Optional[str] = Field(default=None, description="University, college, or school name")
+    graduation_year: Optional[int] = Field(default=None, description="Graduation year (YYYY), null if not stated or currently enrolled")
+    gpa: Optional[str] = Field(default=None, description="GPA or grade if stated, e.g. '3.8/4.0', 'First Class Honours', '4.0'")
+    honors: Optional[str] = Field(default=None, description="Distinctions, honors, magna cum laude, dean's list, valedictorian, scholarships linked to this degree")
+    is_ongoing: bool = Field(default=False, description="True if the person is currently enrolled in this program")
+
+
+class ExtractedCertification(BaseModel):
+    name: str = Field(description="Full certification name, e.g. 'AWS Certified Solutions Architect – Professional', 'Google Cloud Professional Data Engineer'")
+    issuer: Optional[str] = Field(default=None, description="Issuing organization, e.g. 'Amazon Web Services', 'Google', 'Microsoft', 'Coursera'")
+    date_obtained: Optional[str] = Field(default=None, description="Date obtained if mentioned, e.g. '2022', '2023-05'")
+    expiry_date: Optional[str] = Field(default=None, description="Expiry date if mentioned, null if not specified")
+    is_active: bool = Field(default=True, description="True if this certification appears current/active")
+
+
+class ExtractedAchievement(BaseModel):
+    title: str = Field(description="Achievement title or name, e.g. 'First Place - HackMIT 2023', 'Dean's List', 'Employee of the Year'")
+    type: str = Field(
+        description=(
+            "Achievement category. Use one of: "
+            "award, scholarship, grant, competition, recognition, honor, fellowship, prize, other"
+        )
+    )
+    description: Optional[str] = Field(default=None, description="Brief description of what the achievement was for")
+    date: Optional[str] = Field(default=None, description="Year or date if mentioned, e.g. '2023', '2022-03'")
+    impact: Optional[str] = Field(default=None, description="Scale or significance, e.g. 'national level', '1st out of 500 teams', '$10,000 grant'")
+
+
+class ExtractedPublication(BaseModel):
+    title: str = Field(description="Full title of the publication, paper, article, or research work")
+    type: str = Field(
+        description=(
+            "Publication type. Use one of: "
+            "paper, thesis, dissertation, blog, article, patent, conference_talk, preprint, book_chapter, other"
+        )
+    )
+    venue: Optional[str] = Field(default=None, description="Journal, conference, or platform where published, e.g. 'NeurIPS 2023', 'IEEE Transactions', 'Medium', 'arXiv'")
+    year: Optional[int] = Field(default=None, description="Publication year (YYYY)")
+    description: Optional[str] = Field(default=None, description="Brief summary of the work and its contribution")
+    is_first_author: Optional[bool] = Field(default=None, description="True if they were the primary/first author, null if unknown")
+
+
+class ExtractedCoursework(BaseModel):
+    name: str = Field(description="Course or program name, e.g. 'Machine Learning', 'Distributed Systems', 'CS229', 'Full Stack Web Development Bootcamp'")
+    provider: Optional[str] = Field(default=None, description="Institution, platform, or provider, e.g. 'Stanford', 'Coursera', 'fast.ai', 'MIT OpenCourseWare'")
+    type: str = Field(
+        default="university",
+        description=(
+            "Course type. Use one of: "
+            "university, mooc, bootcamp, workshop, online, certification_course, other"
+        )
+    )
+    year_completed: Optional[int] = Field(default=None, description="Year completed if mentioned")
+    relevance_note: Optional[str] = Field(default=None, description="Why this course is notable or how it strengthens the profile")
+
+
+class ExtractedLanguage(BaseModel):
+    name: str = Field(description="Spoken/written language name (NOT programming language), e.g. 'English', 'Spanish', 'Mandarin', 'French'")
+    proficiency: str = Field(
+        description=(
+            "Proficiency level. Use one of: "
+            "native, fluent, professional, conversational, basic"
+        )
+    )
+
+
+class ExtractedVolunteerWork(BaseModel):
+    role: str = Field(description="Volunteer role or title, e.g. 'Open Source Contributor', 'Mentor', 'Tech Lead'")
+    organization: Optional[str] = Field(default=None, description="Organization, project, or community name")
+    description: Optional[str] = Field(default=None, description="What they did and what impact it had")
+    skills_applied: List[str] = Field(default_factory=list, description="Technical or leadership skills demonstrated")
+    duration_years: Optional[float] = Field(default=None, description="Duration in years if mentioned")
+
+
 class ExtractedPreference(BaseModel):
     type: str = Field(
         description=(
@@ -336,6 +413,34 @@ class UserProfileExtraction(BaseModel):
     projects: List[ExtractedProject] = Field(default_factory=list)
     domains: List[ExtractedDomain] = Field(default_factory=list)
     experiences: List[ExtractedExperience] = Field(default_factory=list)
+    education: List[ExtractedEducation] = Field(
+        default_factory=list,
+        description="All education entries: degrees, diplomas, ongoing programs. Extract EVERY educational qualification mentioned."
+    )
+    certifications: List[ExtractedCertification] = Field(
+        default_factory=list,
+        description="All professional certifications, licenses, and credentials. Extract EVERY cert mentioned."
+    )
+    achievements: List[ExtractedAchievement] = Field(
+        default_factory=list,
+        description="Awards, prizes, scholarships, grants, competitions, honors, recognitions, fellowships."
+    )
+    publications: List[ExtractedPublication] = Field(
+        default_factory=list,
+        description="Research papers, theses, dissertations, blogs, articles, patents, conference talks, book chapters."
+    )
+    coursework: List[ExtractedCoursework] = Field(
+        default_factory=list,
+        description="Notable courses, MOOCs, bootcamps, workshops - especially those that strengthen technical skills."
+    )
+    languages: List[ExtractedLanguage] = Field(
+        default_factory=list,
+        description="Spoken/written languages (NOT programming languages). Extract every human language mentioned."
+    )
+    volunteer_work: List[ExtractedVolunteerWork] = Field(
+        default_factory=list,
+        description="Open source contributions, mentoring, nonprofit work, community involvement."
+    )
     preferences: List[ExtractedPreference] = Field(default_factory=list)
     patterns: List[ExtractedPattern] = Field(default_factory=list)
     assessment: Optional[CriticalAssessment] = Field(

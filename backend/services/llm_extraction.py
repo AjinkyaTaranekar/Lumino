@@ -93,52 +93,88 @@ class LLMExtractionService:
         system_msg = (
             "You are a senior engineering manager and technical recruiter conducting a rigorous, "
             "evidence-based analysis of a candidate profile. Your job is NOT to be flattering - "
-            "it is to extract structured data AND produce a brutally honest assessment of what "
-            "this person can actually do versus what they merely claim.\n\n"
-            "EXTRACTION RULES:\n"
-            "1. For each skill, assess evidence_strength honestly: did they just list it, or do "
-            "   they have concrete project evidence? 'expert' level requires multiple production projects.\n"
-            "2. For each project, extract HOW each skill was specifically used (not just that it was used). "
-            "   Capture contribution_type honestly - 'sole_engineer' only if they clearly built it alone.\n"
-            "3. For each experience, extract concrete accomplishments with metrics where present. "
-            "   If the profile is vague, reflect that vagueness - do NOT invent specifics.\n"
-            "4. For the critical assessment: think like a skeptical EM reading this resume before "
-            "   a hiring committee. What would concern you? What is well-evidenced? "
-            "   What level is this person REALLY at (not what their title says)?\n"
-            "5. Flag inflated skills: if someone claims 'expert' in 15 technologies, that's a red flag.\n"
-            "6. overall_signal 'misleading' if claims are materially unsupported by evidence.\n\n"
-            "INTERPRETATION FLAGS - THIS IS CRITICAL:\n"
-            "For EVERY field where you made an inference (rather than reading it directly), "
-            "create an interpretation_flag. A flag must be created when:\n"
-            "  - Years of experience was calculated/inferred (not stated explicitly)\n"
-            "  - Skill level was inferred from job titles or context (not stated)\n"
-            "  - Contribution type is ambiguous ('we built', 'our team' without clarity on their role)\n"
-            "  - Domain depth was guessed from industry rather than described\n"
-            "  - Any claim seems inconsistent with other evidence\n"
-            "  - Accomplishments were vague and you had to guess the impact\n"
+            "it is to extract EVERY piece of structured data AND produce a brutally honest assessment "
+            "of what this person can actually do versus what they merely claim.\n\n"
+            "═══ WHAT TO EXTRACT - SCAN THE ENTIRE PROFILE FOR ALL OF THESE ═══\n\n"
+            "SKILLS: Every technical skill, tool, framework, library, language, platform mentioned.\n"
+            "  - Assess evidence_strength honestly: listed-only vs project-backed.\n"
+            "  - 'expert' requires multiple production project evidence.\n\n"
+            "EXPERIENCES: Every work experience, internship, freelance, contract role.\n"
+            "  - Extract concrete accomplishments with metrics where present.\n"
+            "  - If vague, reflect that vagueness - do NOT invent specifics.\n\n"
+            "PROJECTS: Every personal, academic, professional, open-source project.\n"
+            "  - For each project, describe HOW each skill was specifically used.\n"
+            "  - Capture contribution_type honestly.\n\n"
+            "DOMAINS: Every industry, domain, or application area the person has worked in.\n\n"
+            "EDUCATION: EVERY degree, diploma, certification program, bootcamp attended as a course.\n"
+            "  - Include: degree type, field of study, institution, graduation year, GPA if stated,\n"
+            "    honors (cum laude, dean's list, scholarships attached to degree), ongoing status.\n"
+            "  - Do NOT miss minor degrees, ongoing programs, or exchange programs.\n\n"
+            "CERTIFICATIONS: EVERY professional certification, license, credential, badge.\n"
+            "  - Examples: AWS, Azure, GCP certs, PMP, CFA, Kubernetes (CKA), Google Analytics, etc.\n"
+            "  - Include issuer, date, expiry if stated.\n\n"
+            "ACHIEVEMENTS: EVERY award, prize, scholarship (standalone, not degree-linked), grant,\n"
+            "  competition win/placement, hackathon result, honor, fellowship, recognition, employee award.\n"
+            "  - Include impact/scale (e.g. 'national finalist', '1st out of 300 teams').\n\n"
+            "PUBLICATIONS: EVERY research paper, thesis, dissertation, patent, conference talk/poster,\n"
+            "  book chapter, published blog post, technical article, preprint.\n"
+            "  - Include venue (journal/conference/platform), year, whether first-authored.\n\n"
+            "COURSEWORK: Notable individual courses, MOOCs, online programs that strengthen the profile.\n"
+            "  - Especially relevant if they list courses directly (e.g. 'Relevant Coursework: ...' section).\n"
+            "  - Include provider and completion year if mentioned.\n\n"
+            "LANGUAGES: Every spoken/written human language mentioned (NOT programming languages).\n"
+            "  - Infer 'native' for the apparent native language if implied by context.\n\n"
+            "VOLUNTEER WORK: Open source contributions, mentoring, nonprofit work, community involvement,\n"
+            "  teaching assistant roles, organizing tech events, contributing to public repos.\n\n"
+            "PREFERENCES: Any signals about preferred work style, remote/hybrid/onsite, company size,\n"
+            "  role type, location, salary expectations.\n\n"
+            "PATTERNS: Problem-solving or working style patterns observable across the profile\n"
+            "  (e.g. 'data-driven', 'systems thinker', 'user-focused', 'performance-oriented').\n\n"
+            "═══ CRITICAL ASSESSMENT ═══\n"
+            "Think like a skeptical EM reading this before a hiring committee:\n"
+            "  - What level is this person REALLY at (not what their title says)?\n"
+            "  - Flag inflated skills (15+ technologies with no depth = red flag).\n"
+            "  - overall_signal 'misleading' if claims are materially unsupported by evidence.\n\n"
+            "═══ INTERPRETATION FLAGS - MANDATORY ═══\n"
+            "For EVERY field where you made an inference (rather than reading it directly):\n"
+            "  - Years of experience calculated/inferred (not stated explicitly)\n"
+            "  - Skill level inferred from job titles or context\n"
+            "  - Contribution type ambiguous ('we built', 'our team')\n"
+            "  - Domain depth guessed from industry\n"
+            "  - Any claim inconsistent with other evidence\n"
+            "  - Graduation year inferred from start year or context\n"
+            "  - Language proficiency inferred (not stated)\n"
             "The clarification_question must quote the actual resume text and ask a specific, "
-            "answerable question. Use suggested_options for multiple-choice fields "
-            "(e.g. skill levels, contribution types, depths).\n\n"
-            "SCHEMA CONSTRAINTS:\n"
+            "answerable question. Use suggested_options for multiple-choice fields.\n\n"
+            "═══ SCHEMA CONSTRAINTS ═══\n"
             "- skill.family must be one of: Programming Languages, Web Frameworks, "
             "Databases, Cloud & DevOps, ML & AI, Data Engineering, Mobile Development, "
             "Testing & QA, Analytics & Visualization, Other\n"
             "- domain.family must be one of: FinTech, Healthcare, E-commerce, SaaS, "
             "Enterprise, Gaming, Education, Other\n"
-            "- Return an empty list [] for any section with no data - never omit keys.\n"
+            "- Return an empty list [] for any section with no data - NEVER omit keys.\n"
             "- Return ONLY valid JSON matching this exact schema:\n\n"
             f"{_USER_SCHEMA}"
         )
 
         user_msg = (
-            "Analyze this professional profile. Extract all structured data, produce a critical "
-            "assessment through the lens of a skeptical engineering manager, AND generate "
-            "interpretation_flags for every uncertain inference.\n\n"
-            "For each project, describe HOW each skill was used - not just that it was used. "
-            "For each skill, honestly assess evidence_strength. "
-            "In the assessment, be direct about red flags, inflated claims, and genuine strengths.\n\n"
-            "Remember: every inference you make (not directly stated) needs an interpretation_flag "
-            "so the user can verify or correct it.\n\n"
+            "Analyze this professional profile EXHAUSTIVELY. Extract structured data from EVERY section "
+            "including: skills, experiences, projects, domains, education, certifications, achievements, "
+            "publications/research, coursework, languages, volunteer work, preferences, and patterns.\n\n"
+            "Think beyond the obvious - scan for:\n"
+            "  • Education sections (degrees, schools, graduation years, GPA, honors)\n"
+            "  • Certifications and licenses (AWS, Google, Microsoft, industry certs)\n"
+            "  • Awards, competitions, hackathons, scholarships, fellowships\n"
+            "  • Research papers, theses, publications, patents, talks, blog posts\n"
+            "  • Individual notable courses or 'Relevant Coursework' sections\n"
+            "  • Languages spoken (English, Spanish, Mandarin, etc.)\n"
+            "  • Open source, volunteer, mentoring, community work\n"
+            "  • Job preferences implied by career choices or stated explicitly\n"
+            "  • Working style patterns revealed across projects and roles\n\n"
+            "For each project: describe HOW each skill was used, not just that it was used.\n"
+            "For each skill: honestly assess evidence_strength.\n"
+            "For the assessment: be direct about red flags, inflated claims, and genuine strengths.\n"
+            "For every inference (not directly stated): create an interpretation_flag.\n\n"
             "Skill family reference:\n"
             f"{self._skill_hint}\n\n"
             "Domain family reference:\n"
@@ -518,6 +554,75 @@ class LLMExtractionService:
             {"id": user_id},
         )
 
+        # ── Extended profile nodes ────────────────────────────────────────────
+        education = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_EDUCATION_CATEGORY]->(:EducationCategory)
+                  -[:HAS_EDUCATION]->(e:Education)
+            RETURN e.degree AS degree, e.field_of_study AS field_of_study,
+                   e.institution AS institution, e.graduation_year AS graduation_year,
+                   e.gpa AS gpa, e.honors AS honors, e.is_ongoing AS is_ongoing
+            ORDER BY e.graduation_year DESC
+            """,
+            {"id": user_id},
+        )
+        certifications = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_CERTIFICATION_CATEGORY]->(:CertificationCategory)
+                  -[:HAS_CERTIFICATION]->(c:Certification)
+            RETURN c.name AS name, c.issuer AS issuer, c.date_obtained AS date_obtained,
+                   c.expiry_date AS expiry_date, c.is_active AS is_active
+            """,
+            {"id": user_id},
+        )
+        achievements = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_ACHIEVEMENT_CATEGORY]->(:AchievementCategory)
+                  -[:HAS_ACHIEVEMENT]->(a:Achievement)
+            RETURN a.title AS title, a.type AS type, a.description AS description,
+                   a.date AS date, a.impact AS impact
+            ORDER BY a.date DESC
+            """,
+            {"id": user_id},
+        )
+        publications = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_PUBLICATION_CATEGORY]->(:PublicationCategory)
+                  -[:HAS_PUBLICATION]->(p:Publication)
+            RETURN p.title AS title, p.type AS type, p.venue AS venue,
+                   p.year AS year, p.description AS description,
+                   p.is_first_author AS is_first_author
+            ORDER BY p.year DESC
+            """,
+            {"id": user_id},
+        )
+        coursework = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_COURSEWORK_CATEGORY]->(:CourseworkCategory)
+                  -[:HAS_COURSE]->(c:Course)
+            RETURN c.name AS name, c.provider AS provider, c.type AS type,
+                   c.year_completed AS year_completed, c.relevance_note AS relevance_note
+            """,
+            {"id": user_id},
+        )
+        languages = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_LANGUAGE_CATEGORY]->(:LanguageCategory)
+                  -[:HAS_LANGUAGE]->(l:Language)
+            RETURN l.name AS name, l.proficiency AS proficiency
+            """,
+            {"id": user_id},
+        )
+        volunteer_work = await neo4j_client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $id})-[:HAS_VOLUNTEER_CATEGORY]->(:VolunteerCategory)
+                  -[:HAS_VOLUNTEER]->(v:VolunteerWork)
+            RETURN v.role AS role, v.organization AS organization,
+                   v.description AS description, v.duration_years AS duration_years
+            """,
+            {"id": user_id},
+        )
+
         # ── Human portrait nodes ──────────────────────────────────────────────
         anecdotes = await neo4j_client.run_query(
             """
@@ -605,6 +710,13 @@ class LLMExtractionService:
             "domains": domains,
             "projects": projects,
             "experiences": experiences,
+            "education": [e for e in education if e.get("degree")],
+            "certifications": [c for c in certifications if c.get("name")],
+            "achievements": [a for a in achievements if a.get("title")],
+            "publications": [p for p in publications if p.get("title")],
+            "coursework": [c for c in coursework if c.get("name")],
+            "languages": [l for l in languages if l.get("name")],
+            "volunteer_work": [v for v in volunteer_work if v.get("role")],
             "assessment": assessment[0] if assessment else {},
             "patterns": [p for p in patterns if p.get("pattern")],
             # Human portrait - included only if data exists
@@ -622,19 +734,24 @@ class LLMExtractionService:
             "the human portrait captured through the deep interview.\n\n"
             "This profile is shown to the candidate themselves so they understand how they are perceived "
             "by recruiters. Be specific, evidence-based, and honest - not flattering.\n\n"
-            "If motivations, values, goals, or culture identity data exist in the graph, incorporate them. "
-            "These reveal WHO this person is beyond their resume.\n"
+            "If education data exists, summarize their academic background in career_arc.\n"
+            "If certifications exist, mention the strongest ones in technical_profile.\n"
+            "If achievements/awards exist, reference them in core_strengths.\n"
+            "If publications/research exist, note them - they are strong evidence of depth.\n"
+            "If motivations, values, goals, or culture identity data exist, incorporate them.\n"
             "If anecdotes exist, reference the stories - they are stronger evidence than skill claims.\n"
             "If behavioral insights exist, note them honestly.\n\n"
             "Return a JSON object with these exact keys:\n"
             "{\n"
             "  \"identity\": \"1-sentence professional identity statement\",\n"
-            "  \"career_arc\": \"2-3 sentences describing their career progression and trajectory\",\n"
+            "  \"career_arc\": \"2-3 sentences describing their career progression and trajectory, "
+            "including educational background\",\n"
             "  \"who_they_are\": \"2-3 sentences on what drives them, how they work, and what they care about - "
             "based on motivations/values/culture data if available, otherwise omit or note as unknown\",\n"
-            "  \"core_strengths\": [\"strength 1 with evidence - cite anecdotes where available\"],\n"
+            "  \"core_strengths\": [\"strength 1 with evidence - cite anecdotes/achievements where available\"],\n"
             "  \"domain_expertise\": \"paragraph about domain depth and industry context\",\n"
-            "  \"technical_profile\": \"paragraph about technical skills, depth vs breadth, evidence quality\",\n"
+            "  \"technical_profile\": \"paragraph about technical skills, depth vs breadth, "
+            "evidence quality, notable certifications\",\n"
             "  \"honest_assessment\": \"paragraph: what they can genuinely do, what level they are at, "
             "what they have not yet demonstrated\",\n"
             "  \"gaps_and_concerns\": [\"specific gap or concern with evidence - be direct\"],\n"
@@ -647,7 +764,7 @@ class LLMExtractionService:
 
         user_msg = (
             f"Generate a professional profile for user: {user_id}\n\n"
-            f"COMPLETE GRAPH DATA:\n{json.dumps(graph_data, indent=2, default=str)}"
+            f"COMPLETE GRAPH DATA:\n{_j.dumps(graph_data, indent=2, default=str)}"
         )
 
         raw = await self._call_with_retry(
@@ -665,6 +782,14 @@ class LLMExtractionService:
         except Exception:
             description = {"identity": raw, "error": "parse_failed"}
 
+        # Attach structured data for frontend display
+        description["education"] = graph_data["education"]
+        description["certifications"] = graph_data["certifications"]
+        description["achievements"] = graph_data["achievements"]
+        description["publications"] = graph_data["publications"]
+        description["coursework"] = graph_data["coursework"]
+        description["languages"] = graph_data["languages"]
+        description["volunteer_work"] = graph_data["volunteer_work"]
         description["completeness"] = completeness.model_dump()
         return description
 

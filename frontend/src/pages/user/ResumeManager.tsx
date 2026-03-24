@@ -277,6 +277,18 @@ export default function ResumeManager() {
               <StatCard label="Domains" value={result.domains_extracted ?? 0} />
               <StatCard label="Projects" value={result.projects_extracted ?? 0} />
               <StatCard label="Experiences" value={result.experiences_extracted ?? 0} />
+              {(result.education_extracted ?? 0) > 0 && (
+                <StatCard label="Education" value={result.education_extracted!} />
+              )}
+              {(result.certifications_extracted ?? 0) > 0 && (
+                <StatCard label="Certifications" value={result.certifications_extracted!} />
+              )}
+              {(result.achievements_extracted ?? 0) > 0 && (
+                <StatCard label="Achievements" value={result.achievements_extracted!} />
+              )}
+              {(result.publications_extracted ?? 0) > 0 && (
+                <StatCard label="Publications" value={result.publications_extracted!} />
+              )}
             </div>
 
             {/* Verification banner */}

@@ -38,6 +38,13 @@ class LLMIngestionService:
         await self._ingest_projects(user_id, extraction.projects)
         await self._ingest_domains(user_id, extraction.domains)
         await self._ingest_experiences(user_id, extraction.experiences)
+        await self._ingest_education(user_id, getattr(extraction, "education", []) or [])
+        await self._ingest_certifications(user_id, getattr(extraction, "certifications", []) or [])
+        await self._ingest_achievements(user_id, getattr(extraction, "achievements", []) or [])
+        await self._ingest_publications(user_id, getattr(extraction, "publications", []) or [])
+        await self._ingest_coursework(user_id, getattr(extraction, "coursework", []) or [])
+        await self._ingest_languages(user_id, getattr(extraction, "languages", []) or [])
+        await self._ingest_volunteer_work(user_id, getattr(extraction, "volunteer_work", []) or [])
         await self._ingest_preferences(user_id, extraction.preferences)
         await self._ingest_patterns(user_id, extraction.patterns)
         if extraction.assessment:
@@ -221,6 +228,181 @@ class LLMIngestionService:
                     "description": exp.description,
                     "accomplishments": accomplishments_json,
                     "contribution_type": getattr(exp, "contribution_type", None),
+                },
+            )
+
+    async def _ingest_education(self, user_id: str, education: list) -> None:
+        for edu in education:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:EducationCategory {name: 'Education', user_id: $user_id})
+                MERGE (u)-[:HAS_EDUCATION_CATEGORY]->(cat)
+                MERGE (e:Education {degree: $degree, institution: $institution, user_id: $user_id})
+                SET e.field_of_study    = $field_of_study,
+                    e.graduation_year   = $graduation_year,
+                    e.gpa               = $gpa,
+                    e.honors            = $honors,
+                    e.is_ongoing        = $is_ongoing,
+                    e.source            = 'llm'
+                MERGE (cat)-[:HAS_EDUCATION]->(e)
+                """,
+                {
+                    "user_id": user_id,
+                    "degree": edu.degree,
+                    "institution": edu.institution or "Unknown",
+                    "field_of_study": edu.field_of_study,
+                    "graduation_year": edu.graduation_year,
+                    "gpa": edu.gpa,
+                    "honors": edu.honors,
+                    "is_ongoing": getattr(edu, "is_ongoing", False),
+                },
+            )
+
+    async def _ingest_certifications(self, user_id: str, certifications: list) -> None:
+        for cert in certifications:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:CertificationCategory {name: 'Certifications', user_id: $user_id})
+                MERGE (u)-[:HAS_CERTIFICATION_CATEGORY]->(cat)
+                MERGE (c:Certification {name: $name, user_id: $user_id})
+                SET c.issuer         = $issuer,
+                    c.date_obtained  = $date_obtained,
+                    c.expiry_date    = $expiry_date,
+                    c.is_active      = $is_active,
+                    c.source         = 'llm'
+                MERGE (cat)-[:HAS_CERTIFICATION]->(c)
+                """,
+                {
+                    "user_id": user_id,
+                    "name": cert.name,
+                    "issuer": cert.issuer,
+                    "date_obtained": cert.date_obtained,
+                    "expiry_date": cert.expiry_date,
+                    "is_active": getattr(cert, "is_active", True),
+                },
+            )
+
+    async def _ingest_achievements(self, user_id: str, achievements: list) -> None:
+        for ach in achievements:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:AchievementCategory {name: 'Achievements', user_id: $user_id})
+                MERGE (u)-[:HAS_ACHIEVEMENT_CATEGORY]->(cat)
+                MERGE (a:Achievement {title: $title, user_id: $user_id})
+                SET a.type        = $type,
+                    a.description = $description,
+                    a.date        = $date,
+                    a.impact      = $impact,
+                    a.source      = 'llm'
+                MERGE (cat)-[:HAS_ACHIEVEMENT]->(a)
+                """,
+                {
+                    "user_id": user_id,
+                    "title": ach.title,
+                    "type": ach.type,
+                    "description": ach.description,
+                    "date": ach.date,
+                    "impact": ach.impact,
+                },
+            )
+
+    async def _ingest_publications(self, user_id: str, publications: list) -> None:
+        for pub in publications:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:PublicationCategory {name: 'Publications', user_id: $user_id})
+                MERGE (u)-[:HAS_PUBLICATION_CATEGORY]->(cat)
+                MERGE (p:Publication {title: $title, user_id: $user_id})
+                SET p.type           = $type,
+                    p.venue          = $venue,
+                    p.year           = $year,
+                    p.description    = $description,
+                    p.is_first_author = $is_first_author,
+                    p.source         = 'llm'
+                MERGE (cat)-[:HAS_PUBLICATION]->(p)
+                """,
+                {
+                    "user_id": user_id,
+                    "title": pub.title,
+                    "type": pub.type,
+                    "venue": pub.venue,
+                    "year": pub.year,
+                    "description": pub.description,
+                    "is_first_author": pub.is_first_author,
+                },
+            )
+
+    async def _ingest_coursework(self, user_id: str, coursework: list) -> None:
+        for course in coursework:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:CourseworkCategory {name: 'Coursework', user_id: $user_id})
+                MERGE (u)-[:HAS_COURSEWORK_CATEGORY]->(cat)
+                MERGE (c:Course {name: $name, user_id: $user_id})
+                SET c.provider        = $provider,
+                    c.type            = $type,
+                    c.year_completed  = $year_completed,
+                    c.relevance_note  = $relevance_note,
+                    c.source          = 'llm'
+                MERGE (cat)-[:HAS_COURSE]->(c)
+                """,
+                {
+                    "user_id": user_id,
+                    "name": course.name,
+                    "provider": course.provider,
+                    "type": course.type,
+                    "year_completed": course.year_completed,
+                    "relevance_note": course.relevance_note,
+                },
+            )
+
+    async def _ingest_languages(self, user_id: str, languages: list) -> None:
+        for lang in languages:
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:LanguageCategory {name: 'Languages', user_id: $user_id})
+                MERGE (u)-[:HAS_LANGUAGE_CATEGORY]->(cat)
+                MERGE (l:Language {name: $name, user_id: $user_id})
+                SET l.proficiency = $proficiency,
+                    l.source      = 'llm'
+                MERGE (cat)-[:HAS_LANGUAGE]->(l)
+                """,
+                {
+                    "user_id": user_id,
+                    "name": lang.name,
+                    "proficiency": lang.proficiency,
+                },
+            )
+
+    async def _ingest_volunteer_work(self, user_id: str, volunteer_work: list) -> None:
+        import json as _json
+        for vol in volunteer_work:
+            skills_json = _json.dumps(getattr(vol, "skills_applied", []) or [])
+            await self.client.run_write(
+                """
+                MATCH (u:User {id: $user_id})
+                MERGE (cat:VolunteerCategory {name: 'Volunteer', user_id: $user_id})
+                MERGE (u)-[:HAS_VOLUNTEER_CATEGORY]->(cat)
+                MERGE (v:VolunteerWork {role: $role, organization: $organization, user_id: $user_id})
+                SET v.description    = $description,
+                    v.skills_applied = $skills_applied,
+                    v.duration_years = $duration_years,
+                    v.source         = 'llm'
+                MERGE (cat)-[:HAS_VOLUNTEER]->(v)
+                """,
+                {
+                    "user_id": user_id,
+                    "role": vol.role,
+                    "organization": vol.organization or "Unknown",
+                    "description": vol.description,
+                    "skills_applied": skills_json,
+                    "duration_years": vol.duration_years,
                 },
             )
 

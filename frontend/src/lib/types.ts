@@ -192,6 +192,13 @@ export interface IngestUserResponse {
   domains_extracted: number;
   projects_extracted: number;
   experiences_extracted: number;
+  education_extracted?: number;
+  certifications_extracted?: number;
+  achievements_extracted?: number;
+  publications_extracted?: number;
+  coursework_extracted?: number;
+  languages_extracted?: number;
+  volunteer_work_extracted?: number;
   interpretation_flags: number;
   clarification_questions?: Array<{ flag_id: string; question: string }>;
 }
@@ -209,9 +216,65 @@ export interface AdminStatsResponse {
   system_health: string;
 }
 
+export interface ExtractedEducationItem {
+  degree: string;
+  field_of_study?: string | null;
+  institution?: string | null;
+  graduation_year?: number | null;
+  gpa?: string | null;
+  honors?: string | null;
+  is_ongoing?: boolean;
+}
+
+export interface ExtractedCertificationItem {
+  name: string;
+  issuer?: string | null;
+  date_obtained?: string | null;
+  expiry_date?: string | null;
+  is_active?: boolean;
+}
+
+export interface ExtractedAchievementItem {
+  title: string;
+  type: string;
+  description?: string | null;
+  date?: string | null;
+  impact?: string | null;
+}
+
+export interface ExtractedPublicationItem {
+  title: string;
+  type: string;
+  venue?: string | null;
+  year?: number | null;
+  description?: string | null;
+  is_first_author?: boolean | null;
+}
+
+export interface ExtractedCourseworkItem {
+  name: string;
+  provider?: string | null;
+  type: string;
+  year_completed?: number | null;
+  relevance_note?: string | null;
+}
+
+export interface ExtractedLanguageItem {
+  name: string;
+  proficiency: string;
+}
+
+export interface ExtractedVolunteerItem {
+  role: string;
+  organization?: string | null;
+  description?: string | null;
+  duration_years?: number | null;
+}
+
 export interface UserDescribeResponse {
   identity?: string;
   career_arc?: string;
+  who_they_are?: string;
   technical_profile?: string;
   domain_expertise?: string;
   core_strengths?: string[];
@@ -219,6 +282,14 @@ export interface UserDescribeResponse {
   honest_assessment?: string;
   best_suited_for?: string;
   interview_ready_summary?: string;
+  // Structured data from the graph
+  education?: ExtractedEducationItem[];
+  certifications?: ExtractedCertificationItem[];
+  achievements?: ExtractedAchievementItem[];
+  publications?: ExtractedPublicationItem[];
+  coursework?: ExtractedCourseworkItem[];
+  languages?: ExtractedLanguageItem[];
+  volunteer_work?: ExtractedVolunteerItem[];
 }
 
 export interface MatchExplanation {
