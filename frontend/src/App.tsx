@@ -46,6 +46,10 @@ const PostJob = lazy(() => import('./pages/recruiter/PostJob'));
 const JobModel = lazy(() => import('./pages/recruiter/JobModel'));
 const EditJobGraph = lazy(() => import('./pages/recruiter/EditJobGraph'));
 const JobsList = lazy(() => import('./pages/recruiter/JobsList'));
+const JobProfile = lazy(() => import('./pages/recruiter/JobProfile'));
+
+// User job profile
+const JobProfileView = lazy(() => import('./pages/user/JobProfileView'));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -267,6 +271,29 @@ export default function App() {
             <ProtectedRoute role="RECRUITER">
               <LuminoLayout>
                 <EditJobGraph />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/jobs/:jobId/profile"
+          element={
+            <ProtectedRoute role="RECRUITER">
+              <LuminoLayout>
+                <JobProfile />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── User job profile view ── */}
+        <Route
+          path="/user/jobs/:jobId/profile"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <JobProfileView />
               </LuminoLayout>
             </ProtectedRoute>
           }

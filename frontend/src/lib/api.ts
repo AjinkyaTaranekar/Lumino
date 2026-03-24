@@ -12,6 +12,7 @@ import type {
   InterestProfileResponse,
   Job,
   ResolveFlagResponse,
+  RichJobProfile,
   RollbackResponse,
   UserDescribeResponse,
   UserListItem,
@@ -161,6 +162,9 @@ export const api = {
     post<{ job_id: string; tags: string[]; count: number }>(`/jobs/${jobId}/retag`, {}),
   retagAllJobs: () =>
     post<{ jobs_processed: number; jobs_tagged: number; results: Record<string, string[]> }>('/jobs/retag-all', {}),
+
+  // Job profile
+  getJobProfile: (jobId: string) => get<RichJobProfile>(`/jobs/${jobId}/profile`),
 
   // Admin - delete
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),

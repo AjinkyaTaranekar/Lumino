@@ -3,6 +3,7 @@ import {
   Building2,
   Clock,
   Edit3,
+  FileText,
   Network,
   Plus,
   RefreshCw,
@@ -287,6 +288,15 @@ export default function JobsList() {
                       >
                         <Network className="w-3.5 h-3.5" aria-hidden="true" />
                         Model
+                      </button>
+
+                      <button
+                        onClick={() => navigate(`/jobs/${job.id}/profile`)}
+                        aria-label={`View full profile for ${job.title ?? job.id}`}
+                        className="btn-secondary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300"
+                      >
+                        <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+                        Profile
                       </button>
 
                       <button

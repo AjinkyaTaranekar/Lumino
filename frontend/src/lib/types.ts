@@ -56,6 +56,11 @@ export interface MatchResult {
   interest_score?: number;
   interest_tags_matched?: string[];
   hybrid_score?: number;
+  // Deep job profile bonuses
+  education_fit_score?: number;
+  preferred_qual_bonus?: number;
+  met_education_reqs?: string[];
+  gap_education_reqs?: string[];
 }
 
 // ─── Analytics Types ──────────────────────────────────────────────────────────
@@ -345,4 +350,85 @@ export interface MatchExplanation {
   honest_take?: string;
   recommendation?: string;
   interview_focus?: string[];
+}
+
+// ─── Deep Job Profile ─────────────────────────────────────────────────────────
+
+export interface JobEducationRequirement {
+  degree_level: string;
+  field?: string | null;
+  is_required: boolean;
+  alternatives?: string[];
+  description?: string | null;
+}
+
+export interface JobPreferredQualification {
+  type: string;
+  value: string;
+  description?: string | null;
+  importance: 'nice_to_have' | 'preferred' | 'strongly_preferred';
+}
+
+export interface JobCompanyProfile {
+  mission?: string | null;
+  vision?: string | null;
+  values?: string[];
+  stage?: string | null;
+  product_description?: string | null;
+  industry?: string | null;
+  notable_tech?: string[];
+}
+
+export interface JobHiringTeam {
+  name?: string | null;
+  description?: string | null;
+  product_built?: string | null;
+  team_size_est?: string | null;
+  tech_focus?: string[];
+  reports_to?: string | null;
+  team_type?: string | null;
+}
+
+export interface JobCompensation {
+  salary_min?: number | null;
+  salary_max?: number | null;
+  currency?: string;
+  equity?: string | null;
+  benefits?: string[];
+  bonus_structure?: string | null;
+  is_disclosed?: boolean;
+}
+
+export interface JobRoleExpectation {
+  key_responsibilities?: string[];
+  success_metrics?: string[];
+  first_30_days?: string | null;
+  first_90_days?: string | null;
+  autonomy_level?: 'low' | 'moderate' | 'high';
+}
+
+export interface JobSoftRequirement {
+  trait: string;
+  description?: string | null;
+  is_dealbreaker: boolean;
+}
+
+export interface RichJobProfile {
+  job_id: string;
+  title?: string | null;
+  company?: string | null;
+  remote_policy?: string | null;
+  company_size?: string | null;
+  experience_years_min?: number | null;
+  tags?: string[];
+  description_preview?: string | null;
+  skill_requirements?: Array<{ name: string; importance: string; min_years?: number | null }>;
+  domain_requirements?: Array<{ name: string; min_years?: number | null }>;
+  education_requirements?: JobEducationRequirement[];
+  preferred_qualifications?: JobPreferredQualification[];
+  company_profile?: JobCompanyProfile | null;
+  hiring_team?: JobHiringTeam | null;
+  compensation?: JobCompensation | null;
+  role_expectations?: JobRoleExpectation | null;
+  soft_requirements?: JobSoftRequirement[];
 }

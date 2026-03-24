@@ -3,7 +3,9 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle,
-  ChevronDown, ChevronRight, Sparkles,
+  ChevronDown, ChevronRight,
+  FileText,
+  Sparkles,
   TrendingUp,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -303,7 +305,9 @@ export default function MatchExplorer() {
               </div>
 
               {/* Bonus badges */}
-              {(detail.culture_bonus > 0 || detail.preference_bonus > 0) && (
+              {(detail.culture_bonus > 0 || detail.preference_bonus > 0 ||
+                (detail.education_fit_score != null && detail.education_fit_score > 0) ||
+                (detail.preferred_qual_bonus != null && detail.preferred_qual_bonus > 0)) && (
                 <div className="flex gap-2 flex-wrap mb-5">
                   {detail.culture_bonus > 0 && (
                     <span className="badge-green">Culture +{Math.round(detail.culture_bonus * 100)}%</span>
@@ -311,6 +315,38 @@ export default function MatchExplorer() {
                   {detail.preference_bonus > 0 && (
                     <span className="badge-blue">Prefs +{Math.round(detail.preference_bonus * 100)}%</span>
                   )}
+                  {detail.education_fit_score != null && detail.education_fit_score > 0 && (
+                    <span className="badge badge-green">Edu fit {Math.round(detail.education_fit_score * 100)}%</span>
+                  )}
+                  {detail.preferred_qual_bonus != null && detail.preferred_qual_bonus > 0 && (
+                    <span className="badge badge-gray">+{Math.round(detail.preferred_qual_bonus * 100)}% quals</span>
+                  )}
+                </div>
+              )}
+
+              {/* Education fit detail */}
+              {detail.met_education_reqs && detail.met_education_reqs.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-emerald-600 mb-1.5">Education Met</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detail.met_education_reqs.map(r => (
+                      <span key={r} className="inline-flex items-center gap-1 text-[11px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full">
+                        <CheckCircle size={9} /> {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {detail.gap_education_reqs && detail.gap_education_reqs.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-amber-600 mb-1.5">Education Gaps</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detail.gap_education_reqs.map(r => (
+                      <span key={r} className="inline-flex items-center gap-1 text-[11px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -400,6 +436,20 @@ export default function MatchExplorer() {
                 {explainErr && <p className="text-xs text-red-500" role="alert">{explainErr}</p>}
               </div>
             </>
+          )}
+
+          {/* View full job profile link */}
+          {detail && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={() => navigate(`/user/jobs/${jobId}/profile`)}
+                className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
+              >
+                <FileText size={14} />
+                View Full Job Profile
+              </button>
+            </div>
           )}
 
           {/* Graph paths collapsible */}

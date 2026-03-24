@@ -489,11 +489,24 @@ class LLMIngestionService:
         self, job_id: str, extraction: JobPostingExtraction, recruiter_id: str | None = None,
         raw_text: str | None = None,
     ) -> None:
-        """Write the job hierarchy into Neo4j from LLM extraction output."""
+        """Write the full job hierarchy into Neo4j from LLM extraction output."""
         await self._create_job_node(job_id, extraction, recruiter_id, raw_text=raw_text)
+        # Core requirement nodes
         await self._ingest_job_skills(job_id, extraction.skill_requirements)
         await self._ingest_job_domains(job_id, extraction.domain_requirements)
         await self._ingest_job_culture(job_id, extraction.work_styles)
+        # Deep profile nodes
+        await self._ingest_job_education_requirements(job_id, extraction.education_requirements)
+        await self._ingest_job_preferred_qualifications(job_id, extraction.preferred_qualifications)
+        if extraction.company_profile:
+            await self._ingest_job_company_profile(job_id, extraction.company_profile)
+        if extraction.hiring_team:
+            await self._ingest_job_hiring_team(job_id, extraction.hiring_team)
+        if extraction.compensation:
+            await self._ingest_job_compensation(job_id, extraction.compensation)
+        if extraction.role_expectations:
+            await self._ingest_job_role_expectations(job_id, extraction.role_expectations)
+        await self._ingest_job_soft_requirements(job_id, extraction.soft_requirements)
         logger.info(f"LLM hierarchy written for job {job_id}")
 
     async def _create_job_node(
@@ -591,6 +604,176 @@ class LLMIngestionService:
                 MERGE (jcr)-[:HAS_WORK_STYLE]->(w)
                 """,
                 {"job_id": job_id, "style": ws.style},
+            )
+
+    async def _ingest_job_education_requirements(self, job_id: str, reqs: list) -> None:
+        import json as _j
+        for req in reqs:
+            await self.client.run_write(
+                """
+                MATCH (j:Job {id: $job_id})
+                MERGE (e:EducationRequirement {job_id: $job_id, degree_level: $degree_level, field: $field})
+                SET e.is_required   = $is_required,
+                    e.alternatives  = $alternatives,
+                    e.description   = $description,
+                    e.source        = 'llm'
+                MERGE (j)-[:HAS_EDUCATION_REQ]->(e)
+                """,
+                {
+                    "job_id": job_id,
+                    "degree_level": req.degree_level,
+                    "field": req.field or "",
+                    "is_required": req.is_required,
+                    "alternatives": _j.dumps(req.alternatives),
+                    "description": req.description,
+                },
+            )
+
+    async def _ingest_job_preferred_qualifications(self, job_id: str, quals: list) -> None:
+        for qual in quals:
+            await self.client.run_write(
+                """
+                MATCH (j:Job {id: $job_id})
+                MERGE (p:PreferredQualification {job_id: $job_id, type: $type, value: $value})
+                SET p.description = $description,
+                    p.importance  = $importance,
+                    p.source      = 'llm'
+                MERGE (j)-[:HAS_PREFERRED_QUAL]->(p)
+                """,
+                {
+                    "job_id": job_id,
+                    "type": qual.type,
+                    "value": qual.value,
+                    "description": qual.description,
+                    "importance": qual.importance,
+                },
+            )
+
+    async def _ingest_job_company_profile(self, job_id: str, profile) -> None:
+        import json as _j
+        await self.client.run_write(
+            """
+            MATCH (j:Job {id: $job_id})
+            MERGE (c:CompanyProfile {job_id: $job_id})
+            SET c.mission             = $mission,
+                c.vision              = $vision,
+                c.values              = $values,
+                c.stage               = $stage,
+                c.product_description = $product_description,
+                c.industry            = $industry,
+                c.notable_tech        = $notable_tech,
+                c.source              = 'llm'
+            MERGE (j)-[:HAS_COMPANY_PROFILE]->(c)
+            """,
+            {
+                "job_id": job_id,
+                "mission": profile.mission,
+                "vision": profile.vision,
+                "values": _j.dumps(profile.values),
+                "stage": profile.stage,
+                "product_description": profile.product_description,
+                "industry": profile.industry,
+                "notable_tech": _j.dumps(profile.notable_tech),
+            },
+        )
+
+    async def _ingest_job_hiring_team(self, job_id: str, team) -> None:
+        import json as _j
+        await self.client.run_write(
+            """
+            MATCH (j:Job {id: $job_id})
+            MERGE (t:HiringTeam {job_id: $job_id})
+            SET t.name          = $name,
+                t.description   = $description,
+                t.product_built = $product_built,
+                t.team_size_est = $team_size_est,
+                t.tech_focus    = $tech_focus,
+                t.reports_to    = $reports_to,
+                t.team_type     = $team_type,
+                t.source        = 'llm'
+            MERGE (j)-[:HAS_HIRING_TEAM]->(t)
+            """,
+            {
+                "job_id": job_id,
+                "name": team.name,
+                "description": team.description,
+                "product_built": team.product_built,
+                "team_size_est": team.team_size_est,
+                "tech_focus": _j.dumps(team.tech_focus),
+                "reports_to": team.reports_to,
+                "team_type": team.team_type,
+            },
+        )
+
+    async def _ingest_job_compensation(self, job_id: str, comp) -> None:
+        import json as _j
+        await self.client.run_write(
+            """
+            MATCH (j:Job {id: $job_id})
+            MERGE (c:CompensationPackage {job_id: $job_id})
+            SET c.salary_min      = $salary_min,
+                c.salary_max      = $salary_max,
+                c.currency        = $currency,
+                c.equity          = $equity,
+                c.benefits        = $benefits,
+                c.bonus_structure = $bonus_structure,
+                c.is_disclosed    = $is_disclosed,
+                c.source          = 'llm'
+            MERGE (j)-[:HAS_COMPENSATION]->(c)
+            """,
+            {
+                "job_id": job_id,
+                "salary_min": comp.salary_min,
+                "salary_max": comp.salary_max,
+                "currency": comp.currency,
+                "equity": comp.equity,
+                "benefits": _j.dumps(comp.benefits),
+                "bonus_structure": comp.bonus_structure,
+                "is_disclosed": comp.is_disclosed,
+            },
+        )
+
+    async def _ingest_job_role_expectations(self, job_id: str, role) -> None:
+        import json as _j
+        await self.client.run_write(
+            """
+            MATCH (j:Job {id: $job_id})
+            MERGE (r:RoleExpectation {job_id: $job_id})
+            SET r.key_responsibilities = $key_responsibilities,
+                r.success_metrics      = $success_metrics,
+                r.first_30_days        = $first_30_days,
+                r.first_90_days        = $first_90_days,
+                r.autonomy_level       = $autonomy_level,
+                r.source               = 'llm'
+            MERGE (j)-[:HAS_ROLE_EXPECTATIONS]->(r)
+            """,
+            {
+                "job_id": job_id,
+                "key_responsibilities": _j.dumps(role.key_responsibilities),
+                "success_metrics": _j.dumps(role.success_metrics),
+                "first_30_days": role.first_30_days,
+                "first_90_days": role.first_90_days,
+                "autonomy_level": role.autonomy_level,
+            },
+        )
+
+    async def _ingest_job_soft_requirements(self, job_id: str, reqs: list) -> None:
+        for req in reqs:
+            await self.client.run_write(
+                """
+                MATCH (j:Job {id: $job_id})
+                MERGE (s:JobSoftRequirement {job_id: $job_id, trait: $trait})
+                SET s.description   = $description,
+                    s.is_dealbreaker = $is_dealbreaker,
+                    s.source        = 'llm'
+                MERGE (j)-[:HAS_SOFT_REQUIREMENTS]->(s)
+                """,
+                {
+                    "job_id": job_id,
+                    "trait": req.trait,
+                    "description": req.description,
+                    "is_dealbreaker": req.is_dealbreaker,
+                },
             )
 
     # ──────────────────────────────────────────────────────────────────────────

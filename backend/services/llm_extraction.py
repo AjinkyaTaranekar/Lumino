@@ -428,13 +428,14 @@ class LLMExtractionService:
         Extract structured job requirements from raw job posting text.
 
         Returns a validated JobPostingExtraction with skill requirements,
-        domain requirements, work styles, and company metadata.
+        domain requirements, work styles, company metadata, AND deep profile
+        sections (education requirements, compensation, hiring team, etc.).
         """
         system_msg = (
-            "You are an expert HR data extractor. Extract structured job requirements "
-            "and return ONLY valid JSON matching this exact schema:\n\n"
+            "You are an expert HR data extractor. Extract ALL available information "
+            "from the job posting and return ONLY valid JSON matching this exact schema:\n\n"
             f"{_JOB_SCHEMA}\n\n"
-            "Constraints:\n"
+            "Constraints for basic fields:\n"
             "- skill.family must be one of: Programming Languages, Web Frameworks, "
             "Databases, Cloud & DevOps, ML & AI, Data Engineering, Mobile Development, "
             "Testing & QA, Analytics & Visualization, Other\n"
@@ -443,11 +444,36 @@ class LLMExtractionService:
             "- remote_policy must be one of: 'remote', 'hybrid', 'onsite'\n"
             "- company_size must be one of: 'startup', 'mid-size', 'enterprise'\n"
             "- importance must be one of: 'must_have' (required/mandatory skills) or 'optional' (nice-to-have/bonus skills)\n"
-            "- Return an empty list [] for any section with no data - never omit keys."
+            "- Return an empty list [] for any list section with no data; null for optional object fields.\n\n"
+            "Deep profile extraction guidelines:\n"
+            "- education_requirements: Extract degree requirements. Set is_required=true for hard requirements "
+            "(\"required\", \"must have\") and false for preferred. degree_level must be one of: "
+            "'phd', 'master', 'bachelor', 'associate', 'any'. Include alternatives if mentioned.\n"
+            "- preferred_qualifications: Extract ALL nice-to-have items beyond core skills: "
+            "certifications (type='certification'), bonus domain experience (type='domain_exp'), "
+            "soft skills explicitly called out (type='soft_skill'), tools/platforms (type='tool'). "
+            "importance: 'strongly_preferred' (\"highly desirable\"), 'preferred' (\"plus\"), "
+            "'nice_to_have' (\"bonus\", \"good to have\").\n"
+            "- company_profile: Extract mission, vision, company values, funding stage, "
+            "product description, industry vertical, and notable technologies. "
+            "stage: 'startup', 'growth', 'enterprise', 'nonprofit'.\n"
+            "- hiring_team: Extract team name, what the team builds, estimated size, "
+            "tech focus areas, reporting structure, and team type. "
+            "team_type: 'product', 'platform', 'infra', 'ml', 'data', 'design', 'other'.\n"
+            "- compensation: Extract salary range as integers (no currency symbols), equity details, "
+            "benefits list, and bonus structure. Set is_disclosed=true only if salary was explicitly stated.\n"
+            "- role_expectations: Extract the top 5-8 key responsibilities as action statements, "
+            "success metrics, and any 30/90-day ramp expectations. "
+            "autonomy_level: 'low' (micromanaged), 'moderate', 'high' (self-directed).\n"
+            "- soft_requirements: Extract explicitly mentioned personality traits, work styles, "
+            "and cultural fit requirements as individual items. Set is_dealbreaker=true for "
+            "phrases like 'must be', 'required to', 'non-negotiable'."
         )
 
         user_msg = (
-            "Extract all job requirements from the following job posting.\n\n"
+            "Extract all job requirements from the following job posting. "
+            "Be thorough — extract every section including company context, team details, "
+            "compensation, and soft requirements.\n\n"
             "Skill family reference:\n"
             f"{self._skill_hint}\n\n"
             "Domain family reference:\n"
@@ -467,9 +493,216 @@ class LLMExtractionService:
         extracted = JobPostingExtraction.model_validate_json(raw_json)
         logger.info(
             f"Extracted job: {extracted.title} at {extracted.company} - "
-            f"{len(extracted.skill_requirements)} skill requirements"
+            f"{len(extracted.skill_requirements)} skills, "
+            f"{len(extracted.education_requirements)} edu reqs, "
+            f"{len(extracted.preferred_qualifications)} preferred quals, "
+            f"company_profile={'yes' if extracted.company_profile else 'no'}, "
+            f"compensation={'yes' if extracted.compensation else 'no'}"
         )
         return extracted
+
+    async def describe_job_from_graph(self, job_id: str, neo4j_client) -> dict:
+        """
+        Query the job's complete graph — including deep profile nodes — and
+        generate a rich natural-language job profile description.
+
+        Returns a dict suitable for the GET /jobs/{job_id}/profile endpoint.
+        """
+        import json as _j
+
+        # ── Query base job node ────────────────────────────────────────────────
+        job_rows = await neo4j_client.run_query(
+            "MATCH (j:Job {id: $id}) RETURN j",
+            {"id": job_id},
+        )
+        job = job_rows[0]["j"] if job_rows else {}
+
+        # ── Skill requirements ─────────────────────────────────────────────────
+        skill_reqs = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)
+                  -[:REQUIRES_SKILL]->(s:JobSkillRequirement)
+            RETURN s.name AS name, s.required AS required,
+                   s.importance AS importance, s.min_years AS min_years
+            """,
+            {"id": job_id},
+        )
+
+        # ── Domain requirements ────────────────────────────────────────────────
+        domain_reqs = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_DOMAIN_REQUIREMENTS]->(:JobDomainRequirements)
+                  -[:HAS_DOMAIN_FAMILY_REQ]->(:JobDomainFamily)
+                  -[:REQUIRES_DOMAIN]->(d:JobDomainRequirement)
+            RETURN d.name AS name, d.min_years AS min_years
+            """,
+            {"id": job_id},
+        )
+
+        # ── Deep profile nodes ─────────────────────────────────────────────────
+        edu_reqs = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_EDUCATION_REQ]->(e:EducationRequirement)
+            RETURN e.degree_level AS degree_level, e.field AS field,
+                   e.is_required AS is_required, e.alternatives AS alternatives,
+                   e.description AS description
+            """,
+            {"id": job_id},
+        )
+
+        pref_quals = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_PREFERRED_QUAL]->(p:PreferredQualification)
+            RETURN p.type AS type, p.value AS value,
+                   p.description AS description, p.importance AS importance
+            ORDER BY CASE p.importance
+                WHEN 'strongly_preferred' THEN 0
+                WHEN 'preferred' THEN 1
+                ELSE 2 END
+            """,
+            {"id": job_id},
+        )
+
+        company_rows = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_COMPANY_PROFILE]->(c:CompanyProfile)
+            RETURN c.mission AS mission, c.vision AS vision,
+                   c.values AS values, c.stage AS stage,
+                   c.product_description AS product_description,
+                   c.industry AS industry, c.notable_tech AS notable_tech
+            """,
+            {"id": job_id},
+        )
+
+        team_rows = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_HIRING_TEAM]->(t:HiringTeam)
+            RETURN t.name AS name, t.description AS description,
+                   t.product_built AS product_built, t.team_size_est AS team_size_est,
+                   t.tech_focus AS tech_focus, t.reports_to AS reports_to,
+                   t.team_type AS team_type
+            """,
+            {"id": job_id},
+        )
+
+        comp_rows = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_COMPENSATION]->(c:CompensationPackage)
+            RETURN c.salary_min AS salary_min, c.salary_max AS salary_max,
+                   c.currency AS currency, c.equity AS equity,
+                   c.benefits AS benefits, c.bonus_structure AS bonus_structure,
+                   c.is_disclosed AS is_disclosed
+            """,
+            {"id": job_id},
+        )
+
+        role_rows = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_ROLE_EXPECTATIONS]->(r:RoleExpectation)
+            RETURN r.key_responsibilities AS key_responsibilities,
+                   r.success_metrics AS success_metrics,
+                   r.first_30_days AS first_30_days,
+                   r.first_90_days AS first_90_days,
+                   r.autonomy_level AS autonomy_level
+            """,
+            {"id": job_id},
+        )
+
+        soft_reqs = await neo4j_client.run_query(
+            """
+            MATCH (j:Job {id: $id})-[:HAS_SOFT_REQUIREMENTS]->(s:JobSoftRequirement)
+            RETURN s.trait AS trait, s.description AS description,
+                   s.is_dealbreaker AS is_dealbreaker
+            ORDER BY s.is_dealbreaker DESC
+            """,
+            {"id": job_id},
+        )
+
+        # ── Parse JSON-stored list fields ──────────────────────────────────────
+        def _parse_json_list(val) -> list:
+            if not val:
+                return []
+            if isinstance(val, list):
+                return val
+            try:
+                return _j.loads(val)
+            except Exception:
+                return [val] if val else []
+
+        # Process company profile
+        company_profile = None
+        if company_rows and company_rows[0].get("mission") is not None:
+            cp = company_rows[0]
+            company_profile = {
+                "mission": cp.get("mission"),
+                "vision": cp.get("vision"),
+                "values": _parse_json_list(cp.get("values")),
+                "stage": cp.get("stage"),
+                "product_description": cp.get("product_description"),
+                "industry": cp.get("industry"),
+                "notable_tech": _parse_json_list(cp.get("notable_tech")),
+            }
+
+        # Process hiring team
+        hiring_team = None
+        if team_rows and team_rows[0].get("name") is not None:
+            t = team_rows[0]
+            hiring_team = {
+                "name": t.get("name"),
+                "description": t.get("description"),
+                "product_built": t.get("product_built"),
+                "team_size_est": t.get("team_size_est"),
+                "tech_focus": _parse_json_list(t.get("tech_focus")),
+                "reports_to": t.get("reports_to"),
+                "team_type": t.get("team_type"),
+            }
+
+        # Process compensation
+        compensation = None
+        if comp_rows:
+            c = comp_rows[0]
+            compensation = {
+                "salary_min": c.get("salary_min"),
+                "salary_max": c.get("salary_max"),
+                "currency": c.get("currency", "USD"),
+                "equity": c.get("equity"),
+                "benefits": _parse_json_list(c.get("benefits")),
+                "bonus_structure": c.get("bonus_structure"),
+                "is_disclosed": c.get("is_disclosed", False),
+            }
+
+        # Process role expectations
+        role_expectations = None
+        if role_rows:
+            r = role_rows[0]
+            role_expectations = {
+                "key_responsibilities": _parse_json_list(r.get("key_responsibilities")),
+                "success_metrics": _parse_json_list(r.get("success_metrics")),
+                "first_30_days": r.get("first_30_days"),
+                "first_90_days": r.get("first_90_days"),
+                "autonomy_level": r.get("autonomy_level", "moderate"),
+            }
+
+        return {
+            "job_id": job_id,
+            "title": job.get("title"),
+            "company": job.get("company"),
+            "remote_policy": job.get("remote_policy"),
+            "company_size": job.get("company_size"),
+            "experience_years_min": job.get("experience_years_min"),
+            "tags": _parse_json_list(job.get("tags")),
+            "description_preview": (job.get("raw_text") or "")[:300] or None,
+            "skill_requirements": [dict(s) for s in skill_reqs],
+            "domain_requirements": [dict(d) for d in domain_reqs],
+            "education_requirements": [dict(e) for e in edu_reqs],
+            "preferred_qualifications": [dict(p) for p in pref_quals],
+            "company_profile": company_profile,
+            "hiring_team": hiring_team,
+            "compensation": compensation,
+            "role_expectations": role_expectations,
+            "soft_requirements": [dict(s) for s in soft_reqs],
+        }
 
     async def describe_user_from_graph(self, user_id: str, neo4j_client) -> dict:
         """

@@ -46,6 +46,7 @@ from models.schemas import (
     AdjustInterestRequest,
     InterestProfileResponse,
     InterestTag,
+    JobProfileResponse,
     MatchResult,
     RecordEventRequest,
     RejectMutationsRequest,
@@ -628,6 +629,28 @@ async def list_jobs(recruiter_id: str | None = None, db: Neo4jClient = Depends(g
             {"recruiter_id": recruiter_id},
         )
     return await db.run_query("MATCH (j:Job) " + _LIST_JOBS_RETURN)
+
+
+@router.get(
+    "/jobs/{job_id}/profile",
+    response_model=JobProfileResponse,
+    tags=["utility"],
+    summary="Get full enriched job profile",
+)
+async def get_job_profile(
+    job_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Return the complete enriched job profile including deep graph nodes:
+    company profile, hiring team, compensation, role expectations,
+    education requirements, preferred qualifications, and soft requirements.
+    """
+    llm_svc = LLMExtractionService()
+    profile = await llm_svc.describe_job_from_graph(job_id, db)
+    if not profile.get("title") and not profile.get("company"):
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    return profile
 
 
 @router.get("/users/{user_id}/graph-stats", tags=["utility"])
