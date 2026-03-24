@@ -19,6 +19,11 @@ export const USERS: Credential[] = [
   { userId: 'Xichen', name: 'Xichen', email: 'xichen@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'Shreshtha', name: 'Shreshtha', email: 'shreshtha@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'recruiter1', name: 'Owen', email: 'owen@lumino.ai', password: 'demo123', role: 'RECRUITER' },
+  { userId: 'sarah.chen', name: 'Sarah Chen', email: 'sarah.chen@google.com', password: 'google123', role: 'RECRUITER' },
+  { userId: 'james.park', name: 'James Park', email: 'james.park@meta.com', password: 'meta123', role: 'RECRUITER' },
+  { userId: 'priya.nair', name: 'Priya Nair', email: 'priya.nair@amazon.com', password: 'amazon123', role: 'RECRUITER' },
+  { userId: 'marcus.wu', name: 'Marcus Wu', email: 'marcus.wu@apple.com', password: 'apple123', role: 'RECRUITER' },
+  { userId: 'elena.ross', name: 'Elena Ross', email: 'elena.ross@netflix.com', password: 'netflix123', role: 'RECRUITER' },
   { userId: 'admin', name: 'Admin', email: 'admin@lumino.ai', password: 'admin123', role: 'ADMIN' },
 ];
 

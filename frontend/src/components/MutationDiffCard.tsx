@@ -1,6 +1,6 @@
-import { Check, ChevronDown, ChevronRight, X } from 'lucide-react'
+import { Activity, BookOpen, Briefcase, Check, ChevronDown, ChevronRight, Folder, Heart, Layers, Star, Target, Users, X, Zap } from 'lucide-react'
 import { useState } from 'react'
-import type { GraphMutation, GraphMutationProposal } from '../lib/types'
+import type { GraphImpactBanner, GraphImpactItem, GraphMutation, GraphMutationProposal } from '../lib/types'
 
 interface SectionProps {
   title: string
@@ -55,6 +55,56 @@ function renderNode(node: unknown): string {
   return String(node)
 }
 
+const IMPACT_ICONS: Record<GraphImpactItem['icon'], React.ElementType> = {
+  skill: Zap,
+  anecdote: BookOpen,
+  motivation: Heart,
+  value: Star,
+  goal: Target,
+  culture: Users,
+  behavior: Activity,
+  domain: Layers,
+  project: Folder,
+  experience: Briefcase,
+}
+
+const CHANGE_COLORS: Record<string, string> = {
+  added: 'text-emerald-600 bg-emerald-50',
+  updated: 'text-amber-600 bg-amber-50',
+  removed: 'text-red-500 bg-red-50',
+}
+
+function ImpactBannerView({ banner }: { banner: GraphImpactBanner }) {
+  return (
+    <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 p-3">
+      <p className="text-xs font-semibold text-blue-700 mb-2">{banner.headline}</p>
+      {banner.items.length > 0 && (
+        <ul className="space-y-1 mb-2">
+          {banner.items.map((item, i) => {
+            const Icon = IMPACT_ICONS[item.icon] ?? Zap
+            const colorCls = CHANGE_COLORS[item.change_type] ?? 'text-slate-600 bg-slate-100'
+            return (
+              <li key={i} className="flex items-start gap-2 text-xs">
+                <Icon size={11} className={`flex-shrink-0 mt-0.5 ${colorCls.split(' ')[0]}`} />
+                <span className="text-slate-700">
+                  <span className={`inline-block px-1 rounded text-[10px] font-semibold mr-1 ${colorCls}`}>
+                    {item.change_type}
+                  </span>
+                  <span className="font-medium">{item.label}</span>
+                  {item.detail && <span className="text-slate-400"> - {item.detail}</span>}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+      {banner.digital_twin_progress && (
+        <p className="text-[11px] text-blue-600 italic">{banner.digital_twin_progress}</p>
+      )}
+    </div>
+  )
+}
+
 function renderEdge(edge: unknown): string {
   if (typeof edge === 'object' && edge !== null) {
     const { from, rel, to } = edge as Record<string, unknown>
@@ -70,7 +120,7 @@ interface MutationDiffCardProps {
 }
 
 export default function MutationDiffCard({ proposal, onApply, onReject }: MutationDiffCardProps) {
-  const { mutations, reasoning } = proposal
+  const { mutations, reasoning, graph_impact_banner } = proposal
 
   const [addSel, setAddSel] = useState<Set<number>>(() => new Set((mutations.add_nodes || []).map((_, i) => i)))
   const [updSel, setUpdSel] = useState<Set<number>>(() => new Set((mutations.update_nodes || []).map((_, i) => i)))
@@ -103,6 +153,7 @@ export default function MutationDiffCard({ proposal, onApply, onReject }: Mutati
 
   return (
     <div className="rounded-lg p-3 mt-2 bg-slate-50 border border-slate-100 text-xs">
+      {graph_impact_banner && <ImpactBannerView banner={graph_impact_banner} />}
       {reasoning && (
         <p className="mb-2 text-xs italic text-slate-400">{reasoning}</p>
       )}

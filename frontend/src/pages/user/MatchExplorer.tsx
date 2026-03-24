@@ -297,6 +297,9 @@ export default function MatchExplorer() {
                 {detail.culture_fit_score != null && (
                   <ScoreBar label="Culture Fit" score={detail.culture_fit_score} />
                 )}
+                {detail.optional_skill_score != null && detail.optional_skill_score > 0 && (
+                  <ScoreBar label="Optional Skills" score={detail.optional_skill_score} />
+                )}
               </div>
 
               {/* Bonus badges */}

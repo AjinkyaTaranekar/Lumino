@@ -1,13 +1,25 @@
-import { Suspense, lazy } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import LuminoLayout from './components/LuminoLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
+import { isOnboardingComplete } from './lib/onboarding';
+
+/** Redirects to /dashboard if the user has already completed onboarding */
+function OnboardingRoute({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role === 'USER' && isOnboardingComplete(user.id)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return <>{children}</>;
+}
 
 // ─── Lazy-loaded pages ────────────────────────────────────────────────────────
 const Login = lazy(() => import('./pages/Login'));
 
 // User pages
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Onboarding = lazy(() => import('./pages/user/Onboarding'));
 const ResumeManager = lazy(() => import('./pages/user/ResumeManager'));
 const Trajectory = lazy(() => import('./pages/user/Trajectory'));
 const Applications = lazy(() => import('./pages/user/Applications'));
@@ -48,6 +60,18 @@ export default function App() {
       <Routes>
         {/* Public */}
         <Route path="/login" element={<Login />} />
+
+        {/* User onboarding (no layout, no sidebar) */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute role="USER" skipOnboardingGate>
+              <OnboardingRoute>
+                <Onboarding />
+              </OnboardingRoute>
+            </ProtectedRoute>
+          }
+        />
 
         {/* Shared dashboard (role-aware) */}
         <Route

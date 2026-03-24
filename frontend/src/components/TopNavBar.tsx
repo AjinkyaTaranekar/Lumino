@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, Menu, X } from 'lucide-react';
+import LuminoIcon from './LuminoIcon';
 
 interface NavItem {
   label: string;
@@ -49,11 +50,7 @@ export function TopNavBar() {
             className="flex items-center gap-2 group cursor-pointer active:scale-95 transition-transform focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 rounded"
             aria-label="Lumino home"
           >
-            <img
-              src="/logo.png"
-              alt="Lumino logo"
-              className="w-9 h-9 object-contain"
-            />
+            <LuminoIcon size="sm" />
             <span className="text-2xl font-bold tracking-tighter text-indigo-950">Lumino</span>
           </NavLink>
 

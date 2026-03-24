@@ -1,4 +1,5 @@
 import { AlertCircle, LogIn } from 'lucide-react';
+import LuminoIcon from '../components/LuminoIcon';
 import { motion } from 'motion/react';
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
@@ -51,11 +52,7 @@ export default function Login() {
         >
           {/* Logo */}
           <div className="flex items-center gap-3 mb-8 justify-center">
-            <img
-              src="/logo.png"
-              alt="Lumino logo"
-              className="w-10 h-10 object-contain"
-            />
+            <LuminoIcon size="md" shadow />
             <h1 className="text-3xl font-bold tracking-tighter text-indigo-950">Lumino</h1>
           </div>
 

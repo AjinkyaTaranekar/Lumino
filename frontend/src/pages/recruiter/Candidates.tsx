@@ -133,6 +133,9 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
         <div className="grid grid-cols-2 gap-3 mt-2">
           <ScoreBar label="Skills (65%)" score={result.skill_score} />
           <ScoreBar label="Domain (35%)" score={result.domain_score} />
+          {result.optional_skill_score != null && result.optional_skill_score > 0 && (
+            <ScoreBar label="Optional Skills" score={result.optional_skill_score} />
+          )}
         </div>
       </div>
 

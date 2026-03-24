@@ -1,11 +1,14 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import type { UserRole, LegacyRole } from '../lib/types';
+import { isOnboardingComplete } from '../lib/onboarding';
+import type { LegacyRole, UserRole } from '../lib/types';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   /** Accept new UserRole ('USER' | 'RECRUITER' | 'ADMIN') or legacy role */
   role?: UserRole | LegacyRole | Array<UserRole | LegacyRole>;
+  /** Skip the onboarding gate (used for the /onboarding route itself) */
+  skipOnboardingGate?: boolean;
 }
 
 const legacyToNew: Record<LegacyRole, UserRole> = {
@@ -19,7 +22,7 @@ function normalizeRole(r: UserRole | LegacyRole): UserRole {
   return legacyToNew[r as LegacyRole];
 }
 
-export default function ProtectedRoute({ children, role }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, role, skipOnboardingGate }: ProtectedRouteProps) {
   const { user } = useAuth();
 
   if (!user) return <Navigate to="/login" replace />;
@@ -33,6 +36,11 @@ export default function ProtectedRoute({ children, role }: ProtectedRouteProps) 
         : '/dashboard';
       return <Navigate to={redirect} replace />;
     }
+  }
+
+  // Gate USER routes: redirect to onboarding until it's complete
+  if (!skipOnboardingGate && user.role === 'USER' && !isOnboardingComplete(user.id)) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;

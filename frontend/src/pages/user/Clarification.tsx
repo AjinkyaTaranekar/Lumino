@@ -127,6 +127,27 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
     }
   }
 
+  async function handleSelectOption(opt: string) {
+    setSelectedOption(opt);
+    setPhase('interpreting');
+    setErr(null);
+    try {
+      const res = await api.interpretFlag(session!.userId, q.flag_id, opt) as InterpretResult;
+      setInterp(res);
+      if (!res.is_complete) {
+        setFollowUp(res.needs_clarification ?? null);
+        setAnswer('');
+        setPhase('typing');
+      } else {
+        setAnswer(opt);
+        setPhase('confirming');
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+      setPhase('idle');
+    }
+  }
+
   async function handleConfirm() {
     setSaving(true);
     try {
@@ -231,22 +252,57 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
         {phase === 'idle' && (
           <>
             <p className="text-sm font-medium text-indigo-950">{q.clarification_question}</p>
-            <p className="text-xs text-slate-400">Tell us in your own words, or confirm the AI was right.</p>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={handleConfirmOriginal}
-                disabled={saving}
-                className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-              >
-                <CheckCircle2 size={13} /> AI was right
-              </button>
-              <button
-                onClick={() => setPhase('typing')}
-                className="btn-secondary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-              >
-                <MessageSquare size={13} /> Let me describe it
-              </button>
-            </div>
+            {q.suggested_options && q.suggested_options.length > 0 ? (
+              <>
+                <p className="text-xs text-slate-400">Pick one or describe in your own words.</p>
+                <div className="flex flex-wrap gap-2">
+                  {q.suggested_options.map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => handleSelectOption(opt)}
+                      disabled={saving}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-50"
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={handleConfirmOriginal}
+                    disabled={saving}
+                    className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  >
+                    <CheckCircle2 size={13} /> AI was right
+                  </button>
+                  <button
+                    onClick={() => setPhase('typing')}
+                    className="btn-secondary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                  >
+                    <MessageSquare size={13} /> Let me describe it
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400">Tell us in your own words, or confirm the AI was right.</p>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={handleConfirmOriginal}
+                    disabled={saving}
+                    className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                  >
+                    <CheckCircle2 size={13} /> AI was right
+                  </button>
+                  <button
+                    onClick={() => setPhase('typing')}
+                    className="btn-secondary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+                  >
+                    <MessageSquare size={13} /> Let me describe it
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
 

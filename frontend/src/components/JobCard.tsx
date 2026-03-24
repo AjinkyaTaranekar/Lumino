@@ -104,6 +104,9 @@ export default function JobCard({ result, rank, userIdOrJobId: _userIdOrJobId, m
         {result.soft_skill_score != null && result.soft_skill_score > 0 && (
           <ScoreBar label="Soft Skills" score={result.soft_skill_score} />
         )}
+        {result.optional_skill_score != null && result.optional_skill_score > 0 && (
+          <ScoreBar label="Optional Skills" score={result.optional_skill_score} />
+        )}
       </div>
 
       {/* Skill badges */}
