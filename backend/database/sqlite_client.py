@@ -84,6 +84,12 @@ class SQLiteClient:
                     ON analytics_events(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_analytics_job
                     ON analytics_events(job_id);
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_user_event
+                    ON analytics_events(user_id, event_type, created_at);
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_job_event
+                    ON analytics_events(job_id, event_type, created_at);
                 """
             )
             await db.commit()

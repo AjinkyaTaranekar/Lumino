@@ -1,59 +1,107 @@
 import {
-  Award,
   BookOpen,
-  CheckCircle,
-  Download,
+  Briefcase,
+  Building2,
+  CalendarDays,
   ExternalLink,
-  FileText,
-  Info,
   TrendingUp,
   Users,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
+import { useAuth } from '../../context/AuthContext';
+import { api } from '../../lib/api';
+import type { UserApplication } from '../../lib/types';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface FeedbackPoint {
-  id: string;
-  text: string;
+function scoreColor(score: number): string {
+  if (score >= 0.7) return 'text-emerald-600';
+  if (score >= 0.4) return 'text-amber-500';
+  return 'text-red-500';
 }
 
-interface NextStep {
-  id: string;
-  title: string;
-  description: string;
-  cta: string;
-  href: string;
-  icon: React.ComponentType<{ size?: number; className?: string }>;
-  color: string;
+function scoreBg(score: number): string {
+  if (score >= 0.7) return 'bg-emerald-50 border-emerald-100';
+  if (score >= 0.4) return 'bg-amber-50 border-amber-100';
+  return 'bg-red-50 border-red-100';
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
-const STRENGTHS: FeedbackPoint[] = [
-  { id: 's1', text: 'Strong TypeScript and React foundation with production-grade experience.' },
-  { id: 's2', text: 'Clear communication style - answers were structured and concise.' },
-  { id: 's3', text: 'Demonstrated ownership mindset when describing past projects.' },
-  { id: 's4', text: 'Good understanding of trade-offs in system design decisions.' },
-];
+// ─── ApplicationCard ──────────────────────────────────────────────────────────
 
-const GROWTH_AREAS: FeedbackPoint[] = [
-  { id: 'g1', text: 'Deepen knowledge of distributed systems and scalability patterns.' },
-  { id: 'g2', text: 'Practice estimating complexity and timelines under pressure.' },
-  { id: 'g3', text: 'Expand experience with cross-team stakeholder alignment.' },
-];
+function ApplicationCard({ app }: { app: UserApplication }) {
+  const scorePct = app.match_score != null ? Math.round(app.match_score * 100) : null;
 
-const PIE_DATA = [
-  { name: 'Aligned', value: 85 },
-  { name: 'Gap', value: 15 },
-];
+  return (
+    <motion.div
+      className="card-lumino p-5"
+      whileHover={{ y: -3 }}
+      transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+      role="article"
+      aria-label={`Application for ${app.job_title}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-primary-50 border border-primary-100 flex items-center justify-center flex-shrink-0">
+            <Briefcase size={18} className="text-primary-500" aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-extrabold text-indigo-950 tracking-tight truncate">
+              {app.job_title}
+            </h3>
+            {app.company && (
+              <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
+                <Building2 size={11} aria-hidden="true" />
+                {app.company}
+              </p>
+            )}
+            <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+              <CalendarDays size={11} aria-hidden="true" />
+              Applied {formatDate(app.applied_at)}
+            </p>
+          </div>
+        </div>
 
-const PIE_COLORS = ['#3B82F6', '#E2E8F0'];
+        {/* Score badge */}
+        {scorePct != null && (
+          <div
+            className={`flex-shrink-0 w-14 h-14 rounded-2xl border flex flex-col items-center justify-center ${scoreBg(app.match_score!)}`}
+            aria-label={`Match score: ${scorePct}%`}
+          >
+            <span className={`text-lg font-bold leading-none ${scoreColor(app.match_score!)}`}>
+              {scorePct}
+            </span>
+            <span className="text-[9px] text-slate-400 mt-0.5">match</span>
+          </div>
+        )}
+      </div>
 
-const NEXT_STEPS: NextStep[] = [
+      <div className="mt-4 flex justify-end">
+        <Link
+          to={`/user/match/${app.job_id}`}
+          className="btn-secondary btn-sm inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+          aria-label={`View match details for ${app.job_title}`}
+        >
+          View Match Details
+          <ExternalLink size={11} aria-hidden="true" />
+        </Link>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Next Steps (static guidance) ─────────────────────────────────────────────
+
+const NEXT_STEPS = [
   {
     id: 'n1',
     title: 'System Design Deep Dive',
@@ -75,7 +123,7 @@ const NEXT_STEPS: NextStep[] = [
   {
     id: 'n3',
     title: 'Update Your Knowledge Graph',
-    description: "Re-upload your resume or add new skills to improve your match scores for future applications.",
+    description: 'Re-upload your resume or add new skills to improve your match scores for future applications.',
     cta: 'Update Profile',
     href: '/resume',
     icon: TrendingUp,
@@ -83,37 +131,28 @@ const NEXT_STEPS: NextStep[] = [
   },
 ];
 
-// ─── Custom Pie Label ─────────────────────────────────────────────────────────
-
-function CenterLabel({ cx, cy }: { cx?: number; cy?: number }) {
-  return (
-    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central">
-      <tspan
-        x={cx}
-        dy="-0.3em"
-        style={{ fontSize: '22px', fontWeight: 800, fill: '#1e1b4b' }}
-      >
-        85%
-      </tspan>
-      <tspan
-        x={cx}
-        dy="1.4em"
-        style={{ fontSize: '10px', fill: '#64748b', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}
-      >
-        Alignment
-      </tspan>
-    </text>
-  );
-}
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function Applications() {
+  const { session } = useAuth();
+  const [applications, setApplications] = useState<UserApplication[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    setLoading(true);
+    api.getApplications(session.userId)
+      .then(res => setApplications(res.applications))
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load applications.'))
+      .finally(() => setLoading(false));
+  }, [session]);
+
   return (
     <>
       <title>My Applications - Lumino</title>
 
-      <div className="px-6 py-8 max-w-6xl mx-auto space-y-8">
+      <div className="px-6 py-8 max-w-4xl mx-auto space-y-8">
 
         {/* ── Page Header ── */}
         <div>
@@ -121,194 +160,68 @@ export default function Applications() {
             My Applications
           </h1>
           <p className="text-slate-500 mt-1.5 text-sm">
-            Review feedback from your interviews and applications. Real-time data would be pulled from the API.
+            Jobs you have applied to, with your match scores and application history.
           </p>
         </div>
 
-        {/* ── Application Header Card ── */}
-        <motion.div
-          className="card-lumino p-6"
-          whileHover={{ y: -2 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-          role="region"
-          aria-label="Latest application details"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                <Award size={22} className="text-emerald-600" aria-hidden="true" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 border border-emerald-200"
-                    aria-label="Application status: Interview Complete"
-                  >
-                    <CheckCircle size={11} aria-hidden="true" />
-                    Interview Complete
-                  </span>
-                </div>
-                <h2 className="text-xl font-extrabold text-indigo-950 tracking-tight mt-1">
-                  Senior Full-Stack Engineer - Stripe
-                </h2>
-                <p className="text-sm text-slate-500 mt-0.5">
-                  Interviewed on <time dateTime="2026-03-20">20 March 2026</time>
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <button
-                className="btn-secondary btn-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
-                aria-label="Download interview report as PDF"
-              >
-                <Download size={13} aria-hidden="true" />
-                Download Report
-              </button>
-              <button
-                className="btn-secondary btn-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
-                aria-label="View interview transcript"
-              >
-                <FileText size={13} aria-hidden="true" />
-                Transcript
-              </button>
-            </div>
+        {/* ── Error ── */}
+        {error && (
+          <div role="alert" className="alert-error">
+            {error}
           </div>
-        </motion.div>
+        )}
 
-        {/* ── Three-Panel Grid ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-          {/* Strengths Observed */}
-          <motion.div
-            className="card-lumino p-6"
-            whileHover={{ y: -4 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            role="region"
-            aria-label="Strengths observed"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <CheckCircle size={16} className="text-emerald-600" aria-hidden="true" />
-              </div>
-              <h3 className="font-extrabold text-indigo-950 tracking-tight">Strengths Observed</h3>
-            </div>
-            <ul className="space-y-3" aria-label="List of observed strengths">
-              {STRENGTHS.map((s) => (
-                <li key={s.id} className="flex items-start gap-2.5">
-                  <div
-                    className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0 mt-2"
-                    aria-hidden="true"
-                  />
-                  <p className="text-sm text-slate-600 leading-relaxed">{s.text}</p>
-                </li>
-              ))}
-            </ul>
-          </motion.div>
-
-          {/* Growth Areas */}
-          <motion.div
-            className="card-lumino p-6"
-            whileHover={{ y: -4 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            role="region"
-            aria-label="Growth areas"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
-                <TrendingUp size={16} className="text-amber-600" aria-hidden="true" />
-              </div>
-              <h3 className="font-extrabold text-indigo-950 tracking-tight">Growth Areas</h3>
-            </div>
-            <ul className="space-y-3" aria-label="List of growth areas">
-              {GROWTH_AREAS.map((g) => (
-                <li key={g.id} className="flex items-start gap-2.5">
-                  <div
-                    className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-2"
-                    aria-hidden="true"
-                  />
-                  <p className="text-sm text-slate-600 leading-relaxed">{g.text}</p>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 pt-4 border-t border-slate-100">
-              <div className="flex items-start gap-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
-                <Info size={13} className="text-amber-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
-                <p className="text-xs text-amber-700 leading-relaxed">
-                  Focus on System Design first - it has the highest impact on your target role progression.
-                </p>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* Role Trajectory Fit */}
-          <motion.div
-            className="card-lumino p-6"
-            whileHover={{ y: -4 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 22 }}
-            role="region"
-            aria-label="Role trajectory fit"
-          >
-            <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center">
-                <Award size={16} className="text-blue-600" aria-hidden="true" />
-              </div>
-              <h3 className="font-extrabold text-indigo-950 tracking-tight">Role Trajectory Fit</h3>
-            </div>
-
-            {/* Pie Chart */}
-            <div
-              className="h-44"
-              role="img"
-              aria-label="Pie chart showing 85% role alignment"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={PIE_DATA}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={52}
-                    outerRadius={72}
-                    startAngle={90}
-                    endAngle={-270}
-                    paddingAngle={2}
-                    dataKey="value"
-                    labelLine={false}
-                  >
-                    {PIE_DATA.map((entry, index) => (
-                      <Cell
-                        key={`cell-${entry.name}`}
-                        fill={PIE_COLORS[index]}
-                        stroke="none"
-                      />
-                    ))}
-                  </Pie>
-                  <CenterLabel cx={undefined} cy={undefined} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-
-            <div className="flex justify-center gap-6 mt-2">
-              {PIE_DATA.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-1.5">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full"
-                    style={{ backgroundColor: PIE_COLORS[i] }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-xs text-slate-500">{d.name}</span>
+        {/* ── Loading skeleton ── */}
+        {loading && (
+          <div className="space-y-4">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="card-lumino p-5 animate-pulse">
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-slate-100" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-slate-100 rounded w-1/2" />
+                    <div className="h-3 bg-slate-100 rounded w-1/3" />
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-            <p className="text-xs text-slate-400 text-center mt-3 leading-relaxed">
-              Based on skill graph alignment with Senior Engineer role requirements.
-            </p>
-          </motion.div>
+        {/* ── Applications list ── */}
+        {!loading && !error && (
+          <>
+            {applications.length === 0 ? (
+              <div className="text-center py-20">
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <Briefcase className="w-8 h-8 text-slate-300" aria-hidden="true" />
+                </div>
+                <p className="text-slate-600 font-medium mb-1">No applications yet</p>
+                <p className="text-sm text-slate-400 mb-4">
+                  Browse your job matches and click "Apply Now" on any job to get started.
+                </p>
+                <Link to="/dashboard" className="btn-primary btn-sm inline-flex">
+                  Browse Matches
+                </Link>
+              </div>
+            ) : (
+              <div
+                role="list"
+                aria-label={`${applications.length} application${applications.length !== 1 ? 's' : ''}`}
+                className="space-y-4"
+              >
+                <p className="text-sm text-slate-500 font-medium">
+                  {applications.length} application{applications.length !== 1 ? 's' : ''}
+                </p>
+                {applications.map(app => (
+                  <ApplicationCard key={app.job_id} app={app} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
 
-        </div>
-
-        {/* ── Actionable Next Steps ── */}
+        {/* ── Actionable Next Steps (static guidance) ── */}
         <section aria-labelledby="next-steps-heading">
           <h2
             id="next-steps-heading"
@@ -341,19 +254,6 @@ export default function Applications() {
             ))}
           </div>
         </section>
-
-        {/* ── Inspirational Quote ── */}
-        <div
-          className="card-lumino p-8 text-center"
-          role="complementary"
-          aria-label="Inspirational quote"
-        >
-          <blockquote className="text-lg font-bold text-indigo-950 tracking-tight max-w-2xl mx-auto leading-relaxed">
-            "The expert in anything was once a beginner. Every senior engineer started
-            exactly where you are now."
-          </blockquote>
-          <p className="text-sm text-slate-400 mt-3 font-medium">- Lumino Career Coach</p>
-        </div>
 
         {/* ── Footer Links ── */}
         <footer className="flex flex-wrap items-center justify-center gap-6 py-4 text-xs text-slate-400" role="contentinfo">

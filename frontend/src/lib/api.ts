@@ -11,9 +11,11 @@ import type {
   IngestUserResponse,
   InterestProfileResponse,
   Job,
+  JobApplicantsResponse,
   ResolveFlagResponse,
   RichJobProfile,
   RollbackResponse,
+  UserApplicationsResponse,
   UserDescribeResponse,
   UserListItem,
 } from './types';
@@ -156,6 +158,12 @@ export const api = {
     patch<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`, { score }),
   removeInterest: (userId: string, tag: string) =>
     del<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`),
+
+  getApplications: (userId: string) =>
+    get<UserApplicationsResponse>(`/users/${userId}/applications`),
+
+  getJobApplicants: (jobId: string) =>
+    get<JobApplicantsResponse>(`/jobs/${jobId}/applications`),
 
   // Job tag management
   retagJob: (jobId: string) =>

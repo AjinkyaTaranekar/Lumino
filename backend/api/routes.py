@@ -15,11 +15,14 @@ Endpoints:
   GET  /jobs                              - list all jobs
   GET  /health                            - Neo4j connectivity check
   POST   /users/{user_id}/events              - record analytics event (view/like/dislike/bookmark/apply)
+  GET    /users/{user_id}/applications        - list jobs user has applied to (with match scores)
+  GET    /jobs/{job_id}/applications          - list users who applied to a job (with match scores)
   GET    /users/{user_id}/interests           - get user interest profile (tag scores)
   PATCH  /users/{user_id}/interests/{tag}     - manually override tag interest score
   DELETE /users/{user_id}/interests/{tag}     - remove a tag from interest profile
 """
 
+import asyncio
 import io
 import logging
 import os
@@ -31,6 +34,7 @@ from fastapi.responses import FileResponse
 from database.neo4j_client import Neo4jClient, get_client
 from database.sqlite_client import SQLiteClient, get_sqlite
 from models.schemas import (
+    AppliedCandidate,
     ApplyMutationsResponse,
     ApplyMutationsRequest,
     BatchCandidateResponse,
@@ -46,6 +50,7 @@ from models.schemas import (
     AdjustInterestRequest,
     InterestProfileResponse,
     InterestTag,
+    JobApplicantsResponse,
     JobProfileResponse,
     MatchResult,
     RecordEventRequest,
@@ -55,6 +60,8 @@ from models.schemas import (
     RollbackResponse,
     SendMessageRequest,
     StartEditRequest,
+    UserApplication,
+    UserApplicationsResponse,
 )
 from services.analytics_service import AnalyticsService
 from services.job_tag_extractor import JobTagExtractor
@@ -1322,6 +1329,154 @@ async def record_event(
     except Exception as e:
         logger.exception(f"Event recording failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get(
+    "/users/{user_id}/applications",
+    response_model=UserApplicationsResponse,
+    tags=["analytics"],
+    summary="Get all jobs a user has applied to",
+)
+async def get_user_applications(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Return all jobs the user has applied to, deduplicated to the latest
+    application per job, sorted by most recent first.
+    Includes job title, company, applied timestamp, and optional match score.
+    """
+    rows = await sqlite.fetchall(
+        """
+        SELECT job_id, MAX(created_at) AS applied_at
+        FROM analytics_events
+        WHERE user_id = ? AND event_type = 'job_applied'
+        GROUP BY job_id
+        ORDER BY applied_at DESC
+        """,
+        (user_id,),
+    )
+
+    if not rows:
+        return UserApplicationsResponse(user_id=user_id, applications=[], total=0)
+
+    engine = MatchingEngine(db)
+
+    async def _enrich_job(row: dict) -> UserApplication:
+        job_id = row["job_id"]
+        applied_at = row["applied_at"]
+        # Fetch job metadata from Neo4j
+        job_info = await db.run_query(
+            "MATCH (j:Job {id: $job_id}) RETURN j.title AS title, j.company AS company",
+            {"job_id": job_id},
+        )
+        job_title = job_info[0]["title"] if job_info else job_id
+        company = job_info[0]["company"] if job_info else None
+
+        # Compute match score (optional – fails gracefully)
+        match_score: float | None = None
+        try:
+            result = await engine._score_user_job_pair(user_id, job_id)
+            if result is not None:
+                match_score = result.total_score
+        except Exception:
+            pass
+
+        return UserApplication(
+            job_id=job_id,
+            job_title=job_title,
+            company=company,
+            applied_at=applied_at,
+            match_score=match_score,
+        )
+
+    applications = await asyncio.gather(*[_enrich_job(row) for row in rows])
+    return UserApplicationsResponse(
+        user_id=user_id,
+        applications=list(applications),
+        total=len(applications),
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/applications",
+    response_model=JobApplicantsResponse,
+    tags=["analytics"],
+    summary="Get all users who applied to a job, with match scores",
+)
+async def get_job_applicants(
+    job_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Return all users who sent a job_applied event for this job, deduplicated
+    to the latest application per user. Each applicant is enriched with their
+    match score from the graph matching engine where available.
+    Sorted by match score descending (unscored applicants appended at end).
+    """
+    rows = await sqlite.fetchall(
+        """
+        SELECT user_id, MAX(created_at) AS applied_at
+        FROM analytics_events
+        WHERE job_id = ? AND event_type = 'job_applied'
+        GROUP BY user_id
+        ORDER BY applied_at DESC
+        """,
+        (job_id,),
+    )
+
+    if not rows:
+        return JobApplicantsResponse(job_id=job_id, applicants=[], total=0)
+
+    engine = MatchingEngine(db)
+
+    async def _score_applicant(row: dict) -> AppliedCandidate:
+        uid = row["user_id"]
+        applied_at = row["applied_at"]
+        try:
+            result = await engine._score_user_job_pair(uid, job_id)
+        except Exception:
+            result = None
+
+        if result is None:
+            return AppliedCandidate(user_id=uid, applied_at=applied_at)
+
+        return AppliedCandidate(
+            user_id=uid,
+            applied_at=applied_at,
+            total_score=result.total_score,
+            skill_score=result.skill_score,
+            domain_score=result.domain_score,
+            optional_skill_score=result.optional_skill_score or 0.0,
+            soft_skill_score=getattr(result, "soft_skill_score", 0.0) or 0.0,
+            culture_fit_score=getattr(result, "culture_fit_score", 0.0) or 0.0,
+            culture_bonus=result.culture_bonus or 0.0,
+            preference_bonus=result.preference_bonus or 0.0,
+            matched_skills=result.matched_skills or [],
+            missing_skills=result.missing_skills or [],
+            matched_domains=result.matched_domains or [],
+            missing_domains=result.missing_domains or [],
+            behavioral_risk_flags=result.behavioral_risk_flags or [],
+            explanation=result.explanation or "",
+        )
+
+    applicants = list(await asyncio.gather(*[_score_applicant(row) for row in rows]))
+
+    # Sort: scored first (descending), unscored appended at end
+    scored = sorted(
+        [a for a in applicants if a.total_score is not None],
+        key=lambda a: a.total_score,  # type: ignore[arg-type]
+        reverse=True,
+    )
+    unscored = [a for a in applicants if a.total_score is None]
+
+    return JobApplicantsResponse(
+        job_id=job_id,
+        applicants=scored + unscored,
+        total=len(applicants),
+    )
 
 
 @router.get(

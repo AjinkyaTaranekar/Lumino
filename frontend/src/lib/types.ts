@@ -432,3 +432,44 @@ export interface RichJobProfile {
   role_expectations?: JobRoleExpectation | null;
   soft_requirements?: JobSoftRequirement[];
 }
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+export interface UserApplication {
+  job_id: string;
+  job_title: string;
+  company: string | null;
+  applied_at: string;
+  match_score: number | null;
+}
+
+export interface UserApplicationsResponse {
+  user_id: string;
+  applications: UserApplication[];
+  total: number;
+}
+
+export interface AppliedCandidate {
+  user_id: string;
+  applied_at: string;
+  total_score: number | null;
+  skill_score: number | null;
+  domain_score: number | null;
+  optional_skill_score?: number;
+  soft_skill_score?: number;
+  culture_fit_score?: number;
+  culture_bonus: number;
+  preference_bonus: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  matched_domains: string[];
+  missing_domains: string[];
+  behavioral_risk_flags?: string[];
+  explanation: string;
+}
+
+export interface JobApplicantsResponse {
+  job_id: string;
+  applicants: AppliedCandidate[];
+  total: number;
+}
