@@ -148,14 +148,25 @@ class JobTagExtractor:
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": f"Job posting:\n\n{job_text[:4000]}"},
                 ],
-                response_format={"type": "json_object"},
                 temperature=0.1,
             )
             raw = response.choices[0].message.content or "{}"
+            # Extract JSON from response — model may wrap it in markdown fences
+            if "```" in raw:
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            # Find the JSON object boundaries
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            if start != -1 and end > start:
+                raw = raw[start:end]
             data = json.loads(raw)
             raw_tags: list = data.get("tags", [])
-            # Validate — only keep tags in our taxonomy
-            return [t for t in raw_tags if t in _ALL_VALID_TAGS]
+            if not isinstance(raw_tags, list):
+                raw_tags = []
+            # Normalize to lowercase before taxonomy validation
+            return [t.lower() for t in raw_tags if isinstance(t, str) and t.lower() in _ALL_VALID_TAGS]
         except Exception as e:
             logger.warning(f"Tag extraction failed, skipping: {e}")
             return []
