@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarDays,
   ExternalLink,
+  GraduationCap,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -85,7 +86,15 @@ function ApplicationCard({ app }: { app: UserApplication }) {
         )}
       </div>
 
-      <div className="mt-4 flex justify-end">
+      <div className="mt-4 flex gap-2 justify-end">
+        <Link
+          to={`/practice?jobId=${app.job_id}`}
+          className="btn-secondary btn-sm inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
+          aria-label={`Practice interview for ${app.job_title}`}
+        >
+          <GraduationCap size={11} aria-hidden="true" />
+          Practice Interview
+        </Link>
         <Link
           to={`/user/match/${app.job_id}`}
           className="btn-secondary btn-sm inline-flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
