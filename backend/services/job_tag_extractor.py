@@ -8,6 +8,7 @@ Tags are stored in Neo4j and used for analytics-driven interest profile matching
 
 import json
 import logging
+import os
 import re
 
 from litellm import acompletion
@@ -39,9 +40,9 @@ Rules:
 class JobTagExtractor:
     """Extracts semantic tags from job posting text and writes them to Neo4j."""
 
-    def __init__(self, client: Neo4jClient, model: str = "groq/llama-3.3-70b-versatile"):
+    def __init__(self, client: Neo4jClient, model: str | None = None):
         self.client = client
-        self.model = model
+        self.model = model or os.environ.get("LLM_MODEL", "groq/llama-3.3-70b-versatile")
 
     async def retag_job(self, job_id: str) -> list[str]:
         """
