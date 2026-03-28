@@ -1,4 +1,4 @@
-import { Code2, Cpu, Database, Globe, Target, Zap } from 'lucide-react';
+import { CheckCircle2, Target, Zap } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,15 +10,90 @@ import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { PracticeMessage, PracticeScorecard } from '../../lib/types';
 
-// ─── Knowledge graph nodes (static visualization) ─────────────────────────────
+// ─── Graph node types ─────────────────────────────────────────────────────────
 
-const SKILL_NODES = [
-  { id: 'react', label: 'React', icon: Code2, cx: 50, cy: 35, radius: 32, color: 'bg-blue-500', ring: 'ring-blue-300', connections: ['typescript', 'graphql'] },
-  { id: 'typescript', label: 'TypeScript', icon: Code2, cx: 25, cy: 62, radius: 26, color: 'bg-indigo-500', ring: 'ring-indigo-300', connections: ['react'] },
-  { id: 'graphql', label: 'GraphQL', icon: Database, cx: 73, cy: 60, radius: 24, color: 'bg-pink-500', ring: 'ring-pink-300', connections: ['react', 'nodejs'] },
-  { id: 'nodejs', label: 'Node.js', icon: Cpu, cx: 50, cy: 80, radius: 22, color: 'bg-emerald-500', ring: 'ring-emerald-300', connections: ['graphql'] },
-  { id: 'cloud', label: 'Cloud', icon: Globe, cx: 82, cy: 32, radius: 20, color: 'bg-sky-400', ring: 'ring-sky-300', connections: ['react'] },
-];
+interface GraphNode {
+  id: string;
+  label: string;
+  type: 'matched' | 'gap' | 'domain';
+  cx: number;   // % from left
+  cy: number;   // % from top
+  radius: number;
+  connections: string[];
+}
+
+interface GraphData {
+  nodes: GraphNode[];
+}
+
+/** Lay out N nodes in an ellipse centered on the panel. */
+function buildGraphLayout(
+  matched: string[],
+  missing: string[],
+  domains: string[]
+): GraphData {
+  // Take top items — keep graph readable
+  const matchedTop = matched.slice(0, 5);
+  const missingTop = missing.slice(0, 3);
+  const domainsTop = domains.slice(0, 2);
+
+  type RawNode = { label: string; type: 'matched' | 'gap' | 'domain' };
+  const raw: RawNode[] = [
+    ...matchedTop.map((l) => ({ label: l, type: 'matched' as const })),
+    ...missingTop.map((l) => ({ label: l, type: 'gap' as const })),
+    ...domainsTop.map((l) => ({ label: l, type: 'domain' as const })),
+  ];
+
+  const n = raw.length;
+  const CX = 50;   // panel center x %
+  const CY = 50;   // panel center y %
+  const RX = 32;   // ellipse horizontal radius %
+  const RY = 26;   // ellipse vertical radius %
+
+  const nodes: GraphNode[] = raw.map((item, i) => {
+    // Start at top (-π/2) and go clockwise
+    const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
+    const cx = CX + RX * Math.cos(angle);
+    const cy = CY + RY * Math.sin(angle);
+
+    const radius =
+      item.type === 'matched' ? 24
+      : item.type === 'domain' ? 20
+      : 18;
+
+    return {
+      id: `${item.type}-${i}`,
+      label: item.label,
+      type: item.type,
+      cx,
+      cy,
+      radius,
+      connections: [],
+    };
+  });
+
+  // Connect matched skills to each other (ring) for a cohesive look
+  const matchedNodes = nodes.filter((n) => n.type === 'matched');
+  matchedNodes.forEach((node, i) => {
+    const next = matchedNodes[(i + 1) % matchedNodes.length];
+    if (next && next.id !== node.id) node.connections.push(next.id);
+  });
+
+  // Connect each gap node to the nearest matched node
+  const gapNodes = nodes.filter((n) => n.type === 'gap');
+  gapNodes.forEach((gap) => {
+    if (matchedNodes.length > 0) {
+      const nearest = matchedNodes.reduce((best, mn) => {
+        const d = Math.hypot(mn.cx - gap.cx, mn.cy - gap.cy);
+        const bd = Math.hypot(best.cx - gap.cx, best.cy - gap.cy);
+        return d < bd ? mn : best;
+      });
+      gap.connections.push(nearest.id);
+    }
+  });
+
+  return { nodes };
+}
 
 const PHASE_ORDER = ['intro', 'technical', 'behavioral', 'culture', 'closing'];
 
@@ -43,10 +118,15 @@ export default function Practice() {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [scorecard, setScorecard] = useState<PracticeScorecard | null>(null);
 
+  // Right panel graph state
+  const [graphData, setGraphData] = useState<GraphData | null>(null);
+
   // Modal state
   const [showJobPicker, setShowJobPicker] = useState(false);
 
   const jobIdFromUrl = searchParams.get('jobId');
+  // Track the active job ID (URL param or modal selection)
+  const [activeJobId, setActiveJobId] = useState<string | null>(jobIdFromUrl);
   const startedRef = useRef(false);
 
   // ── Session start ────────────────────────────────────────────────────────────
@@ -55,6 +135,7 @@ export default function Practice() {
     async (jobId: string) => {
       if (!session || startedRef.current) return;
       startedRef.current = true;
+      setActiveJobId(jobId);
       setIsLoading(true);
       setStartError(null);
       try {
@@ -89,6 +170,28 @@ export default function Practice() {
       setShowJobPicker(true);
     }
   }, [session, jobIdFromUrl, startSession]);
+
+  // ── Fetch real graph data (match + job profile) ───────────────────────────────
+
+  useEffect(() => {
+    if (!session || !activeJobId) return;
+    Promise.all([
+      api.getMatchDetail(session.userId, activeJobId),
+      api.getJobProfile(activeJobId),
+    ])
+      .then(([match, jobProfile]) => {
+        const domains = [
+          ...match.matched_domains,
+          ...match.missing_domains,
+        ].slice(0, 2);
+        setGraphData(
+          buildGraphLayout(match.matched_skills, match.missing_skills, domains)
+        );
+      })
+      .catch(() => {
+        // Non-critical — graph stays empty; session is unaffected
+      });
+  }, [session, activeJobId]);
 
   // ── Send message ─────────────────────────────────────────────────────────────
 
@@ -165,8 +268,8 @@ export default function Practice() {
         <JobPickerModal
           onSelect={(jobId) => {
             setShowJobPicker(false);
+            setActiveJobId(jobId);
             startSession(jobId);
-            // Update URL without navigation
             window.history.replaceState({}, '', `/practice?jobId=${jobId}`);
           }}
         />
@@ -270,55 +373,121 @@ export default function Practice() {
             aria-hidden="true"
           />
 
-          {/* Graph title */}
+          {/* Graph title + legend */}
           <div className="absolute top-6 left-6 z-10">
             <h2 className="text-sm font-bold text-indigo-950">Your Knowledge Graph</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Skills activated in this session</p>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {graphData
+                ? 'Skills matched against this role'
+                : 'Loading skill graph…'}
+            </p>
+            {graphData && (
+              <div className="flex items-center gap-3 mt-2">
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-600">
+                  <CheckCircle2 size={10} aria-hidden="true" /> You have
+                </span>
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-500">
+                  <span className="w-2.5 h-2.5 rounded-full border-2 border-amber-400 inline-block" aria-hidden="true" /> Gap
+                </span>
+                <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block" aria-hidden="true" /> Domain
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* SVG connections */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
-            {SKILL_NODES.flatMap((node) =>
-              node.connections.map((targetId) => {
-                const target = SKILL_NODES.find((n) => n.id === targetId);
-                if (!target) return null;
-                return (
-                  <line
-                    key={`${node.id}-${targetId}`}
-                    x1={`${node.cx}%`} y1={`${node.cy}%`}
-                    x2={`${target.cx}%`} y2={`${target.cy}%`}
-                    stroke="#3B82F6" strokeWidth="1.5" strokeOpacity="0.2"
-                  />
-                );
-              })
-            )}
-          </svg>
+          {/* Loading shimmer */}
+          {!graphData && (
+            <div className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
+              <div className="w-48 h-48 rounded-full border border-dashed border-slate-200 animate-pulse opacity-50" />
+            </div>
+          )}
 
-          {/* Skill nodes */}
-          {SKILL_NODES.map((node, i) => (
-            <motion.div
-              key={node.id}
-              className="absolute flex flex-col items-center gap-1.5"
-              style={{ left: `${node.cx}%`, top: `${node.cy}%`, transform: 'translate(-50%, -50%)' }}
-              initial={{ opacity: 0, scale: 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1, type: 'spring', stiffness: 260, damping: 20 }}
-              role="img"
-              aria-label={`Skill: ${node.label}`}
-            >
-              <motion.div
-                className={`rounded-full ${node.color} flex items-center justify-center shadow-lg ring-4 ${node.ring} ring-opacity-30 cursor-pointer`}
-                style={{ width: node.radius * 2, height: node.radius * 2 }}
-                whileHover={{ scale: 1.15, y: -4 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 18 }}
-              >
-                <node.icon size={Math.max(14, node.radius * 0.55)} className="text-white" aria-hidden="true" />
-              </motion.div>
-              <span className="text-[11px] font-bold text-slate-600 bg-white/80 px-1.5 py-0.5 rounded-md shadow-sm whitespace-nowrap">
-                {node.label}
-              </span>
-            </motion.div>
-          ))}
+          {graphData && (
+            <>
+              {/* SVG connection lines */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
+                {graphData.nodes.flatMap((node) =>
+                  node.connections.map((targetId) => {
+                    const target = graphData.nodes.find((n) => n.id === targetId);
+                    if (!target) return null;
+                    const isGapLink = node.type === 'gap' || target.type === 'gap';
+                    return (
+                      <line
+                        key={`${node.id}-${targetId}`}
+                        x1={`${node.cx}%`} y1={`${node.cy}%`}
+                        x2={`${target.cx}%`} y2={`${target.cy}%`}
+                        stroke={isGapLink ? '#F59E0B' : '#3B82F6'}
+                        strokeWidth="1.5"
+                        strokeOpacity="0.25"
+                        strokeDasharray={isGapLink ? '4 3' : undefined}
+                      />
+                    );
+                  })
+                )}
+              </svg>
+
+              {/* Skill nodes */}
+              {graphData.nodes.map((node, i) => {
+                const isMatched = node.type === 'matched';
+                const isGap = node.type === 'gap';
+                const bgColor = isMatched ? 'bg-blue-500' : isGap ? 'bg-amber-400' : 'bg-emerald-500';
+                const ringColor = isMatched ? 'ring-blue-300' : isGap ? 'ring-amber-200' : 'ring-emerald-200';
+                const borderStyle = isGap
+                  ? { background: 'transparent', border: '2px dashed #F59E0B' }
+                  : {};
+
+                return (
+                  <motion.div
+                    key={node.id}
+                    className="absolute flex flex-col items-center gap-1.5"
+                    style={{ left: `${node.cx}%`, top: `${node.cy}%`, transform: 'translate(-50%, -50%)' }}
+                    initial={{ opacity: 0, scale: 0.5 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.08, type: 'spring', stiffness: 260, damping: 20 }}
+                    role="img"
+                    aria-label={`${isMatched ? 'Matched skill' : isGap ? 'Skill gap' : 'Domain'}: ${node.label}`}
+                  >
+                    <motion.div
+                      className={`rounded-full flex items-center justify-center shadow-lg ring-4 ${!isGap ? bgColor : ''} ${ringColor} ring-opacity-30 cursor-default`}
+                      style={{ width: node.radius * 2, height: node.radius * 2, ...borderStyle }}
+                      whileHover={{ scale: 1.12, y: -4 }}
+                      transition={{ type: 'spring', stiffness: 300, damping: 18 }}
+                    >
+                      {isMatched && (
+                        <CheckCircle2
+                          size={Math.max(12, node.radius * 0.55)}
+                          className="text-white"
+                          aria-hidden="true"
+                        />
+                      )}
+                      {isGap && (
+                        <span
+                          className="text-amber-500 font-black leading-none"
+                          style={{ fontSize: Math.max(10, node.radius * 0.6) }}
+                          aria-hidden="true"
+                        >
+                          ?
+                        </span>
+                      )}
+                      {node.type === 'domain' && (
+                        <span
+                          className="text-white font-black leading-none"
+                          style={{ fontSize: Math.max(10, node.radius * 0.55) }}
+                          aria-hidden="true"
+                        >
+                          D
+                        </span>
+                      )}
+                    </motion.div>
+                    <span className="text-[10px] font-bold text-slate-600 bg-white/90 px-1.5 py-0.5 rounded-md shadow-sm text-center max-w-[80px] leading-tight">
+                      {node.label}
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </>
+          )}
 
           {/* HUD: bottom-right */}
           <div className="absolute bottom-6 right-6 z-10 space-y-3">
@@ -366,7 +535,9 @@ export default function Practice() {
                   setCoachingHint(null);
                   setSessionComplete(false);
                   setScorecard(null);
-                  if (jobIdFromUrl) startSession(jobIdFromUrl);
+                  setGraphData(null);
+                  const currentJobId = activeJobId ?? jobIdFromUrl;
+                  if (currentJobId) startSession(currentJobId);
                   else setShowJobPicker(true);
                 }}
                 onBackToApplications={() => navigate('/applications')}
