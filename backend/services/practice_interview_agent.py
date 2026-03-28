@@ -17,7 +17,7 @@ from litellm import acompletion
 
 from database.neo4j_client import Neo4jClient
 from database.sqlite_client import SQLiteClient
-from models.practice_schemas import InterviewTurn, PracticeScorecard, ScoreBreakdown
+from models.practice_schemas import InterviewTurn, PracticeScorecard
 
 logger = logging.getLogger(__name__)
 
@@ -452,7 +452,17 @@ class PracticeInterviewAgent:
 
     async def _call_with_retry(self, messages: list) -> str:
         """Call LLM with retry logic. Rate limit errors wait the suggested time from
-        the error message + a 2s buffer. Other errors use exponential backoff."""
+        the error message + a 2s buffer. Other errors use exponential backoff.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+
+        Returns:
+            Raw JSON string from LLM response (potentially unwrapped from list wrapper).
+
+        Raises:
+            Exception: On max retry attempts exhausted.
+        """
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
