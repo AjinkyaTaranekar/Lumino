@@ -101,6 +101,18 @@ export interface BatchMatchResponse {
   total_jobs_ranked: number;
 }
 
+export interface JobInteraction {
+  job_id: string;
+  liked: boolean;
+  disliked: boolean;
+  bookmarked: boolean;
+}
+
+export interface JobInteractionsResponse {
+  user_id: string;
+  interactions: JobInteraction[];
+}
+
 export interface CandidateResult {
   user_id: string;
   total_score: number;

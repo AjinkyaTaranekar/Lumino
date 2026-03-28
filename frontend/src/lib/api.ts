@@ -167,6 +167,9 @@ export const api = {
   getApplications: (userId: string) =>
     get<UserApplicationsResponse>(`/users/${userId}/applications`),
 
+  getJobInteractions: (userId: string) =>
+    get<import('./types').JobInteractionsResponse>(`/users/${userId}/job-interactions`),
+
   getJobApplicants: (jobId: string) =>
     get<JobApplicantsResponse>(`/jobs/${jobId}/applications`),
 

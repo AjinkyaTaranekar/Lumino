@@ -1332,6 +1332,64 @@ async def record_event(
 
 
 @router.get(
+    "/users/{user_id}/job-interactions",
+    tags=["analytics"],
+    summary="Get current like/dislike/bookmark state per job for a user",
+)
+async def get_job_interactions(
+    user_id: str,
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Returns the derived interaction state for every job the user has interacted with.
+
+    Like/dislike state: determined by whichever of job_liked / job_disliked / job_dismissed
+    was recorded most recently for that job.
+    Bookmark state: toggled by parity — odd number of job_bookmarked events = currently bookmarked.
+    """
+    rows = await sqlite.fetchall(
+        """
+        SELECT
+            job_id,
+            MAX(CASE WHEN event_type = 'job_liked'      THEN created_at END) AS last_liked,
+            MAX(CASE WHEN event_type = 'job_disliked'   THEN created_at END) AS last_disliked,
+            MAX(CASE WHEN event_type = 'job_dismissed'  THEN created_at END) AS last_dismissed,
+            SUM(CASE WHEN event_type = 'job_bookmarked' THEN 1 ELSE 0 END) % 2 AS bookmark_parity
+        FROM analytics_events
+        WHERE user_id = ?
+          AND event_type IN ('job_liked', 'job_disliked', 'job_dismissed', 'job_bookmarked')
+        GROUP BY job_id
+        """,
+        (user_id,),
+    )
+
+    interactions = []
+    for row in rows:
+        last_liked     = row["last_liked"]
+        last_disliked  = row["last_disliked"]
+        last_dismissed = row["last_dismissed"]
+
+        # A like is active if job_liked was recorded more recently than any dismissal
+        liked = bool(
+            last_liked and (not last_dismissed or last_liked > last_dismissed)
+        )
+        # A dislike is active if job_disliked was recorded more recently than any dismissal
+        disliked = bool(
+            last_disliked and (not last_dismissed or last_disliked > last_dismissed)
+        )
+        bookmarked = bool(row["bookmark_parity"])
+
+        interactions.append({
+            "job_id":     row["job_id"],
+            "liked":      liked,
+            "disliked":   disliked,
+            "bookmarked": bookmarked,
+        })
+
+    return {"user_id": user_id, "interactions": interactions}
+
+
+@router.get(
     "/users/{user_id}/applications",
     response_model=UserApplicationsResponse,
     tags=["analytics"],
