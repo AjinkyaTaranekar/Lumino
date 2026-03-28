@@ -26,13 +26,12 @@ interface GraphData {
   nodes: GraphNode[];
 }
 
-/** Lay out N nodes in an ellipse centered on the panel. */
+/** Lay out N nodes in an ellipse and connect them as a ring. */
 function buildGraphLayout(
   matched: string[],
   missing: string[],
   domains: string[]
 ): GraphData {
-  // Take top items — keep graph readable
   const matchedTop = matched.slice(0, 5);
   const missingTop = missing.slice(0, 3);
   const domainsTop = domains.slice(0, 2);
@@ -45,52 +44,35 @@ function buildGraphLayout(
   ];
 
   const n = raw.length;
-  const CX = 50;   // panel center x %
-  const CY = 50;   // panel center y %
-  const RX = 32;   // ellipse horizontal radius %
-  const RY = 26;   // ellipse vertical radius %
+  if (n === 0) return { nodes: [] };
 
+  const CX = 50;  // % from left
+  const CY = 50;  // % from top
+  const RX = 32;  // ellipse horizontal radius %
+  const RY = 26;  // ellipse vertical radius %
+
+  // Build nodes with sequential IDs so lookups are always reliable
   const nodes: GraphNode[] = raw.map((item, i) => {
-    // Start at top (-π/2) and go clockwise
     const angle = (i / n) * 2 * Math.PI - Math.PI / 2;
-    const cx = CX + RX * Math.cos(angle);
-    const cy = CY + RY * Math.sin(angle);
-
-    const radius =
-      item.type === 'matched' ? 24
-      : item.type === 'domain' ? 20
-      : 18;
-
     return {
-      id: `${item.type}-${i}`,
+      id: `node-${i}`,
       label: item.label,
       type: item.type,
-      cx,
-      cy,
-      radius,
+      cx: CX + RX * Math.cos(angle),
+      cy: CY + RY * Math.sin(angle),
+      radius: item.type === 'matched' ? 24 : item.type === 'domain' ? 20 : 18,
       connections: [],
     };
   });
 
-  // Connect matched skills to each other (ring) for a cohesive look
-  const matchedNodes = nodes.filter((n) => n.type === 'matched');
-  matchedNodes.forEach((node, i) => {
-    const next = matchedNodes[(i + 1) % matchedNodes.length];
-    if (next && next.id !== node.id) node.connections.push(next.id);
-  });
-
-  // Connect each gap node to the nearest matched node
-  const gapNodes = nodes.filter((n) => n.type === 'gap');
-  gapNodes.forEach((gap) => {
-    if (matchedNodes.length > 0) {
-      const nearest = matchedNodes.reduce((best, mn) => {
-        const d = Math.hypot(mn.cx - gap.cx, mn.cy - gap.cy);
-        const bd = Math.hypot(best.cx - gap.cx, best.cy - gap.cy);
-        return d < bd ? mn : best;
-      });
-      gap.connections.push(nearest.id);
-    }
-  });
+  // Ring: each node connects to the next one on the ellipse.
+  // This guarantees every node has exactly one outgoing edge and
+  // the graph forms a closed ring — no isolated nodes.
+  if (n > 1) {
+    nodes.forEach((node, i) => {
+      node.connections.push(nodes[(i + 1) % n].id);
+    });
+  }
 
   return { nodes };
 }
@@ -405,22 +387,26 @@ export default function Practice() {
 
           {graphData && (
             <>
-              {/* SVG connection lines */}
+              {/* SVG connection lines — one per ring edge */}
               <svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden="true">
                 {graphData.nodes.flatMap((node) =>
                   node.connections.map((targetId) => {
                     const target = graphData.nodes.find((n) => n.id === targetId);
                     if (!target) return null;
-                    const isGapLink = node.type === 'gap' || target.type === 'gap';
+                    const hasGap = node.type === 'gap' || target.type === 'gap';
+                    const hasDomain = node.type === 'domain' || target.type === 'domain';
+                    const stroke = hasGap ? '#F59E0B' : hasDomain ? '#10B981' : '#3B82F6';
+                    const dash = hasGap || hasDomain ? '5 4' : undefined;
                     return (
                       <line
-                        key={`${node.id}-${targetId}`}
+                        key={`${node.id}→${targetId}`}
                         x1={`${node.cx}%`} y1={`${node.cy}%`}
                         x2={`${target.cx}%`} y2={`${target.cy}%`}
-                        stroke={isGapLink ? '#F59E0B' : '#3B82F6'}
+                        stroke={stroke}
                         strokeWidth="1.5"
-                        strokeOpacity="0.25"
-                        strokeDasharray={isGapLink ? '4 3' : undefined}
+                        strokeOpacity="0.3"
+                        strokeDasharray={dash}
+                        strokeLinecap="round"
                       />
                     );
                   })
