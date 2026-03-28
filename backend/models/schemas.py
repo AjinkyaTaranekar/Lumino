@@ -907,6 +907,45 @@ class AdjustInterestRequest(BaseModel):
     )
 
 
+class UserApplication(BaseModel):
+    job_id: str
+    job_title: str
+    company: Optional[str] = None
+    applied_at: str  # ISO-8601 UTC
+    match_score: Optional[float] = None
+
+
+class UserApplicationsResponse(BaseModel):
+    user_id: str
+    applications: List[UserApplication]
+    total: int
+
+
+class AppliedCandidate(BaseModel):
+    user_id: str
+    applied_at: str
+    total_score: Optional[float] = None
+    skill_score: Optional[float] = None
+    domain_score: Optional[float] = None
+    optional_skill_score: float = 0.0
+    soft_skill_score: float = 0.0
+    culture_fit_score: float = 0.0
+    culture_bonus: float = 0.0
+    preference_bonus: float = 0.0
+    matched_skills: List[str] = Field(default_factory=list)
+    missing_skills: List[str] = Field(default_factory=list)
+    matched_domains: List[str] = Field(default_factory=list)
+    missing_domains: List[str] = Field(default_factory=list)
+    behavioral_risk_flags: List[str] = Field(default_factory=list)
+    explanation: str = ""
+
+
+class JobApplicantsResponse(BaseModel):
+    job_id: str
+    applicants: List[AppliedCandidate]
+    total: int
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # EDIT SESSION SCHEMAS
 # ──────────────────────────────────────────────────────────────────────────────

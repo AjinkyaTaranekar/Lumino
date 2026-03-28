@@ -432,3 +432,119 @@ export interface RichJobProfile {
   role_expectations?: JobRoleExpectation | null;
   soft_requirements?: JobSoftRequirement[];
 }
+
+// ─── Applications ─────────────────────────────────────────────────────────────
+
+export interface UserApplication {
+  job_id: string;
+  job_title: string;
+  company: string | null;
+  applied_at: string;
+  match_score: number | null;
+}
+
+export interface UserApplicationsResponse {
+  user_id: string;
+  applications: UserApplication[];
+  total: number;
+}
+
+export interface AppliedCandidate {
+  user_id: string;
+  applied_at: string;
+  total_score: number | null;
+  skill_score: number | null;
+  domain_score: number | null;
+  optional_skill_score?: number;
+  soft_skill_score?: number;
+  culture_fit_score?: number;
+  culture_bonus: number;
+  preference_bonus: number;
+  matched_skills: string[];
+  missing_skills: string[];
+  matched_domains: string[];
+  missing_domains: string[];
+  behavioral_risk_flags?: string[];
+  explanation: string;
+}
+
+export interface JobApplicantsResponse {
+  job_id: string;
+  applicants: AppliedCandidate[];
+  total: number;
+}
+
+// ─── Practice Interview Types ─────────────────────────────────────────────────
+
+export interface StartPracticeResponse {
+  session_id: string;
+  opening_message: string;
+  interviewer_persona: string;
+  phase: string;
+  core_questions_count: number;
+  job_title: string;
+  company: string;
+}
+
+export interface InterviewTurn {
+  ai_response: string;
+  interviewer_persona: string;
+  phase: string;
+  phase_changed: boolean;
+  session_complete: boolean;
+  coaching_hint: string | null;
+}
+
+export interface ScoreBreakdown {
+  communication: number;
+  technical: number;
+  behavioral: number;
+  culture: number;
+  overall: number;
+}
+
+export interface PracticeScorecard {
+  scores: ScoreBreakdown;
+  strengths: string[];
+  gaps: string[];
+  recommendation: 'strong_yes' | 'yes' | 'maybe' | 'no';
+}
+
+export interface PracticeMessageHistory {
+  role: 'user' | 'assistant';
+  content: string;
+  interviewer_persona?: string;
+  phase?: string;
+}
+
+export interface PracticeHistoryResponse {
+  session_id: string;
+  phase: string;
+  question_index: number;
+  core_questions_count: number;
+  messages: PracticeMessageHistory[];
+}
+
+export interface PracticeSessionSummary {
+  session_id: string;
+  job_id: string;
+  job_title: string;
+  company?: string;
+  phase: string;
+  started_at: string;
+  last_active: string;
+  has_scorecard: boolean;
+}
+
+export interface UserPracticeSessionsResponse {
+  user_id: string;
+  sessions: PracticeSessionSummary[];
+}
+
+export interface PracticeMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  persona?: string;
+  phase?: string;
+  phaseChanged?: boolean;
+}

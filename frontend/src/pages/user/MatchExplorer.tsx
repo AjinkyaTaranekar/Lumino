@@ -196,6 +196,21 @@ export default function MatchExplorer() {
   const [explanation, setExplanation] = useState<string | MatchExplanation | null>(null)
   const [explaining, setExplaining] = useState(false)
   const [explainErr, setExplainErr] = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
+  const [applying, setApplying] = useState(false)
+
+  async function handleApply() {
+    if (!jobId || !session || isProxy) return
+    setApplying(true)
+    try {
+      await api.recordEvent(session.userId, jobId, 'job_applied')
+      setApplied(true)
+    } catch {
+      // silent — analytics should not block the user
+    } finally {
+      setApplying(false)
+    }
+  }
 
   async function handleExplain() {
     setExplaining(true)
@@ -267,6 +282,26 @@ export default function MatchExplorer() {
             </p>
           )}
         </div>
+
+        {!isProxy && session && (
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={applying || applied}
+            aria-label={applied ? 'Application submitted' : 'Apply to this job'}
+            className={`btn-sm flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${
+              applied ? 'btn-ghost text-emerald-600' : 'btn-primary'
+            }`}
+          >
+            {applied ? (
+              <><CheckCircle size={13} /> Applied!</>
+            ) : applying ? (
+              <><div className="spinner-sm" /> Applying…</>
+            ) : (
+              'Apply Now'
+            )}
+          </button>
+        )}
 
         {detail && (
           <div className="text-right flex-shrink-0" aria-label={`Overall match: ${Math.round(detail.total_score * 100)}%`}>
