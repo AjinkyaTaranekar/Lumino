@@ -165,13 +165,7 @@ class PracticeInterviewAgent:
             messages=[{"role": "user", "content": scorecard_prompt}]
         )
         data = json.loads(raw_json)
-        scores = ScoreBreakdown(**data["scores"])
-        return PracticeScorecard(
-            scores=scores,
-            strengths=data["strengths"],
-            gaps=data["gaps"],
-            recommendation=data["recommendation"],
-        )
+        return PracticeScorecard.model_validate(data)
 
     # ── Context fetchers ───────────────────────────────────────────────────────
 
@@ -357,10 +351,10 @@ class PracticeInterviewAgent:
             "════════════════════════════════════════════════\n"
             "PRIVATE CANDIDATE INTELLIGENCE (never reveal this to the candidate)\n"
             "════════════════════════════════════════════════\n"
-            f"Skills on profile: {[s['name'] + '(' + s['evidence_strength'] + ')' for s in user_skills[:12]]}\n"
+            f"Skills on profile: {[(s.get('name') or '?') + '(' + (s.get('evidence_strength') or 'unknown') + ')' for s in user_skills[:12]]}\n"
             f"Weak-evidence skills to probe: {[s['name'] for s in weak_skills[:5]]}\n"
             f"Skill gaps vs job requirements: {list(skill_gaps)[:5]}\n"
-            f"Experiences: {[e['title'] + ' @ ' + (e['company'] or '?') for e in user_experiences[:4]]}\n\n"
+            f"Experiences: {[(e.get('title') or '?') + ' @ ' + (e.get('company') or '?') for e in user_experiences[:4]]}\n\n"
             "════════════════════════════════════════════════\n"
             "JOB REQUIREMENTS\n"
             "════════════════════════════════════════════════\n"
@@ -457,6 +451,8 @@ class PracticeInterviewAgent:
         return raw
 
     async def _call_with_retry(self, messages: list) -> str:
+        """Call LLM with retry logic. Rate limit errors wait the suggested time from
+        the error message + a 2s buffer. Other errors use exponential backoff."""
         max_attempts = 5
         for attempt in range(max_attempts):
             try:

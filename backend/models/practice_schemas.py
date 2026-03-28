@@ -1,7 +1,7 @@
 """Pydantic models for the interview practice feature."""
 
-from typing import Optional
-from pydantic import BaseModel
+from typing import Annotated, Literal, Optional
+from pydantic import BaseModel, Field
 
 
 class StartPracticeRequest(BaseModel):
@@ -38,18 +38,18 @@ class CompletePracticeRequest(BaseModel):
 
 
 class ScoreBreakdown(BaseModel):
-    communication: float
-    technical: float
-    behavioral: float
-    culture: float
-    overall: float
+    communication: Annotated[float, Field(ge=0, le=10)]
+    technical: Annotated[float, Field(ge=0, le=10)]
+    behavioral: Annotated[float, Field(ge=0, le=10)]
+    culture: Annotated[float, Field(ge=0, le=10)]
+    overall: Annotated[float, Field(ge=0, le=10)]
 
 
 class PracticeScorecard(BaseModel):
     scores: ScoreBreakdown
     strengths: list[str]
     gaps: list[str]
-    recommendation: str  # 'strong_yes' | 'yes' | 'maybe' | 'no'
+    recommendation: Literal['strong_yes', 'yes', 'maybe', 'no']
 
 
 class PracticeMessageHistory(BaseModel):
