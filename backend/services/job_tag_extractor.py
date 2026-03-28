@@ -1,46 +1,38 @@
 """
 LLM-based semantic tag extractor for job postings.
 
-Extracts human-readable tags (remote-first, high-paying, growth-driven, etc.)
-from job posting text. Tags are stored in Neo4j and used for analytics-driven
-interest profile matching.
-
-Tag taxonomy is defined in models/taxonomies.py::JOB_TAG_TAXONOMY.
+Extracts human-readable tags describing the nature and context of the role.
+Tags are fully dynamic — the LLM decides what fits based on the posting text.
+Tags are stored in Neo4j and used for analytics-driven interest profile matching.
 """
 
 import json
 import logging
+import re
 
 from litellm import acompletion
 
 from database.neo4j_client import Neo4jClient
-from models.taxonomies import JOB_TAG_TAXONOMY
 
 logger = logging.getLogger(__name__)
 
-# Pre-computed hint for the LLM prompt
-_TAG_HINT = "\n".join(
-    f"  {category}: {', '.join(tags)}"
-    for category, tags in JOB_TAG_TAXONOMY.items()
-)
-
-_ALL_VALID_TAGS: frozenset[str] = frozenset(
-    tag for tags in JOB_TAG_TAXONOMY.values() for tag in tags
-)
-
-_SYSTEM_PROMPT = f"""You are a job market analyst. Given a job posting, extract semantic tags that
+_SYSTEM_PROMPT = """You are a job market analyst. Given a job posting, extract short semantic tags that
 describe the nature and context of the role. These tags help candidates understand what
 kind of job this is at a glance, beyond just the required skills.
 
-Available tags by category:
-{_TAG_HINT}
+Tag categories to consider (generate your own tags — these are just examples):
+  work_style: remote-first, hybrid, on-site, async-culture, fast-paced, startup-pace
+  compensation: high-paying, equity, performance-bonus, competitive-salary
+  culture: mission-driven, flat-hierarchy, collaborative, diverse-team, growth-driven
+  tech: cutting-edge-stack, open-source, ml-heavy, data-driven, cloud-native
+  impact: social-impact, scale-product, greenfield, consumer-facing
 
 Rules:
-- Only assign tags that are clearly supported by the job posting text.
-- Do not guess or infer tags not evidenced in the text.
-- A job can have 0 to 8 tags total.
-- Return ONLY a JSON object: {{"tags": ["tag1", "tag2", ...]}}
-- Only use tags from the provided taxonomy. No custom tags.
+- Only assign tags clearly supported by the job posting text.
+- Use lowercase, hyphen-separated slugs (e.g. "remote-first", not "Remote First").
+- Keep tags concise — 1 to 3 words max per tag.
+- A job can have 0 to 10 tags total.
+- Return ONLY a JSON object: {"tags": ["tag1", "tag2", ...]}
 """
 
 
@@ -140,7 +132,7 @@ class JobTagExtractor:
         return tags
 
     async def _extract_tags(self, job_text: str) -> list[str]:
-        """Call the LLM to extract tags. Returns validated tags only."""
+        """Call the LLM to extract tags. Returns cleaned, dynamic tags."""
         try:
             response = await acompletion(
                 model=self.model,
@@ -151,12 +143,12 @@ class JobTagExtractor:
                 temperature=0.1,
             )
             raw = response.choices[0].message.content or "{}"
-            # Extract JSON from response — model may wrap it in markdown fences
+            # Strip markdown fences if present
             if "```" in raw:
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
                     raw = raw[4:]
-            # Find the JSON object boundaries
+            # Extract JSON object boundaries
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start != -1 and end > start:
@@ -165,8 +157,16 @@ class JobTagExtractor:
             raw_tags: list = data.get("tags", [])
             if not isinstance(raw_tags, list):
                 raw_tags = []
-            # Normalize to lowercase before taxonomy validation
-            return [t.lower() for t in raw_tags if isinstance(t, str) and t.lower() in _ALL_VALID_TAGS]
+            # Normalize: lowercase, slugify spaces → hyphens, keep only valid slug chars
+            tags = []
+            for t in raw_tags:
+                if not isinstance(t, str):
+                    continue
+                slug = re.sub(r"[^a-z0-9-]", "", t.lower().replace(" ", "-").replace("_", "-"))
+                slug = re.sub(r"-+", "-", slug).strip("-")
+                if slug:
+                    tags.append(slug)
+            return tags[:10]  # cap at 10 tags
         except Exception as e:
             logger.warning(f"Tag extraction failed, skipping: {e}")
             return []
@@ -182,21 +182,13 @@ class JobTagExtractor:
             {"job_id": job_id, "tags": tags},
         )
 
-        tag_category_map = {
-            tag: category
-            for category, tag_list in JOB_TAG_TAXONOMY.items()
-            for tag in tag_list
-        }
-
         for tag in tags:
-            category = tag_category_map.get(tag, "other")
             await self.client.run_write(
                 """
                 MERGE (t:JobTag {name: $tag})
-                  ON CREATE SET t.category = $category
                 WITH t
                 MATCH (j:Job {id: $job_id})
                 MERGE (j)-[:HAS_TAG]->(t)
                 """,
-                {"job_id": job_id, "tag": tag, "category": category},
+                {"job_id": job_id, "tag": tag},
             )
