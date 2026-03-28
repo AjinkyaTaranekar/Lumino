@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { TrendingUp, Sparkles, Briefcase, AlertCircle, Users, Plus, Network } from 'lucide-react';
+import { TrendingUp, Sparkles, Briefcase, AlertCircle, Plus, Network } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import type { MatchResult, Job } from '../lib/types';
@@ -208,20 +208,13 @@ function UserDashboard() {
 
 // ─── Recruiter Dashboard ──────────────────────────────────────────────────────
 function RecruiterDashboard() {
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.listJobs(session?.userId).then(data => { setJobs(data); setLoading(false); }).catch(() => setLoading(false));
-  }, [session?.userId]);
 
   const stats = [
-    { label: 'Total Jobs',       value: loading ? '…' : String(jobs.length), color: 'text-indigo-950' },
-    { label: 'Interviews Today', value: '8',                                  color: 'text-indigo-950' },
-    { label: 'High Match',       value: '42',                                 color: 'text-blue-500'   },
-    { label: 'Time to Hire',     value: '14d',                                color: 'text-indigo-950' },
+    { label: 'Interviews Today', value: '8',  color: 'text-indigo-950' },
+    { label: 'High Match',       value: '42', color: 'text-blue-500'   },
+    { label: 'Time to Hire',     value: '14d', color: 'text-indigo-950' },
   ];
 
   return (
@@ -229,11 +222,11 @@ function RecruiterDashboard() {
       <header className="mb-10">
         <h1 className="text-4xl font-extrabold text-indigo-950 tracking-tight">Recruiter Portal</h1>
         <p className="mt-3 text-lg text-slate-500">
-          Welcome back, {user?.name}. Managing {jobs.length} active job{jobs.length !== 1 ? 's' : ''}.
+          Welcome back, {user?.name}.
         </p>
       </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
         {stats.map(s => (
           <motion.div key={s.label} whileHover={{ y: -2 }} className="stat-card">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">{s.label}</h3>
@@ -242,51 +235,26 @@ function RecruiterDashboard() {
         ))}
       </div>
 
-      {/* Active jobs */}
-      <div className="card-lumino overflow-hidden">
-        <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-indigo-950">Active Openings</h2>
-          <Link to="/jobs/create" className="text-sm font-bold text-blue-500 hover:underline flex items-center gap-1">
-            <Plus size={14} aria-hidden="true" /> Create New
-          </Link>
+      {/* Jobs CTA */}
+      <motion.div whileHover={{ y: -2 }} className="card-lumino p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-primary-50 border border-primary-100 flex items-center justify-center flex-shrink-0">
+            <Briefcase size={24} className="text-primary-500" aria-hidden="true" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-indigo-950">Manage Job Openings</h2>
+            <p className="text-sm text-slate-400 mt-0.5">View your postings, browse candidates, and manage your pipeline.</p>
+          </div>
         </div>
-        {jobs.length === 0 && !loading ? (
-          <div className="p-16 text-center">
-            <Briefcase size={40} className="mx-auto mb-3 text-slate-300" aria-hidden="true" />
-            <p className="text-slate-500 text-sm mb-4">No jobs posted yet.</p>
-            <button onClick={() => navigate('/jobs/create')} className="btn-primary">
-              Post a Job →
-            </button>
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-50">
-            {jobs.map(job => (
-              <button
-                key={job.id}
-                onClick={() => navigate(`/talent-pool/${job.id}`)}
-                className="w-full p-6 hover:bg-slate-50 transition-colors cursor-pointer flex justify-between items-center text-left focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-              >
-                <div>
-                  <h3 className="font-bold text-indigo-950">{job.title ?? job.id}</h3>
-                  {job.company && <p className="text-sm text-slate-500">{job.company}</p>}
-                </div>
-                <div className="text-right flex-shrink-0 ml-4">
-                  {job.remote_policy && (
-                    <span className={`badge ${
-                      job.remote_policy === 'remote' ? 'badge-green'
-                      : job.remote_policy === 'hybrid' ? 'badge-orange'
-                      : 'badge-blue'
-                    }`}>
-                      {job.remote_policy}
-                    </span>
-                  )}
-                  <p className="text-xs text-slate-400 uppercase font-bold mt-1">Find candidates</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <button onClick={() => navigate('/jobs/create')} className="btn-secondary flex items-center gap-1.5">
+            <Plus size={14} aria-hidden="true" /> Post a Job
+          </button>
+          <button onClick={() => navigate('/jobs')} className="btn-primary flex items-center gap-1.5">
+            <Briefcase size={14} aria-hidden="true" /> My Jobs
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }

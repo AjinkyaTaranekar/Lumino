@@ -10,11 +10,19 @@ import type {
   IngestJobResponse,
   IngestUserResponse,
   InterestProfileResponse,
+  InterviewTurn,
   Job,
+  JobApplicantsResponse,
+  PracticeHistoryResponse,
+  PracticeScorecard,
   ResolveFlagResponse,
+  RichJobProfile,
   RollbackResponse,
+  StartPracticeResponse,
+  UserApplicationsResponse,
   UserDescribeResponse,
   UserListItem,
+  UserPracticeSessionsResponse,
 } from './types';
 
 const BASE = '/api/v1';
@@ -156,11 +164,20 @@ export const api = {
   removeInterest: (userId: string, tag: string) =>
     del<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`),
 
+  getApplications: (userId: string) =>
+    get<UserApplicationsResponse>(`/users/${userId}/applications`),
+
+  getJobApplicants: (jobId: string) =>
+    get<JobApplicantsResponse>(`/jobs/${jobId}/applications`),
+
   // Job tag management
   retagJob: (jobId: string) =>
     post<{ job_id: string; tags: string[]; count: number }>(`/jobs/${jobId}/retag`, {}),
   retagAllJobs: () =>
     post<{ jobs_processed: number; jobs_tagged: number; results: Record<string, string[]> }>('/jobs/retag-all', {}),
+
+  // Job profile
+  getJobProfile: (jobId: string) => get<RichJobProfile>(`/jobs/${jobId}/profile`),
 
   // Admin - delete
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),
@@ -200,5 +217,23 @@ export const api = {
   saveCheckpoint: (entityType: 'user' | 'job', entityId: string, label?: string) => {
     const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`;
     return post<unknown>(`${base}/graph/checkpoint`, { label: label ?? 'manual' });
+  },
+
+  // ── Practice Interview ──────────────────────────────────────────────────────
+  practice: {
+    startSession: (body: { user_id: string; job_id: string }) =>
+      post<StartPracticeResponse>('/practice/sessions/start', body),
+
+    sendMessage: (sessionId: string, body: { user_id: string; content: string }) =>
+      post<InterviewTurn>(`/practice/sessions/${sessionId}/message`, body),
+
+    completeSession: (sessionId: string, body: { user_id: string }) =>
+      post<PracticeScorecard>(`/practice/sessions/${sessionId}/complete`, body),
+
+    getHistory: (sessionId: string) =>
+      get<PracticeHistoryResponse>(`/practice/sessions/${sessionId}/history`),
+
+    getUserSessions: (userId: string) =>
+      get<UserPracticeSessionsResponse>(`/practice/users/${userId}/sessions`),
   },
 };

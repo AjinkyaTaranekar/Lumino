@@ -84,6 +84,45 @@ class SQLiteClient:
                     ON analytics_events(user_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_analytics_job
                     ON analytics_events(job_id);
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_user_event
+                    ON analytics_events(user_id, event_type, created_at);
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_job_event
+                    ON analytics_events(job_id, event_type, created_at);
+
+                CREATE TABLE IF NOT EXISTS practice_sessions (
+                    session_id        TEXT PRIMARY KEY,
+                    user_id           TEXT NOT NULL,
+                    job_id            TEXT NOT NULL,
+                    phase             TEXT NOT NULL DEFAULT 'intro',
+                    question_index    INTEGER NOT NULL DEFAULT 0,
+                    core_questions    TEXT,
+                    started_at        TEXT NOT NULL,
+                    last_active       TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS practice_messages (
+                    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id           TEXT NOT NULL REFERENCES practice_sessions(session_id),
+                    role                 TEXT NOT NULL,
+                    content              TEXT NOT NULL,
+                    interviewer_persona  TEXT,
+                    phase                TEXT,
+                    created_at           TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS practice_scorecards (
+                    session_id    TEXT PRIMARY KEY REFERENCES practice_sessions(session_id),
+                    scores        TEXT NOT NULL,
+                    strengths     TEXT NOT NULL,
+                    gaps          TEXT NOT NULL,
+                    recommendation TEXT NOT NULL,
+                    generated_at  TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_practice_sessions_user
+                    ON practice_sessions(user_id);
                 """
             )
             await db.commit()

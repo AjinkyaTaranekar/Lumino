@@ -43,6 +43,8 @@ from models.taxonomies import (
     HYBRID_ALPHA,
     HYBRID_BETA,
     normalize_work_style,
+    EDUCATION_LEVEL_SCORE,
+    QUAL_IMPORTANCE_WEIGHTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -132,20 +134,24 @@ class MatchingEngine:
         # Resolve job tags — prefer caller-supplied (avoids extra query in batch)
         resolved_tags: list[str] = job_tags if job_tags is not None else list(job_info[0].get("tags") or [])
 
-        skill_data        = await self._compute_skill_score(user_id, job_id)
-        domain_data       = await self._compute_domain_score(user_id, job_id)
-        soft_data         = await self._compute_soft_skill_score(user_id, job_id)
-        culture_fit_data  = await self._compute_culture_fit_score(user_id, job_id)
+        skill_data         = await self._compute_skill_score(user_id, job_id)
+        domain_data        = await self._compute_domain_score(user_id, job_id)
+        soft_data          = await self._compute_soft_skill_score(user_id, job_id)
+        culture_fit_data   = await self._compute_culture_fit_score(user_id, job_id)
         culture_bonus_data = await self._compute_culture_bonus(user_id, job_id)
-        pref_data         = await self._compute_preference_bonus(user_id, job_id)
+        pref_data          = await self._compute_preference_bonus(user_id, job_id)
+        edu_data           = await self._compute_education_fit(user_id, job_id)
+        qual_data          = await self._compute_preferred_qual_bonus(user_id, job_id)
 
-        mandatory_score   = skill_data.get("mandatory_score", 0.0) or 0.0
-        optional_score    = skill_data.get("optional_score", 0.0) or 0.0
-        domain_score      = domain_data.get("score", 0.0) or 0.0
-        soft_skill_score  = soft_data.get("score")   # None = no data
-        culture_fit_score = culture_fit_data.get("score")  # None = no data
-        culture_bonus     = culture_bonus_data.get("bonus", 0.0) or 0.0
-        preference_bonus  = pref_data.get("bonus", 0.0) or 0.0
+        mandatory_score    = skill_data.get("mandatory_score", 0.0) or 0.0
+        optional_score     = skill_data.get("optional_score", 0.0) or 0.0
+        domain_score       = domain_data.get("score", 0.0) or 0.0
+        soft_skill_score   = soft_data.get("score")    # None = no data
+        culture_fit_score  = culture_fit_data.get("score")  # None = no data
+        culture_bonus      = culture_bonus_data.get("bonus", 0.0) or 0.0
+        preference_bonus   = pref_data.get("bonus", 0.0) or 0.0
+        education_fit      = edu_data.get("score", 0.0) or 0.0
+        preferred_qual_bonus = qual_data.get("bonus", 0.0) or 0.0
 
         graph_score = self._compute_total_score(
             mandatory_score, optional_score, domain_score, soft_skill_score, culture_fit_score
@@ -187,6 +193,10 @@ class MatchingEngine:
             interest_score=round(interest_score, 4),
             interest_tags_matched=interest_tags_matched,
             hybrid_score=hybrid_score,
+            education_fit_score=round(education_fit, 4),
+            preferred_qual_bonus=round(preferred_qual_bonus, 4),
+            met_education_reqs=edu_data.get("met", []),
+            gap_education_reqs=edu_data.get("gaps", []),
         )
 
     async def _get_matched_interest_tags(self, user_id: str, job_tags: list[str]) -> list[str]:
@@ -200,6 +210,139 @@ class MatchingEngine:
             {"user_id": user_id, "tags": job_tags},
         )
         return [row["tag"] for row in rows]
+
+    async def _compute_education_fit(
+        self, user_id: str, job_id: str
+    ) -> dict:
+        """
+        Compare the user's Education nodes against the job's EducationRequirement nodes.
+
+        Scoring (bonus only — never penalizes total_score):
+          1.0  — user meets or exceeds the required degree level
+          0.5  — user is exactly one level below (close enough)
+          0.0  — user is two or more levels below a *required* education req
+
+        Returns: {"score": float, "met": [str], "gaps": [str]}
+        """
+        # Fetch job's education requirements
+        req_rows = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})-[:HAS_EDUCATION_REQ]->(e:EducationRequirement)
+            RETURN e.degree_level AS degree_level, e.field AS field,
+                   e.is_required AS is_required
+            """,
+            {"job_id": job_id},
+        )
+        if not req_rows:
+            return {"score": 0.0, "met": [], "gaps": []}
+
+        # Fetch user's highest education level
+        user_edu = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY|HAS_PROJECT_CATEGORY|
+                  HAS_DOMAIN_CATEGORY|HAS_EXPERIENCE_CATEGORY*0..1]->(cat)
+            WITH u
+            MATCH (e:Education {user_id: $user_id})
+            RETURN e.degree AS degree
+            """,
+            {"user_id": user_id},
+        )
+
+        # Determine user's best education level score
+        user_level = 0  # default: no education data
+        for edu in user_edu:
+            degree = (edu.get("degree") or "").lower()
+            for level_key, level_val in EDUCATION_LEVEL_SCORE.items():
+                if level_key in degree:
+                    user_level = max(user_level, level_val)
+                    break
+
+        met: list[str] = []
+        gaps: list[str] = []
+        total_score = 0.0
+
+        for req in req_rows:
+            req_level = EDUCATION_LEVEL_SCORE.get(
+                (req.get("degree_level") or "any").lower(), 0
+            )
+            field = req.get("field") or ""
+            is_required = req.get("is_required", True)
+            label = f"{req.get('degree_level', 'degree')}{' in ' + field if field else ''}"
+
+            diff = user_level - req_level
+            if diff >= 0:
+                total_score += 1.0
+                met.append(label)
+            elif diff == -1:
+                total_score += 0.5
+                met.append(f"{label} (close)")
+            else:
+                # Only count as gap if it's a hard requirement
+                if is_required:
+                    gaps.append(label)
+                total_score += 0.0
+
+        score = total_score / len(req_rows) if req_rows else 0.0
+        return {"score": score, "met": met, "gaps": gaps}
+
+    async def _compute_preferred_qual_bonus(
+        self, user_id: str, job_id: str
+    ) -> dict:
+        """
+        Score how many of the job's PreferredQualification nodes the user satisfies.
+
+        Matches against user's Certification, Coursework, and Domain nodes (case-insensitive).
+        Weights by importance: strongly_preferred=0.8, preferred=0.5, nice_to_have=0.2.
+
+        Returns: {"bonus": float, "matched": [str]}
+        """
+        qual_rows = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})-[:HAS_PREFERRED_QUAL]->(p:PreferredQualification)
+            RETURN p.value AS value, p.importance AS importance, p.type AS type
+            """,
+            {"job_id": job_id},
+        )
+        if not qual_rows:
+            return {"bonus": 0.0, "matched": []}
+
+        # Gather all user credential names (certs, courses, domains) — lowercased
+        user_creds_rows = await self.client.run_query(
+            """
+            OPTIONAL MATCH (cert:Certification {user_id: $user_id})
+            OPTIONAL MATCH (course:Course {user_id: $user_id})
+            OPTIONAL MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY|HAS_DOMAIN_CATEGORY*0..1]->()
+                           -[:HAS_DOMAIN_FAMILY|HAS_DOMAIN*0..1]->(d:Domain)
+            WITH collect(DISTINCT toLower(trim(coalesce(cert.name, '')))) +
+                 collect(DISTINCT toLower(trim(coalesce(course.name, '')))) +
+                 collect(DISTINCT toLower(trim(coalesce(d.name, '')))) AS creds
+            RETURN creds
+            """,
+            {"user_id": user_id},
+        )
+        user_creds: set[str] = set()
+        if user_creds_rows:
+            for c in (user_creds_rows[0].get("creds") or []):
+                if c:
+                    user_creds.add(c)
+
+        matched: list[str] = []
+        total_weight = 0.0
+        matched_weight = 0.0
+
+        for qual in qual_rows:
+            importance = qual.get("importance") or "nice_to_have"
+            weight = QUAL_IMPORTANCE_WEIGHTS.get(importance, 0.2)
+            total_weight += weight
+            val = (qual.get("value") or "").lower().strip()
+            # Check partial match: any user credential contains the qual value or vice versa
+            hit = any(val in cred or cred in val for cred in user_creds if cred)
+            if hit:
+                matched_weight += weight
+                matched.append(qual.get("value", ""))
+
+        bonus = matched_weight / total_weight if total_weight > 0 else 0.0
+        return {"bonus": bonus, "matched": matched}
 
     def _compute_total_score(
         self,
@@ -980,6 +1123,78 @@ class MatchingEngine:
             {"job_id": job_id},
         )
 
+        # ── Deep job profile nodes ─────────────────────────────────────────────
+        company_profile_rows = await self.client.run_query(
+            "OPTIONAL MATCH (j:Job {id: $job_id})-[:HAS_COMPANY_PROFILE]->(c:CompanyProfile) "
+            "RETURN c.mission AS mission, c.vision AS vision, c.values AS values, "
+            "c.stage AS stage, c.product_description AS product_description, c.industry AS industry",
+            {"job_id": job_id},
+        )
+        hiring_team_rows = await self.client.run_query(
+            "OPTIONAL MATCH (j:Job {id: $job_id})-[:HAS_HIRING_TEAM]->(t:HiringTeam) "
+            "RETURN t.name AS name, t.description AS description, t.product_built AS product_built, "
+            "t.team_size_est AS team_size_est, t.tech_focus AS tech_focus, t.team_type AS team_type",
+            {"job_id": job_id},
+        )
+        role_exp_rows = await self.client.run_query(
+            "OPTIONAL MATCH (j:Job {id: $job_id})-[:HAS_ROLE_EXPECTATIONS]->(r:RoleExpectation) "
+            "RETURN r.key_responsibilities AS key_responsibilities, "
+            "r.success_metrics AS success_metrics, r.first_30_days AS first_30_days, "
+            "r.first_90_days AS first_90_days, r.autonomy_level AS autonomy_level",
+            {"job_id": job_id},
+        )
+        job_soft_req_rows = await self.client.run_query(
+            "OPTIONAL MATCH (j:Job {id: $job_id})-[:HAS_SOFT_REQUIREMENTS]->(s:JobSoftRequirement) "
+            "RETURN s.trait AS trait, s.description AS description, s.is_dealbreaker AS is_dealbreaker",
+            {"job_id": job_id},
+        )
+
+        def _safe_parse_json(val):
+            if not val:
+                return []
+            if isinstance(val, list):
+                return val
+            try:
+                import json as _j2
+                return _j2.loads(val)
+            except Exception:
+                return [val] if val else []
+
+        company_profile_ctx = {}
+        if company_profile_rows and company_profile_rows[0].get("mission"):
+            cp = company_profile_rows[0]
+            company_profile_ctx = {
+                "mission": cp.get("mission"),
+                "vision": cp.get("vision"),
+                "values": _safe_parse_json(cp.get("values")),
+                "stage": cp.get("stage"),
+                "product_description": cp.get("product_description"),
+                "industry": cp.get("industry"),
+            }
+
+        hiring_team_ctx = {}
+        if hiring_team_rows and hiring_team_rows[0].get("name"):
+            t = hiring_team_rows[0]
+            hiring_team_ctx = {
+                "name": t.get("name"),
+                "description": t.get("description"),
+                "product_built": t.get("product_built"),
+                "team_size_est": t.get("team_size_est"),
+                "tech_focus": _safe_parse_json(t.get("tech_focus")),
+                "team_type": t.get("team_type"),
+            }
+
+        role_exp_ctx = {}
+        if role_exp_rows and role_exp_rows[0].get("key_responsibilities"):
+            r = role_exp_rows[0]
+            role_exp_ctx = {
+                "key_responsibilities": _safe_parse_json(r.get("key_responsibilities")),
+                "success_metrics": _safe_parse_json(r.get("success_metrics")),
+                "first_30_days": r.get("first_30_days"),
+                "first_90_days": r.get("first_90_days"),
+                "autonomy_level": r.get("autonomy_level"),
+            }
+
         return {
             # User technical
             "matched_skills_rich":   [dict(r) for r in matched_rich],
@@ -994,7 +1209,7 @@ class MatchingEngine:
             "goals":                 [dict(r) for r in goals if r.get("description")],
             "user_culture":          dict(user_culture[0]) if user_culture and user_culture[0].get("pace_preference") else {},
             "behavioral_insights":   [dict(r) for r in behavioral_insights if r.get("insight_type")],
-            # Job context
+            # Job context (legacy nodes)
             "job_meta":              job_meta,
             "soft_skill_reqs":       [dict(r) for r in soft_skill_reqs if r.get("quality")],
             "job_team_culture":      dict(job_team_culture[0]) if job_team_culture and job_team_culture[0].get("pace") else {},
@@ -1002,6 +1217,11 @@ class MatchingEngine:
             "hiring_goals":          dict(hiring_goals[0]) if hiring_goals and hiring_goals[0].get("gap_being_filled") else {},
             "success_metrics":       dict(success_metrics[0]) if success_metrics and success_metrics[0].get("at_90_days") else {},
             "team_composition":      dict(team_composition[0]) if team_composition and team_composition[0].get("team_size") else {},
+            # Deep job profile (new nodes)
+            "company_profile":       company_profile_ctx,
+            "hiring_team":           hiring_team_ctx,
+            "role_expectations":     role_exp_ctx,
+            "job_soft_requirements": [dict(r) for r in job_soft_req_rows if r.get("trait")],
         }
 
     # ──────────────────────────────────────────────────────────────────────────

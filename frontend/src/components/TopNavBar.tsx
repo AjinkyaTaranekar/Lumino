@@ -24,7 +24,6 @@ export function TopNavBar() {
     : user?.role === 'RECRUITER'
     ? [
         { label: 'Dashboard',   to: '/dashboard'  },
-        { label: 'Talent Pool', to: '/talent-pool' },
         { label: 'Jobs',        to: '/jobs'        },
       ]
     : [

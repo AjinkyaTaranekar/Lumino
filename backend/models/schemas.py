@@ -498,8 +498,177 @@ class ExtractedWorkStyle(BaseModel):
     )
 
 
+class ExtractedEducationRequirement(BaseModel):
+    degree_level: str = Field(
+        description="Required degree level: 'phd', 'master', 'bachelor', 'associate', 'any'"
+    )
+    field: Optional[str] = Field(
+        default=None,
+        description="Field of study, e.g. 'Computer Science', 'Engineering', 'Mathematics'"
+    )
+    is_required: bool = Field(
+        default=True,
+        description="True if this is a hard requirement; False if preferred/nice-to-have"
+    )
+    alternatives: List[str] = Field(
+        default_factory=list,
+        description="Alternative qualifications that substitute for this degree, e.g. ['equivalent experience', 'bootcamp']"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Free-text note about the education requirement"
+    )
+
+
+class ExtractedPreferredQualification(BaseModel):
+    type: str = Field(
+        description="Type: 'certification', 'course', 'domain_exp', 'soft_skill', 'tool', 'other'"
+    )
+    value: str = Field(
+        description="Specific qualification, e.g. 'AWS Certified Solutions Architect', 'Kafka experience'"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Why this qualification is valued or what problem it addresses"
+    )
+    importance: str = Field(
+        default="nice_to_have",
+        description="How important: 'nice_to_have', 'preferred', 'strongly_preferred'"
+    )
+
+
+class ExtractedCompanyProfile(BaseModel):
+    mission: Optional[str] = Field(
+        default=None,
+        description="Company mission statement or core purpose"
+    )
+    vision: Optional[str] = Field(
+        default=None,
+        description="Company vision or long-term goal"
+    )
+    values: List[str] = Field(
+        default_factory=list,
+        description="Core company values, e.g. ['transparency', 'ownership', 'user-first']"
+    )
+    stage: Optional[str] = Field(
+        default=None,
+        description="Company stage: 'startup', 'growth', 'enterprise', 'nonprofit'"
+    )
+    product_description: Optional[str] = Field(
+        default=None,
+        description="What the company builds and who it serves"
+    )
+    industry: Optional[str] = Field(
+        default=None,
+        description="Industry vertical, e.g. 'FinTech', 'Healthcare', 'SaaS', 'E-commerce'"
+    )
+    notable_tech: List[str] = Field(
+        default_factory=list,
+        description="Notable technologies the company is known for or invests in"
+    )
+
+
+class ExtractedHiringTeam(BaseModel):
+    name: Optional[str] = Field(
+        default=None,
+        description="Team or department name, e.g. 'Platform Engineering', 'ML Infrastructure'"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="What the team does day-to-day"
+    )
+    product_built: Optional[str] = Field(
+        default=None,
+        description="The specific product, service, or system the team owns"
+    )
+    team_size_est: Optional[str] = Field(
+        default=None,
+        description="Estimated team size, e.g. '5-10', '~20', 'small'"
+    )
+    tech_focus: List[str] = Field(
+        default_factory=list,
+        description="Primary technologies or domains the team focuses on"
+    )
+    reports_to: Optional[str] = Field(
+        default=None,
+        description="Who this role reports to, e.g. 'VP of Engineering', 'Tech Lead'"
+    )
+    team_type: Optional[str] = Field(
+        default=None,
+        description="Team type: 'product', 'platform', 'infra', 'ml', 'data', 'design', 'other'"
+    )
+
+
+class ExtractedCompensationPackage(BaseModel):
+    salary_min: Optional[int] = Field(
+        default=None,
+        description="Minimum annual salary in the stated currency (integer, no symbols)"
+    )
+    salary_max: Optional[int] = Field(
+        default=None,
+        description="Maximum annual salary in the stated currency (integer, no symbols)"
+    )
+    currency: str = Field(
+        default="USD",
+        description="Currency code, e.g. 'USD', 'EUR', 'GBP', 'INR'"
+    )
+    equity: Optional[str] = Field(
+        default=None,
+        description="Equity details, e.g. '0.1-0.5% options', 'RSUs', 'ESOP'"
+    )
+    benefits: List[str] = Field(
+        default_factory=list,
+        description="Benefits offered, e.g. ['health insurance', '401k', 'remote stipend', 'unlimited PTO']"
+    )
+    bonus_structure: Optional[str] = Field(
+        default=None,
+        description="Bonus structure details, e.g. 'annual 10% target', 'performance-based'"
+    )
+    is_disclosed: bool = Field(
+        default=False,
+        description="True if salary information was explicitly stated in the posting"
+    )
+
+
+class ExtractedRoleExpectation(BaseModel):
+    key_responsibilities: List[str] = Field(
+        default_factory=list,
+        description="Primary responsibilities of the role, each as a concise action statement"
+    )
+    success_metrics: List[str] = Field(
+        default_factory=list,
+        description="How success in this role is measured, e.g. 'reduce P95 latency by 30%'"
+    )
+    first_30_days: Optional[str] = Field(
+        default=None,
+        description="What the candidate is expected to accomplish in the first 30 days"
+    )
+    first_90_days: Optional[str] = Field(
+        default=None,
+        description="What the candidate is expected to accomplish in the first 90 days"
+    )
+    autonomy_level: str = Field(
+        default="moderate",
+        description="Degree of autonomy: 'low' (highly directed), 'moderate', 'high' (self-directed)"
+    )
+
+
+class ExtractedJobSoftRequirement(BaseModel):
+    trait: str = Field(
+        description="Soft skill or personality trait, e.g. 'ownership', 'communication', 'empathy'"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description="Context on why this trait matters for the role"
+    )
+    is_dealbreaker: bool = Field(
+        default=False,
+        description="True if the absence of this trait is a dealbreaker"
+    )
+
+
 class JobPostingExtraction(BaseModel):
-    """Top-level schema for Gemini job posting extraction. Passed as response_schema."""
+    """Top-level schema for LLM job posting extraction."""
     title: str = Field(description="Job title")
     company: Optional[str] = Field(default=None, description="Company name")
     skill_requirements: List[ExtractedJobSkillRequirement] = Field(default_factory=list)
@@ -515,6 +684,35 @@ class JobPostingExtraction(BaseModel):
     )
     experience_years_min: Optional[int] = Field(
         default=None, description="Minimum years of experience required"
+    )
+    # Deep profile sections
+    education_requirements: List[ExtractedEducationRequirement] = Field(
+        default_factory=list,
+        description="Formal education requirements (degree, field, required vs. preferred)"
+    )
+    preferred_qualifications: List[ExtractedPreferredQualification] = Field(
+        default_factory=list,
+        description="Nice-to-have or preferred qualifications beyond core skill requirements"
+    )
+    company_profile: Optional[ExtractedCompanyProfile] = Field(
+        default=None,
+        description="Company mission, values, stage, product and industry context"
+    )
+    hiring_team: Optional[ExtractedHiringTeam] = Field(
+        default=None,
+        description="The team hiring for this role: name, what they build, tech focus, size"
+    )
+    compensation: Optional[ExtractedCompensationPackage] = Field(
+        default=None,
+        description="Compensation details: salary range, equity, benefits"
+    )
+    role_expectations: Optional[ExtractedRoleExpectation] = Field(
+        default=None,
+        description="Role expectations: responsibilities, success metrics, 30/90-day goals"
+    )
+    soft_requirements: List[ExtractedJobSoftRequirement] = Field(
+        default_factory=list,
+        description="Soft skills, personality traits, and cultural fit requirements"
     )
 
 
@@ -588,6 +786,45 @@ class MatchResult(BaseModel):
         default=0.0,
         description="Final hybrid score: alpha*graph_score + beta*interest_score"
     )
+    # Deep job profile bonus signals
+    education_fit_score: float = Field(
+        default=0.0,
+        description="Education fit bonus (0-1): how well user education meets job requirements"
+    )
+    preferred_qual_bonus: float = Field(
+        default=0.0,
+        description="Preferred qualification bonus (0-1): how many nice-to-have qualifications user holds"
+    )
+    met_education_reqs: List[str] = Field(
+        default_factory=list,
+        description="Education requirements the user meets"
+    )
+    gap_education_reqs: List[str] = Field(
+        default_factory=list,
+        description="Required education requirements the user does not meet"
+    )
+
+
+class JobProfileResponse(BaseModel):
+    """Full enriched job profile returned by GET /jobs/{job_id}/profile."""
+    job_id: str
+    title: Optional[str] = None
+    company: Optional[str] = None
+    remote_policy: Optional[str] = None
+    company_size: Optional[str] = None
+    experience_years_min: Optional[int] = None
+    tags: List[str] = Field(default_factory=list)
+    key_skills: List[str] = Field(default_factory=list)
+    domains: List[str] = Field(default_factory=list)
+    description_preview: Optional[str] = None
+    # Deep profile
+    education_requirements: List[dict] = Field(default_factory=list)
+    preferred_qualifications: List[dict] = Field(default_factory=list)
+    company_profile: Optional[dict] = None
+    hiring_team: Optional[dict] = None
+    compensation: Optional[dict] = None
+    role_expectations: Optional[dict] = None
+    soft_requirements: List[dict] = Field(default_factory=list)
 
 
 class BatchMatchResponse(BaseModel):
@@ -668,6 +905,45 @@ class AdjustInterestRequest(BaseModel):
         ge=0.0, le=1.0,
         description="Manually override the interest score for this tag (0.0 = disinterested, 1.0 = highly interested)"
     )
+
+
+class UserApplication(BaseModel):
+    job_id: str
+    job_title: str
+    company: Optional[str] = None
+    applied_at: str  # ISO-8601 UTC
+    match_score: Optional[float] = None
+
+
+class UserApplicationsResponse(BaseModel):
+    user_id: str
+    applications: List[UserApplication]
+    total: int
+
+
+class AppliedCandidate(BaseModel):
+    user_id: str
+    applied_at: str
+    total_score: Optional[float] = None
+    skill_score: Optional[float] = None
+    domain_score: Optional[float] = None
+    optional_skill_score: float = 0.0
+    soft_skill_score: float = 0.0
+    culture_fit_score: float = 0.0
+    culture_bonus: float = 0.0
+    preference_bonus: float = 0.0
+    matched_skills: List[str] = Field(default_factory=list)
+    missing_skills: List[str] = Field(default_factory=list)
+    matched_domains: List[str] = Field(default_factory=list)
+    missing_domains: List[str] = Field(default_factory=list)
+    behavioral_risk_flags: List[str] = Field(default_factory=list)
+    explanation: str = ""
+
+
+class JobApplicantsResponse(BaseModel):
+    job_id: str
+    applicants: List[AppliedCandidate]
+    total: int
 
 
 # ──────────────────────────────────────────────────────────────────────────────

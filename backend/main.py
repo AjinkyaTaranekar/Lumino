@@ -26,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv()
 
 from api.routes import router
+from api.practice_routes import practice_router
 from database.neo4j_client import init_client, get_client
 from database.sqlite_client import init_sqlite
 
@@ -89,6 +90,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api/v1")
+app.include_router(practice_router, prefix="/api/v1/practice")
 
 
 @app.get("/", include_in_schema=False)

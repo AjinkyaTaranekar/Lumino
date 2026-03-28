@@ -81,6 +81,14 @@ NODE_TYPE_COLORS: dict[str, str] = {
     "TeamCultureIdentity": "#10B981",   # emerald-500
     "SuccessMetric": "#22C55E",     # green-500
     "InterviewSignal": "#EAB308",   # yellow-500
+    # ── New deep job profile nodes ─────────────────────────────────────────────
+    "EducationRequirement": "#0369A1",  # sky-700 - required degrees
+    "PreferredQualification": "#0891B2",# cyan-600 - nice-to-haves
+    "CompanyProfile": "#9333EA",    # purple-600 - mission/values
+    "HiringTeam": "#1E40AF",        # blue-800  - team context
+    "CompensationPackage": "#15803D",   # green-700 - salary/equity
+    "RoleExpectation": "#B45309",   # amber-700 - responsibilities
+    "JobSoftRequirement": "#C2410C",    # orange-700 - personality traits
 }
 
 # Nodes whose background is dark enough to warrant white label text
@@ -94,6 +102,9 @@ _DARK_FONT_NODES: frozenset[str] = frozenset({
     # Extended profile category nodes (dark backgrounds)
     "EducationCategory", "CertificationCategory", "AchievementCategory",
     "PublicationCategory", "CourseworkCategory", "LanguageCategory", "VolunteerCategory",
+    # New deep job profile nodes (dark backgrounds)
+    "EducationRequirement", "CompanyProfile", "HiringTeam",
+    "CompensationPackage", "RoleExpectation", "JobSoftRequirement",
 })
 
 
@@ -122,10 +133,15 @@ NODE_SIZES: dict[str, int] = {
     # User human-portrait nodes
     "Anecdote": 16, "Motivation": 16, "Value": 14,
     "Goal": 16, "CultureIdentity": 18, "BehavioralInsight": 12,
-    # Job deep-profile nodes
+    # Job deep-profile nodes (legacy)
     "TeamComposition": 16, "RoleContext": 14, "HiringGoal": 14,
     "SoftSkillRequirement": 14, "TeamCultureIdentity": 16,
     "SuccessMetric": 14, "InterviewSignal": 12,
+    # New deep job profile nodes
+    "EducationRequirement": 16, "PreferredQualification": 14,
+    "CompanyProfile": 22, "HiringTeam": 18,
+    "CompensationPackage": 18, "RoleExpectation": 18,
+    "JobSoftRequirement": 14,
 }
 
 DEFAULT_NODE_COLOR = "#94A3B8"  # slate-400
@@ -139,6 +155,9 @@ _USER_LABEL_FILTER = (
     "|-JobCultureRequirements|-WorkStyle"
     "|-TeamComposition|-RoleContext|-HiringGoal"
     "|-SoftSkillRequirement|-TeamCultureIdentity|-SuccessMetric|-InterviewSignal"
+    "|-EducationRequirement|-PreferredQualification"
+    "|-CompanyProfile|-HiringTeam|-CompensationPackage"
+    "|-RoleExpectation|-JobSoftRequirement"
 )
 _JOB_LABEL_FILTER = (
     "-User|-SkillCategory|-SkillFamily|-Skill"
@@ -155,6 +174,8 @@ _JOB_LABEL_FILTER = (
     "|-CourseworkCategory|-Course"
     "|-LanguageCategory|-Language"
     "|-VolunteerCategory|-VolunteerWork"
+    # NOTE: New deep job profile nodes are intentionally NOT excluded — they
+    # belong to the job subgraph and should appear in job model visualizations.
 )
 
 # Types that belong exclusively to the user hierarchy
@@ -189,6 +210,10 @@ JOB_NODE_TYPES: frozenset[str] = frozenset({
     "TeamComposition", "RoleContext", "HiringGoal",
     "SoftSkillRequirement", "TeamCultureIdentity",
     "SuccessMetric", "InterviewSignal",
+    # New deep job profile nodes
+    "EducationRequirement", "PreferredQualification",
+    "CompanyProfile", "HiringTeam", "CompensationPackage",
+    "RoleExpectation", "JobSoftRequirement",
 })
 
 
