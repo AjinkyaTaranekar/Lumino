@@ -1,7 +1,10 @@
 import { useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import ScoreBar from './ScoreBar'
 import SkillBadge from './SkillBadge'
-import { ArrowRight, Building2 } from 'lucide-react'
+import JobTagBadge from './JobTagBadge'
+import { ArrowRight, Building2, Heart, ThumbsDown, Bookmark } from 'lucide-react'
+import { trackEvent } from '../lib/analytics'
 import type { MatchResult } from '../lib/types'
 
 const REMOTE_STYLES: Record<string, string> = {
@@ -45,20 +48,47 @@ interface JobCardProps {
   mode?: 'seeker' | 'recruiter'
 }
 
-export default function JobCard({ result, rank, userIdOrJobId: _userIdOrJobId, mode = 'seeker' }: JobCardProps) {
+export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }: JobCardProps) {
   const navigate = useNavigate()
+  const [liked, setLiked] = useState(false)
+  const [disliked, setDisliked] = useState(false)
+  const [bookmarked, setBookmarked] = useState(false)
 
   const handleExplore = () => {
     if (mode === 'seeker') {
+      trackEvent(userIdOrJobId, result.job_id, 'job_clicked')
       navigate(`/user/match/${result.job_id}`)
     } else {
       navigate(`/user/match/${result.job_id}`, { state: { viewAs: (result as MatchResult & { user_id?: string }).user_id } })
     }
   }
 
-  const title   = mode === 'seeker' ? (result.job_title || result.job_id) : (result as MatchResult & { user_id?: string }).user_id
-  const company = mode === 'seeker' ? result.company : null
-  const remote  = mode === 'seeker' ? (result as MatchResult & { remote_policy?: string }).remote_policy : null
+  const handleLike = () => {
+    if (mode !== 'seeker') return
+    setLiked(l => !l)
+    setDisliked(false)
+    trackEvent(userIdOrJobId, result.job_id, liked ? 'job_dismissed' : 'job_liked')
+  }
+
+  const handleDislike = () => {
+    if (mode !== 'seeker') return
+    setDisliked(d => !d)
+    setLiked(false)
+    trackEvent(userIdOrJobId, result.job_id, disliked ? 'job_dismissed' : 'job_disliked')
+  }
+
+  const handleBookmark = () => {
+    if (mode !== 'seeker') return
+    setBookmarked(b => !b)
+    trackEvent(userIdOrJobId, result.job_id, 'job_bookmarked')
+  }
+
+  const title        = mode === 'seeker' ? (result.job_title || result.job_id) : (result as MatchResult & { user_id?: string }).user_id
+  const company      = mode === 'seeker' ? result.company : null
+  const remote       = mode === 'seeker' ? (result as MatchResult & { remote_policy?: string }).remote_policy : null
+  const jobTags      = result.job_tags || []
+  const intTags      = new Set(result.interest_tags_matched || [])
+  const interestPct  = result.interest_score != null ? Math.round(result.interest_score * 100) : null
 
   return (
     <div className="card-lumino p-5 fade-in hover:shadow-card-md transition-shadow">
@@ -107,7 +137,26 @@ export default function JobCard({ result, rank, userIdOrJobId: _userIdOrJobId, m
         {result.optional_skill_score != null && result.optional_skill_score > 0 && (
           <ScoreBar label="Optional Skills" score={result.optional_skill_score} />
         )}
+        {interestPct != null && mode === 'seeker' && (
+          <ScoreBar label="Interest" score={result.interest_score!} />
+        )}
       </div>
+
+      {/* Job semantic tags */}
+      {jobTags.length > 0 && mode === 'seeker' && (
+        <div className="flex flex-wrap gap-1 mb-3">
+          {jobTags.slice(0, 5).map(tag => (
+            <JobTagBadge
+              key={tag}
+              tag={tag}
+              variant={intTags.has(tag) ? 'interest' : 'neutral'}
+            />
+          ))}
+          {jobTags.length > 5 && (
+            <JobTagBadge tag={`+${jobTags.length - 5}`} variant="neutral" />
+          )}
+        </div>
+      )}
 
       {/* Skill badges */}
       <div className="space-y-2">
@@ -135,11 +184,37 @@ export default function JobCard({ result, rank, userIdOrJobId: _userIdOrJobId, m
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-100">
-        {result.explanation ? (
-          <p className="text-xs text-slate-400 italic line-clamp-1 flex-1 mr-3">
-            {result.explanation}
-          </p>
-        ) : <div />}
+        {mode === 'seeker' ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleLike}
+              title="I'm interested"
+              className={`p-1.5 rounded-lg transition-colors ${liked ? 'text-green-600 bg-green-50' : 'text-slate-300 hover:text-green-500 hover:bg-green-50'}`}
+            >
+              <Heart size={14} fill={liked ? 'currentColor' : 'none'} />
+            </button>
+            <button
+              onClick={handleDislike}
+              title="Not for me"
+              className={`p-1.5 rounded-lg transition-colors ${disliked ? 'text-red-500 bg-red-50' : 'text-slate-300 hover:text-red-400 hover:bg-red-50'}`}
+            >
+              <ThumbsDown size={14} />
+            </button>
+            <button
+              onClick={handleBookmark}
+              title="Save for later"
+              className={`p-1.5 rounded-lg transition-colors ${bookmarked ? 'text-indigo-600 bg-indigo-50' : 'text-slate-300 hover:text-indigo-500 hover:bg-indigo-50'}`}
+            >
+              <Bookmark size={14} fill={bookmarked ? 'currentColor' : 'none'} />
+            </button>
+          </div>
+        ) : (
+          result.explanation ? (
+            <p className="text-xs text-slate-400 italic line-clamp-1 flex-1 mr-3">
+              {result.explanation}
+            </p>
+          ) : <div />
+        )}
         <button
           onClick={handleExplore}
           className="btn-primary flex-shrink-0 flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"

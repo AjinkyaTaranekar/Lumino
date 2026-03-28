@@ -35,6 +35,14 @@ class NodeLabel(str, Enum):
     JOB_DOMAIN_REQUIREMENT = "JobDomainRequirement"
     JOB_CULTURE_REQUIREMENTS = "JobCultureRequirements"
     WORK_STYLE = "WorkStyle"
+    # Deep job profile nodes
+    EDUCATION_REQUIREMENT = "EducationRequirement"
+    PREFERRED_QUALIFICATION = "PreferredQualification"
+    COMPANY_PROFILE = "CompanyProfile"
+    HIRING_TEAM = "HiringTeam"
+    COMPENSATION_PACKAGE = "CompensationPackage"
+    ROLE_EXPECTATION = "RoleExpectation"
+    JOB_SOFT_REQUIREMENT = "JobSoftRequirement"
 
 
 class RelType(str, Enum):
@@ -68,6 +76,14 @@ class RelType(str, Enum):
     REQUIRES_SKILL = "REQUIRES_SKILL"
     REQUIRES_DOMAIN = "REQUIRES_DOMAIN"
     HAS_WORK_STYLE = "HAS_WORK_STYLE"
+    # Deep job profile relationships
+    HAS_EDUCATION_REQ = "HAS_EDUCATION_REQ"
+    HAS_PREFERRED_QUAL = "HAS_PREFERRED_QUAL"
+    HAS_COMPANY_PROFILE = "HAS_COMPANY_PROFILE"
+    HAS_HIRING_TEAM = "HAS_HIRING_TEAM"
+    HAS_COMPENSATION = "HAS_COMPENSATION"
+    HAS_ROLE_EXPECTATIONS = "HAS_ROLE_EXPECTATIONS"
+    HAS_SOFT_REQUIREMENTS = "HAS_SOFT_REQUIREMENTS"
     # Cross-graph matching
     MATCHES = "MATCHES"  # Skill → JobSkillRequirement, Domain → JobDomainRequirement
 
@@ -180,6 +196,75 @@ SOFT_SKILL_TO_PATTERN: dict[str, list[str]] = {
 BEHAVIORAL_RISK_TYPES: frozenset[str] = frozenset({
     "push_back", "avoidance", "deflection", "inconsistency",
 })
+
+# Education level ordering for fit scoring (higher = more education)
+EDUCATION_LEVEL_SCORE: dict[str, int] = {
+    "phd":       4,
+    "master":    3,
+    "bachelor":  2,
+    "associate": 1,
+    "any":       0,
+}
+
+# Preferred qualification importance → bonus weight
+QUAL_IMPORTANCE_WEIGHTS: dict[str, float] = {
+    "strongly_preferred": 0.8,
+    "preferred":          0.5,
+    "nice_to_have":       0.2,
+}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ANALYTICS & JOB TAGS
+# ──────────────────────────────────────────────────────────────────────────────
+
+class AnalyticsEventType(str, Enum):
+    """User interaction events tracked for interest profile derivation."""
+    JOB_APPLIED    = "job_applied"
+    JOB_LIKED      = "job_liked"
+    JOB_BOOKMARKED = "job_bookmarked"
+    JOB_CLICKED    = "job_clicked"
+    JOB_VIEWED     = "job_viewed"
+    JOB_DISLIKED   = "job_disliked"
+    JOB_DISMISSED  = "job_dismissed"
+
+
+# Interest weights per event type — how much each action shifts the user's tag preferences
+ANALYTICS_EVENT_WEIGHTS: dict[str, float] = {
+    AnalyticsEventType.JOB_APPLIED:    3.0,
+    AnalyticsEventType.JOB_LIKED:      2.0,
+    AnalyticsEventType.JOB_BOOKMARKED: 1.5,
+    AnalyticsEventType.JOB_CLICKED:    1.0,
+    AnalyticsEventType.JOB_VIEWED:     0.5,
+    AnalyticsEventType.JOB_DISLIKED:  -2.0,
+    AnalyticsEventType.JOB_DISMISSED: -0.5,
+}
+
+# Hybrid scoring blend: graph score (fit) vs analytics score (preference)
+HYBRID_ALPHA: float = 0.75  # graph score weight
+HYBRID_BETA:  float = 0.25  # analytics interest score weight
+
+# Tag taxonomy — what the LLM extracts per job posting
+JOB_TAG_TAXONOMY: dict[str, list[str]] = {
+    "work_style": [
+        "remote-first", "hybrid", "onsite", "async-friendly", "fast-paced", "flexible-hours",
+    ],
+    "compensation": [
+        "high-paying", "equity-heavy", "competitive-salary", "below-market", "generous-benefits",
+    ],
+    "culture": [
+        "growth-driven", "mentorship-heavy", "flat-hierarchy", "results-oriented",
+        "startup-energy", "enterprise-stability", "inclusive", "collaborative",
+    ],
+    "tech": [
+        "cutting-edge-stack", "legacy-modernization", "greenfield", "research-heavy",
+        "open-source", "data-intensive", "ml-forward",
+    ],
+    "impact": [
+        "high-impact", "consumer-scale", "social-mission", "b2b", "b2c",
+        "developer-tools", "infra-focused",
+    ],
+}
 
 # Mapping from CultureIdentity fields to TeamCultureIdentity fields for culture fit scoring
 CULTURE_FIELD_MAP = {

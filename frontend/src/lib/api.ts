@@ -1,4 +1,5 @@
 import type {
+  AnalyticsEventType,
   BatchCandidateResponse,
   BatchMatchResponse,
   ClarificationsResponse,
@@ -8,11 +9,20 @@ import type {
   GraphVersion,
   IngestJobResponse,
   IngestUserResponse,
+  InterestProfileResponse,
+  InterviewTurn,
   Job,
+  JobApplicantsResponse,
+  PracticeHistoryResponse,
+  PracticeScorecard,
   ResolveFlagResponse,
+  RichJobProfile,
   RollbackResponse,
+  StartPracticeResponse,
+  UserApplicationsResponse,
   UserDescribeResponse,
   UserListItem,
+  UserPracticeSessionsResponse,
 } from './types';
 
 const BASE = '/api/v1';
@@ -41,6 +51,19 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 async function del<T>(path: string): Promise<T> {
   const res = await fetch(BASE + path, { method: 'DELETE' });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(detail.detail || `HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) {
     const detail = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(detail.detail || `HTTP ${res.status}`);
@@ -127,6 +150,38 @@ export const api = {
   describeUser: (userId: string) => get<UserDescribeResponse>(`/users/${userId}/describe`),
   getCompleteness: (userId: string) => get<unknown>(`/users/${userId}/completeness`),
 
+  // Analytics
+  recordEvent: (userId: string, jobId: string, eventType: AnalyticsEventType, durationMs?: number) =>
+    post<{ status: string }>(`/users/${userId}/events`, {
+      job_id: jobId,
+      event_type: eventType,
+      duration_ms: durationMs,
+    }),
+  getInterestProfile: (userId: string) =>
+    get<InterestProfileResponse>(`/users/${userId}/interests`),
+  adjustInterest: (userId: string, tag: string, score: number) =>
+    patch<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`, { score }),
+  removeInterest: (userId: string, tag: string) =>
+    del<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`),
+
+  getApplications: (userId: string) =>
+    get<UserApplicationsResponse>(`/users/${userId}/applications`),
+
+  getJobInteractions: (userId: string) =>
+    get<import('./types').JobInteractionsResponse>(`/users/${userId}/job-interactions`),
+
+  getJobApplicants: (jobId: string) =>
+    get<JobApplicantsResponse>(`/jobs/${jobId}/applications`),
+
+  // Job tag management
+  retagJob: (jobId: string) =>
+    post<{ job_id: string; tags: string[]; count: number }>(`/jobs/${jobId}/retag`, {}),
+  retagAllJobs: () =>
+    post<{ jobs_processed: number; jobs_tagged: number; results: Record<string, string[]> }>('/jobs/retag-all', {}),
+
+  // Job profile
+  getJobProfile: (jobId: string) => get<RichJobProfile>(`/jobs/${jobId}/profile`),
+
   // Admin - delete
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),
   deleteJob: (jobId: string) => del<unknown>(`/jobs/${jobId}`),
@@ -165,5 +220,23 @@ export const api = {
   saveCheckpoint: (entityType: 'user' | 'job', entityId: string, label?: string) => {
     const base = entityType === 'user' ? `/users/${entityId}` : `/jobs/${entityId}`;
     return post<unknown>(`${base}/graph/checkpoint`, { label: label ?? 'manual' });
+  },
+
+  // ── Practice Interview ──────────────────────────────────────────────────────
+  practice: {
+    startSession: (body: { user_id: string; job_id: string }) =>
+      post<StartPracticeResponse>('/practice/sessions/start', body),
+
+    sendMessage: (sessionId: string, body: { user_id: string; content: string }) =>
+      post<InterviewTurn>(`/practice/sessions/${sessionId}/message`, body),
+
+    completeSession: (sessionId: string, body: { user_id: string }) =>
+      post<PracticeScorecard>(`/practice/sessions/${sessionId}/complete`, body),
+
+    getHistory: (sessionId: string) =>
+      get<PracticeHistoryResponse>(`/practice/sessions/${sessionId}/history`),
+
+    getUserSessions: (userId: string) =>
+      get<UserPracticeSessionsResponse>(`/practice/users/${userId}/sessions`),
   },
 };

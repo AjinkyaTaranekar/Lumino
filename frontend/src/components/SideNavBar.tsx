@@ -2,13 +2,13 @@ import {
   BookOpen,
   Briefcase,
   Database,
+  Heart,
   LayoutDashboard,
   Network,
   ShieldAlert,
   TrendingUp,
   Upload,
   User as UserIcon,
-  Users,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -37,6 +37,7 @@ export function SideNavBar() {
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
       { label: 'Trajectory Map', to: '/trajectory', icon: TrendingUp },
       { label: 'My Profile', to: '/user/profile', icon: UserIcon },
+      { label: 'Job Preferences', to: '/user/interests', icon: Heart },
       { label: 'Upload Resume', to: '/resume', icon: Upload },
       { label: 'Verify Profile', to: '/user/clarifications', icon: ShieldAlert },
       { label: 'Digital Twin', to: '/user/model', icon: Network },
@@ -45,7 +46,6 @@ export function SideNavBar() {
     : user?.role === 'RECRUITER'
       ? [
         { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-        { label: 'Talent Pool', to: '/talent-pool', icon: Users },
         { label: 'Jobs', to: '/jobs', icon: Briefcase },
         { label: 'Post a Job', to: '/jobs/create', icon: Database },
       ]

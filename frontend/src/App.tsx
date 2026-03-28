@@ -37,14 +37,18 @@ const Clarification = lazy(() => import('./pages/user/Clarification'));
 const UserProfile = lazy(() => import('./pages/user/UserProfile'));
 const MatchExplorer = lazy(() => import('./pages/user/MatchExplorer'));
 const Guidelines = lazy(() => import('./pages/user/Guidelines'));
+const Interests = lazy(() => import('./pages/user/Interests'));
 
 // Recruiter pages
-const CandidatesBrowser = lazy(() => import('./pages/recruiter/CandidatesBrowser'));
 const Candidates = lazy(() => import('./pages/recruiter/Candidates'));
 const PostJob = lazy(() => import('./pages/recruiter/PostJob'));
 const JobModel = lazy(() => import('./pages/recruiter/JobModel'));
 const EditJobGraph = lazy(() => import('./pages/recruiter/EditJobGraph'));
 const JobsList = lazy(() => import('./pages/recruiter/JobsList'));
+const JobProfile = lazy(() => import('./pages/recruiter/JobProfile'));
+
+// User job profile
+const JobProfileView = lazy(() => import('./pages/user/JobProfileView'));
 
 // Admin pages
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -109,6 +113,16 @@ export default function App() {
             <ProtectedRoute role="USER">
               <LuminoLayout>
                 <Trajectory />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user/interests"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <Interests />
               </LuminoLayout>
             </ProtectedRoute>
           }
@@ -200,16 +214,7 @@ export default function App() {
         <Route path="/user/dashboard" element={<Navigate to="/dashboard" replace />} />
 
         {/* ── Recruiter routes ── */}
-        <Route
-          path="/talent-pool"
-          element={
-            <ProtectedRoute role="RECRUITER">
-              <LuminoLayout>
-                <CandidatesBrowser />
-              </LuminoLayout>
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/talent-pool" element={<Navigate to="/jobs" replace />} />
         <Route
           path="/talent-pool/:jobId"
           element={
@@ -256,6 +261,29 @@ export default function App() {
             <ProtectedRoute role="RECRUITER">
               <LuminoLayout>
                 <EditJobGraph />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/jobs/:jobId/profile"
+          element={
+            <ProtectedRoute role="RECRUITER">
+              <LuminoLayout>
+                <JobProfile />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+
+        {/* ── User job profile view ── */}
+        <Route
+          path="/user/jobs/:jobId/profile"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <JobProfileView />
               </LuminoLayout>
             </ProtectedRoute>
           }
