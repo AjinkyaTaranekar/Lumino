@@ -586,7 +586,7 @@ class MatchingEngine:
         if not job_domains_raw:
             return {"score": 0.0, "matched": [], "missing": []}
 
-        job_names = [d["name"] for d in job_domains_raw]
+        job_names = [d["name"] for d in job_domains_raw if d.get("name")]
         # Build user domain lookup: name → best depth seen
         user_depth_map: dict[str, str] = {}
         for ud in user_domains:
