@@ -1,9 +1,10 @@
 """
-Pure graph-based matching engine.
+Graph-based matching engine.
 
-All scoring is done through Cypher set-intersection queries - no vectors,
-no embeddings. Every score component is directly traceable to explicit
-graph edges, making the system fully scrutable.
+All scoring is done through Cypher set-intersection queries over explicit
+MATCHES edges. Those edges may now be created through semantic embedding
+linking, but the score computation itself remains deterministic and fully
+traceable through graph paths.
 
 Four-axis scoring model:
   Skills      (45% when all data present): evidence-weighted intersection via MATCHES edges
@@ -335,6 +336,13 @@ class MatchingEngine:
         o_all_names      = optional_all[0]["all_names"] if optional_all else []
         o_total_weight   = optional_all[0]["total_weight"] if optional_all else 0.0
 
+        # OPTIONAL MATCH + collect(...) can yield null entries when a job has no
+        # requirements in that bucket. Strip them before building API models.
+        m_matched_names = [name for name in m_matched_names if isinstance(name, str) and name]
+        m_all_names = [name for name in m_all_names if isinstance(name, str) and name]
+        o_matched_names = [name for name in o_matched_names if isinstance(name, str) and name]
+        o_all_names = [name for name in o_all_names if isinstance(name, str) and name]
+
         mandatory_set     = set(m_matched_names)
         optional_set      = set(o_matched_names)
         missing_mandatory = [n for n in m_all_names if n not in mandatory_set]
@@ -402,12 +410,18 @@ class MatchingEngine:
         if not job_domains_raw:
             return {"score": 0.0, "matched": [], "missing": []}
 
-        job_names = [d["name"] for d in job_domains_raw]
+        job_names = [
+            d["name"]
+            for d in job_domains_raw
+            if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"]
+        ]
         # Build user domain lookup: name → best depth seen
         user_depth_map: dict[str, str] = {}
         for ud in user_domains:
             name  = ud.get("name", "")
             depth = ud.get("depth", "unknown")
+            if not isinstance(name, str) or not name:
+                continue
             # Keep the best depth if the same domain appears multiple times
             existing = user_depth_map.get(name, "unknown")
             priority = {"deep": 3, "moderate": 2, "shallow": 1, "unknown": 0}

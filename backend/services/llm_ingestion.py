@@ -1,5 +1,5 @@
 """
-LLM ingestion service - writes the Gemini-extracted hierarchy into Neo4j.
+LLM ingestion service - writes the extracted hierarchy into Neo4j.
 
 Every node and relationship created here is tagged source='llm'. This provenance
 tag is used later by the graph merger and visualization service to filter views.
@@ -16,6 +16,7 @@ Schema created (User side):
 import logging
 from database.neo4j_client import Neo4jClient
 from models.schemas import UserProfileExtraction, JobPostingExtraction
+from services.semantic_matching import SemanticMatchingService
 from services.weights import recompute_weights
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ logger = logging.getLogger(__name__)
 class LLMIngestionService:
     def __init__(self, client: Neo4jClient):
         self.client = client
+        self._semantic_matcher = SemanticMatchingService(client)
 
     # ──────────────────────────────────────────────────────────────────────────
     # USER INGESTION
@@ -589,82 +591,28 @@ class LLMIngestionService:
 
     async def link_skill_matches(self, user_id: str) -> int:
         """
-        Create MATCHES edges from this user's Skill nodes to any JobSkillRequirement
-        nodes with the same name (case-insensitive). Called after user ingest.
-        Returns the number of edges created/merged.
+        Create MATCHES edges from this user's Skill nodes to job requirements
+        using semantic similarity.
         """
-        records = await self.client.run_query(
-            """
-            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
-                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
-            MATCH (jr:JobSkillRequirement)
-            WHERE toLower(trim(s.name)) = toLower(trim(jr.name))
-            MERGE (s)-[:MATCHES]->(jr)
-            RETURN count(*) AS linked
-            """,
-            {"user_id": user_id},
-        )
-        count = records[0]["linked"] if records else 0
-        logger.info(f"Linked {count} skill MATCHES edges for user {user_id}")
-        return count
+        return await self._semantic_matcher.link_user_skill_matches(user_id)
 
     async def link_domain_matches(self, user_id: str) -> int:
         """
-        Create MATCHES edges from this user's Domain nodes to any JobDomainRequirement
-        nodes with the same name (case-insensitive). Called after user ingest.
-        Returns the number of edges created/merged.
+        Create MATCHES edges from this user's Domain nodes to job requirements
+        using semantic similarity.
         """
-        records = await self.client.run_query(
-            """
-            MATCH (u:User {id: $user_id})-[:HAS_DOMAIN_CATEGORY]->(:DomainCategory)
-                  -[:HAS_DOMAIN_FAMILY]->(:DomainFamily)-[:HAS_DOMAIN]->(d:Domain)
-            MATCH (dr:JobDomainRequirement)
-            WHERE toLower(trim(d.name)) = toLower(trim(dr.name))
-            MERGE (d)-[:MATCHES]->(dr)
-            RETURN count(*) AS linked
-            """,
-            {"user_id": user_id},
-        )
-        count = records[0]["linked"] if records else 0
-        logger.info(f"Linked {count} domain MATCHES edges for user {user_id}")
-        return count
+        return await self._semantic_matcher.link_domain_matches(user_id)
 
     async def link_job_skill_matches(self, job_id: str) -> int:
         """
         Create MATCHES edges from existing Skill nodes (all users) to this job's
-        new JobSkillRequirement nodes. Called after job ingest.
-        Returns the number of edges created/merged.
+        requirements using semantic similarity.
         """
-        records = await self.client.run_query(
-            """
-            MATCH (jr:JobSkillRequirement {job_id: $job_id})
-            MATCH (s:Skill)
-            WHERE toLower(trim(s.name)) = toLower(trim(jr.name))
-            MERGE (s)-[:MATCHES]->(jr)
-            RETURN count(*) AS linked
-            """,
-            {"job_id": job_id},
-        )
-        count = records[0]["linked"] if records else 0
-        logger.info(f"Linked {count} skill MATCHES edges for job {job_id}")
-        return count
+        return await self._semantic_matcher.link_job_skill_matches(job_id)
 
     async def link_job_domain_matches(self, job_id: str) -> int:
         """
         Create MATCHES edges from existing Domain nodes (all users) to this job's
-        new JobDomainRequirement nodes. Called after job ingest.
-        Returns the number of edges created/merged.
+        requirements using semantic similarity.
         """
-        records = await self.client.run_query(
-            """
-            MATCH (dr:JobDomainRequirement {job_id: $job_id})
-            MATCH (d:Domain)
-            WHERE toLower(trim(d.name)) = toLower(trim(dr.name))
-            MERGE (d)-[:MATCHES]->(dr)
-            RETURN count(*) AS linked
-            """,
-            {"job_id": job_id},
-        )
-        count = records[0]["linked"] if records else 0
-        logger.info(f"Linked {count} domain MATCHES edges for job {job_id}")
-        return count
+        return await self._semantic_matcher.link_job_domain_matches(job_id)
