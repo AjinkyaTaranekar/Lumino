@@ -6,6 +6,7 @@ to prevent typo-driven schema drift across the codebase.
 """
 
 from enum import Enum
+import re
 
 
 class NodeLabel(str, Enum):
@@ -190,6 +191,79 @@ SOFT_SKILL_TO_PATTERN: dict[str, list[str]] = {
     "cross_functional":   ["collaborative", "user-focused"],
     "documentation":      ["detail-oriented", "systems_thinker"],
     "estimation":         ["data-driven", "systems_thinker"],
+}
+
+# Shared concept aliases used to normalize related wording to the same
+# matching concept before scoring or embedding.
+MATCH_TERM_SYNONYMS: dict[str, frozenset[str]] = {
+    "collaborative": frozenset({
+        "collaborative", "collaboration", "collaborating", "collaborate",
+        "teamwork", "team work", "team player", "team-oriented",
+        "team oriented", "cross-functional", "cross functional",
+        "cross-team", "cross team", "cooperative", "partnership",
+    }),
+    "communication": frozenset({
+        "communication", "communicator", "communicating", "communicate",
+        "stakeholder communication", "written communication", "verbal communication",
+    }),
+    "ownership": frozenset({
+        "ownership", "owning", "owner mindset", "accountable", "accountability",
+        "responsibility", "responsible",
+    }),
+    "initiative": frozenset({
+        "initiative", "proactive", "self-starter", "self starter",
+        "takes initiative",
+    }),
+    "documentation": frozenset({
+        "documentation", "documenting", "technical writing", "knowledge sharing",
+    }),
+    "mentorship": frozenset({
+        "mentorship", "mentoring", "mentor", "coaching", "coach",
+    }),
+    "detail-oriented": frozenset({
+        "detail-oriented", "detail oriented", "attention to detail",
+        "detail focus", "meticulous",
+    }),
+    "data-driven": frozenset({
+        "data-driven", "data driven", "metrics-driven", "metrics driven",
+        "analytical", "analytics-minded", "evidence-based", "evidence based",
+    }),
+    "systems_thinker": frozenset({
+        "systems thinker", "systems-thinking", "systems thinking",
+        "big picture", "holistic thinking",
+    }),
+    "user-focused": frozenset({
+        "user-focused", "user focused", "customer-focused", "customer focused",
+        "customer-centric", "user-centric",
+    }),
+    "performance-oriented": frozenset({
+        "performance-oriented", "performance oriented", "results-driven",
+        "results driven", "outcome-focused", "outcome focused",
+    }),
+    "conflict_resolution": frozenset({
+        "conflict resolution", "conflict-resolution", "conflict management",
+        "dispute resolution",
+    }),
+    "cross_functional": frozenset({
+        "cross functional", "cross-functional", "cross team", "cross-team",
+        "multi-disciplinary", "multidisciplinary",
+    }),
+}
+
+SOFT_SKILL_SYNONYMS: dict[str, frozenset[str]] = {
+    "ownership": MATCH_TERM_SYNONYMS["ownership"],
+    "accountability": MATCH_TERM_SYNONYMS["ownership"] | frozenset({"accountability"}),
+    "initiative": MATCH_TERM_SYNONYMS["initiative"],
+    "communication": MATCH_TERM_SYNONYMS["communication"],
+    "mentorship": MATCH_TERM_SYNONYMS["mentorship"],
+    "conflict_resolution": MATCH_TERM_SYNONYMS["conflict_resolution"],
+    "cross_functional": MATCH_TERM_SYNONYMS["cross_functional"],
+    "documentation": MATCH_TERM_SYNONYMS["documentation"],
+    "estimation": frozenset({
+        "estimation", "estimating", "scoping", "effort estimation",
+        "planning", "sizing",
+    }),
+    "collaborative": MATCH_TERM_SYNONYMS["collaborative"],
 }
 
 # BehavioralInsight types that are risk signals for soft skill requirements
@@ -387,6 +461,51 @@ def normalize_work_style(style: str) -> str:
         if s in synonyms:
             return canonical
     return s
+
+
+def normalize_matching_term(term: str | None) -> str:
+    """Normalize free-text matching terms to a stable comparison key."""
+    if not term:
+        return ""
+    normalized = term.lower().strip()
+    normalized = normalized.replace("&", " and ")
+    normalized = re.sub(r"[_/+-]+", " ", normalized)
+    normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def canonicalize_matching_term(term: str | None) -> str:
+    """Map synonymous matching terms onto a shared canonical concept key."""
+    normalized = normalize_matching_term(term)
+    for canonical, synonyms in MATCH_TERM_SYNONYMS.items():
+        synonym_keys = {normalize_matching_term(item) for item in synonyms}
+        if normalized in synonym_keys or normalized == canonical:
+            return canonical
+    return normalized
+
+
+def expand_matching_aliases(term: str | None) -> list[str]:
+    """Return known aliases for a term's concept, including the canonical key."""
+    canonical = canonicalize_matching_term(term)
+    if not canonical:
+        return []
+    aliases = MATCH_TERM_SYNONYMS.get(canonical)
+    if not aliases:
+        return [canonical]
+    values = {canonical}
+    values.update(normalize_matching_term(alias) for alias in aliases)
+    return sorted(values)
+
+
+def normalize_soft_skill_quality(term: str | None) -> str:
+    """Resolve soft-skill requirement wording to a canonical quality key."""
+    normalized = normalize_matching_term(term)
+    for canonical, synonyms in SOFT_SKILL_SYNONYMS.items():
+        synonym_keys = {normalize_matching_term(item) for item in synonyms}
+        if normalized in synonym_keys or normalized == canonical:
+            return canonical
+    return canonicalize_matching_term(normalized)
 
 
 # Domain taxonomy used in extraction prompts

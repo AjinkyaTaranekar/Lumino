@@ -1126,6 +1126,17 @@ class ResolveFlagResponse(BaseModel):
     remaining_critical: int            # how many critical flags still pending
 
 
+class RelinkMatchesResponse(BaseModel):
+    status: str
+    scope: Literal["all", "user", "job"]
+    entity_id: Optional[str] = None
+    users_processed: int = 0
+    jobs_processed: int = 0
+    skill_matches_linked: int = 0
+    domain_matches_linked: int = 0
+    visualizations_regenerated: int = 0
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # DIGITAL TWIN COMPLETENESS
 # ──────────────────────────────────────────────────────────────────────────────

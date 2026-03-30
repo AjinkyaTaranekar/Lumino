@@ -1,6 +1,6 @@
 # Lumino - Graph-Based Job Matching
 
-A transparent, graph-based job matching platform where every match decision is fully explainable. Unlike black-box vector similarity or opaque ML models, every match score traces back to explicit paths in a Neo4j knowledge graph - no magic numbers.
+A transparent, graph-based job matching platform where every match decision is explainable. Semantic embeddings are used only to create `MATCHES` edges between equivalent concepts; once those edges exist, all scoring is done deterministically through explicit Neo4j graph traversal.
 
 ---
 
@@ -19,6 +19,7 @@ A transparent, graph-based job matching platform where every match decision is f
 3. Explore the combined graph view for any candidate to see exactly why they matched
 
 **Matching Engine**
+- **Semantic linking** - user skills/domains are linked to job requirements only through embedding-based similarity, then stored as explicit `MATCHES` edges
 - **Skills (65%)** - weighted intersection via `MATCHES` edges; importance-weighted (`must_have=1.0`, `nice_to_have=0.5`); seniority factor applied when years of experience is specified
 - **Domain (35%)** - set intersection of domain expertise vs. job domain requirements
 - **Culture bonus** - ratio of job work styles that match user preferences
@@ -289,9 +290,9 @@ Job └─HAS_CULTURE_REQUIREMENTS─► JobCultureRequirements └─HAS_WORK_S
 
 ## Key Design Decisions
 
-**No vectors, no black boxes.** Matching is 100% graph traversal. `MATCHES` edges connect user skill/domain nodes directly to job requirement nodes. Every score component is a Cypher query result, not an embedding similarity.
+**Hybrid explainability model.** Embeddings are used only during edge creation to decide which concepts should connect. After that, matching is still explicit graph traversal: `MATCHES` edges connect user skill/domain nodes directly to job requirement nodes, and every score component is a Cypher query result.
 
-**LLM as extractor only.** The LLM is used exclusively to parse free-text resumes and job postings into structured JSON. All matching logic is deterministic Cypher - the LLM never touches scoring.
+**LLM for extraction and semantic linking.** Generative models parse free-text resumes and job postings into structured JSON, and embedding models are used to create semantic `MATCHES` edges. The final score computation is still deterministic Cypher over the graph.
 
 **Two-layer candidate depth.** Layer 1 captures technical profile (skills, domains, projects, experience). Layer 2 captures human depth (motivations, values, goals, anecdotes, cultural identity, behavioural insights) - used for culture-fit and human-layer match bonuses.
 

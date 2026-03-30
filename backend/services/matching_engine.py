@@ -1,9 +1,10 @@
 """
-Pure graph-based matching engine.
+Graph-based matching engine.
 
-All scoring is done through Cypher set-intersection queries - no vectors,
-no embeddings. Every score component is directly traceable to explicit
-graph edges, making the system fully scrutable.
+All scoring is done through Cypher set-intersection queries over explicit
+MATCHES edges. Those edges may now be created through semantic embedding
+linking, but the score computation itself remains deterministic and fully
+traceable through graph paths.
 
 Four-axis scoring model:
   Skills      (45% when all data present): evidence-weighted intersection via MATCHES edges
@@ -42,7 +43,9 @@ from models.taxonomies import (
     CULTURE_FIELD_MAP,
     HYBRID_ALPHA,
     HYBRID_BETA,
+    canonicalize_matching_term,
     normalize_work_style,
+    normalize_soft_skill_quality,
     EDUCATION_LEVEL_SCORE,
     QUAL_IMPORTANCE_WEIGHTS,
 )
@@ -519,6 +522,13 @@ class MatchingEngine:
         o_all_names      = optional_all[0]["all_names"] if optional_all else []
         o_total_weight   = optional_all[0]["total_weight"] if optional_all else 0.0
 
+        # OPTIONAL MATCH + collect(...) can yield null entries when a job has no
+        # requirements in that bucket. Strip them before building API models.
+        m_matched_names = [name for name in m_matched_names if isinstance(name, str) and name]
+        m_all_names = [name for name in m_all_names if isinstance(name, str) and name]
+        o_matched_names = [name for name in o_matched_names if isinstance(name, str) and name]
+        o_all_names = [name for name in o_all_names if isinstance(name, str) and name]
+
         mandatory_set     = set(m_matched_names)
         optional_set      = set(o_matched_names)
         missing_mandatory = [n for n in m_all_names if n not in mandatory_set]
@@ -586,12 +596,18 @@ class MatchingEngine:
         if not job_domains_raw:
             return {"score": 0.0, "matched": [], "missing": []}
 
-        job_names = [d["name"] for d in job_domains_raw if d.get("name")]
+        job_names = [
+            d["name"]
+            for d in job_domains_raw
+            if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"]
+        ]
         # Build user domain lookup: name → best depth seen
         user_depth_map: dict[str, str] = {}
         for ud in user_domains:
             name  = ud.get("name", "")
             depth = ud.get("depth", "unknown")
+            if not isinstance(name, str) or not name:
+                continue
             # Keep the best depth if the same domain appears multiple times
             existing = user_depth_map.get(name, "unknown")
             priority = {"deep": 3, "moderate": 2, "shallow": 1, "unknown": 0}
@@ -651,7 +667,11 @@ class MatchingEngine:
             """,
             {"user_id": user_id},
         )
-        user_pattern_set = {r["pattern"] for r in user_patterns if r.get("pattern")}
+        user_pattern_set = {
+            canonicalize_matching_term(r["pattern"])
+            for r in user_patterns
+            if r.get("pattern")
+        }
 
         # Also pull ownership signals from experience contribution_type
         exp_contributions = await self.client.run_query(
@@ -692,13 +712,18 @@ class MatchingEngine:
         risk_flags: list[str] = []
 
         for req in soft_reqs:
-            quality      = (req.get("quality") or "").lower()
+            quality = normalize_soft_skill_quality(req.get("quality"))
             dealbreaker  = req.get("dealbreaker", False)
-            patterns_needed = [p.lower() for p in SOFT_SKILL_TO_PATTERN.get(quality, [])]
+            patterns_needed = {
+                canonicalize_matching_term(p)
+                for p in SOFT_SKILL_TO_PATTERN.get(quality, [])
+            }
+            if quality:
+                patterns_needed.add(quality)
 
             # Ownership quality: also accept _has_ownership_evidence signal
             if quality == "ownership" and "_has_ownership_evidence" in user_pattern_set:
-                patterns_needed = patterns_needed + ["_has_ownership_evidence"]
+                patterns_needed.add("_has_ownership_evidence")
 
             has_evidence = any(p in user_pattern_set for p in patterns_needed)
 

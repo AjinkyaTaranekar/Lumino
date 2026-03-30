@@ -26,6 +26,7 @@ import asyncio
 import io
 import logging
 import os
+from typing import Literal
 
 import pypdf
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -55,6 +56,7 @@ from models.schemas import (
     MatchResult,
     RecordEventRequest,
     RejectMutationsRequest,
+    RelinkMatchesResponse,
     ResolveFlagRequest,
     ResolveFlagResponse,
     RollbackResponse,
@@ -70,6 +72,7 @@ from services.clarification_service import ClarificationService
 from services.graph_edit_service import GraphEditService
 from services.ingestion import IngestionService
 from services.llm_extraction import LLMExtractionService
+from services.llm_ingestion import LLMIngestionService
 from services.matching_engine import MatchingEngine
 from services.visualization import VisualizationService
 
@@ -1276,6 +1279,117 @@ async def delete_job(job_id: str, db: Neo4jClient = Depends(get_neo4j)):
         except OSError:
             pass
     return {"status": "deleted", "job_id": job_id}
+
+
+@router.post(
+    "/admin/relink-matches",
+    response_model=RelinkMatchesResponse,
+    tags=["admin"],
+    summary="Refresh semantic MATCHES edges for one scope or the whole graph",
+)
+async def relink_matches(
+    scope: Literal["all", "user", "job"] = "all",
+    entity_id: str | None = None,
+    regenerate_visualizations: bool = False,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Rebuild semantic MATCHES edges without re-ingesting source documents.
+
+    Scope options:
+      - all: relink every user and job currently in Neo4j
+      - user: relink one user's skill/domain matches to all jobs
+      - job: relink one job's skill/domain matches against all users
+
+    Set regenerate_visualizations=true to also rebuild cached graph HTML files
+    for the processed entities after relinking.
+    """
+    if scope in {"user", "job"} and not entity_id:
+        raise HTTPException(
+            status_code=400,
+            detail="entity_id is required when scope is 'user' or 'job'",
+        )
+
+    ingestor = LLMIngestionService(db)
+    viz = VisualizationService(db)
+    users_processed = 0
+    jobs_processed = 0
+    skill_matches_linked = 0
+    domain_matches_linked = 0
+    visualizations_regenerated = 0
+
+    async def _user_exists(user_id: str) -> bool:
+        rows = await db.run_query(
+            "MATCH (u:User {id: $user_id}) RETURN count(u) AS count",
+            {"user_id": user_id},
+        )
+        return bool(rows and rows[0].get("count"))
+
+    async def _job_exists(job_id: str) -> bool:
+        rows = await db.run_query(
+            "MATCH (j:Job {id: $job_id}) RETURN count(j) AS count",
+            {"job_id": job_id},
+        )
+        return bool(rows and rows[0].get("count"))
+
+    async def _relink_user(user_id: str) -> None:
+        nonlocal users_processed, skill_matches_linked, domain_matches_linked
+        nonlocal visualizations_regenerated
+
+        counts = await ingestor.relink_user_matches(user_id)
+        users_processed += 1
+        skill_matches_linked += counts["skill_matches_linked"]
+        domain_matches_linked += counts["domain_matches_linked"]
+        if regenerate_visualizations:
+            await viz.generate_user_graph(user_id)
+            visualizations_regenerated += 1
+
+    async def _relink_job(job_id: str) -> None:
+        nonlocal jobs_processed, skill_matches_linked, domain_matches_linked
+        nonlocal visualizations_regenerated
+
+        counts = await ingestor.relink_job_matches(job_id)
+        jobs_processed += 1
+        skill_matches_linked += counts["skill_matches_linked"]
+        domain_matches_linked += counts["domain_matches_linked"]
+        if regenerate_visualizations:
+            await viz.generate_job_graph(job_id)
+            visualizations_regenerated += 1
+
+    try:
+        if scope == "user":
+            if not await _user_exists(entity_id):
+                raise HTTPException(status_code=404, detail=f"User '{entity_id}' not found")
+            await _relink_user(entity_id)
+        elif scope == "job":
+            if not await _job_exists(entity_id):
+                raise HTTPException(status_code=404, detail=f"Job '{entity_id}' not found")
+            await _relink_job(entity_id)
+        else:
+            user_rows = await db.run_query("MATCH (u:User) RETURN u.id AS id ORDER BY u.id")
+            job_rows = await db.run_query("MATCH (j:Job) RETURN j.id AS id ORDER BY j.id")
+            for row in user_rows:
+                if row.get("id"):
+                    await _relink_user(row["id"])
+            for row in job_rows:
+                if row.get("id"):
+                    await _relink_job(row["id"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Semantic relink failed for scope={scope} entity_id={entity_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return RelinkMatchesResponse(
+        status="relinked",
+        scope=scope,
+        entity_id=entity_id,
+        users_processed=users_processed,
+        jobs_processed=jobs_processed,
+        skill_matches_linked=skill_matches_linked,
+        domain_matches_linked=domain_matches_linked,
+        visualizations_regenerated=visualizations_regenerated,
+    )
 
 
 @router.get("/health", tags=["utility"], summary="Health check")
