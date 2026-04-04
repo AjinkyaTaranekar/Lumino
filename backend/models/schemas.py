@@ -39,6 +39,15 @@ class ExtractedSkill(BaseModel):
             "'multiple_productions' = demonstrated across multiple real projects/roles"
         )
     )
+    context: Optional[str] = Field(
+        default=None,
+        description=(
+            "One sentence capturing WHY this skill stands out for this candidate: "
+            "their primary use case, strongest application, or most notable context. "
+            "e.g. 'Used Python for production ML pipelines serving 1M daily predictions, "
+            "not just scripting.' Leave null if nothing notable beyond the projects."
+        ),
+    )
 
 
 class SkillUsage(BaseModel):
@@ -121,6 +130,15 @@ class ExtractedDomain(BaseModel):
     )
     depth: Optional[Literal["shallow", "moderate", "deep"]] = Field(
         default=None, description="Depth of domain knowledge"
+    )
+    description: Optional[str] = Field(
+        default=None,
+        description=(
+            "One to two sentences describing the candidate's experience in this domain: "
+            "what they've built, what they understand deeply, what distinguishes their knowledge. "
+            "e.g. 'Deep expertise in FinTech payments — PCI-DSS compliance, idempotent "
+            "transaction design, high-throughput settlement flows.'"
+        ),
     )
 
 
@@ -476,6 +494,14 @@ class ExtractedJobSkillRequirement(BaseModel):
     min_years: Optional[int] = Field(
         default=None, description="Minimum years required, null if not specified"
     )
+    context: Optional[str] = Field(
+        default=None,
+        description=(
+            "Why the job needs this skill specifically — the technical context in which it will be used. "
+            "e.g. 'Core to the async payment processing pipeline — candidate must understand "
+            "backpressure and retry semantics.' Leave null if the JD gives no context."
+        ),
+    )
 
 
 class ExtractedJobDomainRequirement(BaseModel):
@@ -487,6 +513,14 @@ class ExtractedJobDomainRequirement(BaseModel):
         )
     )
     min_years: Optional[int] = Field(default=None)
+    importance: Literal["must_have", "optional"] = Field(
+        default="must_have",
+        description="must_have for required domain experience, optional for nice-to-have",
+    )
+    depth: Optional[Literal["shallow", "moderate", "deep"]] = Field(
+        default=None,
+        description="Required depth of domain knowledge",
+    )
 
 
 class ExtractedWorkStyle(BaseModel):
@@ -1126,15 +1160,16 @@ class ResolveFlagResponse(BaseModel):
     remaining_critical: int            # how many critical flags still pending
 
 
-class RelinkMatchesResponse(BaseModel):
+class ReembedResponse(BaseModel):
     status: str
     scope: Literal["all", "user", "job"]
     entity_id: Optional[str] = None
     users_processed: int = 0
     jobs_processed: int = 0
-    skill_matches_linked: int = 0
-    domain_matches_linked: int = 0
-    visualizations_regenerated: int = 0
+    skills_embedded: int = 0
+    domains_embedded: int = 0
+    skill_reqs_embedded: int = 0
+    domain_reqs_embedded: int = 0
 
 
 # ──────────────────────────────────────────────────────────────────────────────

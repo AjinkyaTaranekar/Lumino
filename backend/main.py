@@ -50,6 +50,9 @@ async def lifespan(app: FastAPI):
 
     client = await init_client(neo4j_uri, neo4j_user, neo4j_pass)
     logger.info(f"Neo4j connected: {neo4j_uri}")
+    embedding_dims = int(os.environ.get("EMBEDDING_DIMENSIONS", "768"))
+    await client.setup_vector_indexes(embedding_dims)
+    logger.info("Vector indexes ready (dims=%d)", embedding_dims)
 
     sqlite_path = os.environ.get("SQLITE_DB_PATH", ".data_storage/lumino.db")
     await init_sqlite(sqlite_path)
