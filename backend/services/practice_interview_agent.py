@@ -470,7 +470,7 @@ class PracticeInterviewAgent:
                     model=self._model,
                     messages=messages,
                     response_format={"type": "json_object"},
-                    temperature=0.7,
+                    temperature=1.0,
                 )
                 return self._unwrap_json(resp.choices[0].message.content)
             except Exception as e:

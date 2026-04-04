@@ -189,7 +189,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=1.0,
         )
         extracted = UserProfileExtraction.model_validate_json(raw_json)
         logger.info(
@@ -404,7 +404,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=1.0,
         )
 
         try:
@@ -488,7 +488,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=1.0,
         )
         extracted = JobPostingExtraction.model_validate_json(raw_json)
         logger.info(
@@ -1007,7 +1007,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=1.0,
         )
 
         try:

@@ -145,6 +145,21 @@ class Neo4jClient:
 
         logger.info("Neo4j constraints initialized")
 
+    async def drop_vector_indexes(self) -> None:
+        """Drop all four vector indexes so they can be recreated at a new dimension."""
+        index_names = [
+            "skill_embeddings",
+            "domain_embeddings",
+            "job_skill_embeddings",
+            "job_domain_embeddings",
+        ]
+        for name in index_names:
+            try:
+                await self.run_write(f"DROP INDEX {name} IF EXISTS")
+                logger.info("Dropped vector index: %s", name)
+            except Exception as e:
+                logger.warning("Could not drop index %s: %s", name, e)
+
     async def setup_vector_indexes(self, dimensions: int) -> None:
         """
         Create Neo4j vector indexes for ANN similarity search at match time.

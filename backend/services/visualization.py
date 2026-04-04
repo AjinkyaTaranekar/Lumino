@@ -148,7 +148,7 @@ DEFAULT_NODE_COLOR = "#94A3B8"  # slate-400
 DEFAULT_NODE_SIZE = 12
 
 # APOC labelFilter strings - blocks traversal INTO these node types
-# Used in apoc.path.subgraphAll to prevent cross-user contamination via MATCHES edges
+# Used in apoc.path.subgraphAll to prevent cross-user contamination
 _USER_LABEL_FILTER = (
     "-Job|-JobSkillRequirements|-JobSkillFamily|-JobSkillRequirement"
     "|-JobDomainRequirements|-JobDomainFamily|-JobDomainRequirement"
@@ -451,7 +451,7 @@ class VisualizationService:
           Orange (#E67E22) - missing job requirements (gap)
           All others       - normal NODE_TYPE_COLORS
 
-        MATCHES edges are drawn in bright green at double width.
+        Similarity edges (vector ANN matches) are drawn in bright green at double width.
         Output: graph_match_{user_id}_{job_id}.html
         """
         MATCH_COLOR = "#16A34A"      # green-600 - readable on white
@@ -526,15 +526,15 @@ class VisualizationService:
             if src in G and tgt in G:
                 G.add_edge(src, tgt, title=rel, label=rel, color="#94A3B8")
 
-        # Add MATCHES edges (cross-graph, green)
+        # Add similarity edges (cross-graph, green)
         for me in matches_edges:
             src = me.get("source_id", "")
             tgt = me.get("target_id", "")
             if src in G and tgt in G:
                 G.add_edge(
                     src, tgt,
-                    title="MATCHES",
-                    label="MATCHES",
+                    title="SIMILAR",
+                    label="~",
                     color=MATCH_EDGE_COLOR,
                     width=3,
                 )
@@ -600,26 +600,37 @@ class VisualizationService:
         self, user_id: str, job_id: str
     ) -> tuple[set, set, set, list]:
         """
-        Return sets of element IDs for coloring the match graph, plus MATCHES edges.
+        Return sets of element IDs for coloring the match graph, plus similarity edges.
+
+        Uses vector index ANN search instead of MATCHES edges — no pre-computed
+        edges needed. Mirrors the logic in MatchingEngine._compute_skill_score.
 
         Returns:
-          matched_user_ids  - Skill elementIds connected via MATCHES to this job
+          matched_user_ids  - Skill elementIds that vector-match a job requirement
           matched_job_ids   - JobSkillRequirement elementIds matched by this user
           missing_ids       - JobSkillRequirement elementIds NOT matched by this user
-          matches_edges     - list of {source_id, target_id} for MATCHES edges
+          matches_edges     - list of {source_id, target_id} for similarity edges
         """
-        # Matched pairs
+        threshold = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.72"))
+
+        # Matched pairs via vector ANN search
         matched_records = await self.client.run_query(
             """
-            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
-                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
-                  -[:MATCHES]->(jr:JobSkillRequirement)
-                  <-[:REQUIRES_SKILL]-(:JobSkillFamily)
-                  <-[:HAS_SKILL_FAMILY_REQ]-(:JobSkillRequirements)
-                  <-[:HAS_SKILL_REQUIREMENTS]-(j:Job {id: $job_id})
-            RETURN elementId(s) AS user_node_id, elementId(jr) AS job_node_id
+            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            WHERE req.embedding IS NOT NULL
+            CALL {
+                WITH req
+                CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
+                YIELD node AS s, score
+                WHERE s.user_id = $user_id AND score >= $threshold
+                RETURN s, score
+                ORDER BY score DESC
+                LIMIT 1
+            }
+            RETURN elementId(s) AS user_node_id, elementId(req) AS job_node_id
             """,
-            {"user_id": user_id, "job_id": job_id},
+            {"user_id": user_id, "job_id": job_id, "threshold": threshold},
         )
 
         matched_user_ids = {r["user_node_id"] for r in matched_records}
@@ -629,20 +640,17 @@ class VisualizationService:
             for r in matched_records
         ]
 
-        # Missing requirements
-        missing_records = await self.client.run_query(
+        # Missing: all skill requirements not in the matched set
+        all_req_records = await self.client.run_query(
             """
             MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
-                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)
-                  -[:REQUIRES_SKILL]->(jr:JobSkillRequirement)
-            WHERE NOT EXISTS {
-                MATCH (s:Skill {user_id: $user_id})-[:MATCHES]->(jr)
-            }
-            RETURN elementId(jr) AS missing_node_id
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            RETURN elementId(req) AS req_id
             """,
-            {"user_id": user_id, "job_id": job_id},
+            {"job_id": job_id},
         )
-        missing_ids = {r["missing_node_id"] for r in missing_records}
+        all_req_ids = {r["req_id"] for r in all_req_records}
+        missing_ids = all_req_ids - matched_job_ids
 
         return matched_user_ids, matched_job_ids, missing_ids, matches_edges
 
@@ -683,7 +691,7 @@ class VisualizationService:
   <span style="color:#16A34A; font-size:16px;">&#9679;</span> Matched skill / domain<br>
   <span style="color:#D97706; font-size:16px;">&#9679;</span> Gap (required, not in profile)<br>
   <span style="color:#94A3B8; font-size:16px;">&#9679;</span> Other node<br>
-  <span style="color:#22C55E; font-weight:bold;">&#9472;&#9472;</span> MATCHES edge
+  <span style="color:#22C55E; font-weight:bold;">&#9472;&#9472;</span> Similarity edge
 </div>
 """
         with open(filepath, "r", encoding="utf-8") as f:

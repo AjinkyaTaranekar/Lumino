@@ -1283,6 +1283,25 @@ async def delete_job(job_id: str, db: Neo4jClient = Depends(get_neo4j)):
 
 
 @router.post(
+    "/admin/reset-vector-indexes",
+    tags=["admin"],
+    summary="Drop and recreate vector indexes at the configured dimension",
+)
+async def reset_vector_indexes(db: Neo4jClient = Depends(get_neo4j)):
+    """
+    Drop all four vector indexes and recreate them at EMBEDDING_DIMENSIONS.
+
+    Use this when switching embedding models that produce a different vector size
+    (e.g. 768 → 3072). After calling this endpoint, call POST /admin/reembed?scope=all
+    to regenerate all embedding vectors at the new dimension.
+    """
+    dims = int(os.environ.get("EMBEDDING_DIMENSIONS", "768"))
+    await db.drop_vector_indexes()
+    await db.setup_vector_indexes(dims)
+    return {"status": "recreated", "dimensions": dims}
+
+
+@router.post(
     "/admin/reembed",
     response_model=ReembedResponse,
     tags=["admin"],
