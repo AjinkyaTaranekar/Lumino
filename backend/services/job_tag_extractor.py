@@ -141,7 +141,7 @@ class JobTagExtractor:
                     {"role": "system", "content": _SYSTEM_PROMPT},
                     {"role": "user", "content": f"Job posting:\n\n{job_text[:4000]}"},
                 ],
-                temperature=0.1,
+                temperature=1.0,
             )
             raw = response.choices[0].message.content or "{}"
             # Strip markdown fences if present

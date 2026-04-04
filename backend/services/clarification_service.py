@@ -259,7 +259,7 @@ class ClarificationService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=1.0,
         )
         raw = resp.choices[0].message.content
         # Unwrap array → object (some models return [{...}] instead of {...})

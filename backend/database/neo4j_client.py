@@ -21,6 +21,7 @@ class Neo4jClient:
             uri,
             auth=(username, password),
             max_connection_pool_size=50,
+            notifications_disabled_classifications=["UNRECOGNIZED"],
         )
 
     async def verify_connectivity(self) -> None:
@@ -143,6 +144,52 @@ class Neo4jClient:
                 logger.debug(f"Constraint skipped (may already exist): {e}")
 
         logger.info("Neo4j constraints initialized")
+
+    async def drop_vector_indexes(self) -> None:
+        """Drop all four vector indexes so they can be recreated at a new dimension."""
+        index_names = [
+            "skill_embeddings",
+            "domain_embeddings",
+            "job_skill_embeddings",
+            "job_domain_embeddings",
+        ]
+        for name in index_names:
+            try:
+                await self.run_write(f"DROP INDEX {name} IF EXISTS")
+                logger.info("Dropped vector index: %s", name)
+            except Exception as e:
+                logger.warning("Could not drop index %s: %s", name, e)
+
+    async def setup_vector_indexes(self, dimensions: int) -> None:
+        """
+        Create Neo4j vector indexes for ANN similarity search at match time.
+        Called once at startup after setup_constraints().
+        dimensions must match the embedding model output size:
+          768  → gemini/gemini-embedding-001, ollama/nomic-embed-text
+          1536 → openai/text-embedding-3-small
+        """
+        indexes = [
+            ("skill_embeddings",       "Skill",                "embedding"),
+            ("domain_embeddings",      "Domain",               "embedding"),
+            ("job_skill_embeddings",   "JobSkillRequirement",  "embedding"),
+            ("job_domain_embeddings",  "JobDomainRequirement", "embedding"),
+        ]
+        for index_name, label, prop in indexes:
+            try:
+                await self.run_write(
+                    f"CREATE VECTOR INDEX {index_name} IF NOT EXISTS "
+                    f"FOR (n:{label}) ON n.{prop} "
+                    f"OPTIONS {{indexConfig: {{"
+                    f"`vector.dimensions`: {dimensions}, "
+                    f"`vector.similarity_function`: 'cosine'"
+                    f"}}}}"
+                )
+                logger.info(
+                    "Vector index ready: %s (%s.%s, dims=%d)",
+                    index_name, label, prop, dimensions,
+                )
+            except Exception as e:
+                logger.warning("Vector index skipped (may already exist): %s", e)
 
     async def count_nodes_for_user(self, user_id: str) -> dict:
         """Return node counts at each hierarchy level for a user."""

@@ -31,6 +31,7 @@ Name normalization: toLower(trim(...)) applied in all Cypher comparisons.
 """
 
 import logging
+import os
 from database.neo4j_client import Neo4jClient
 from models.schemas import MatchResult, BatchMatchResponse, CandidateResult, BatchCandidateResponse
 from models.taxonomies import (
@@ -399,18 +400,17 @@ class MatchingEngine:
 
     async def _compute_skill_score(self, user_id: str, job_id: str) -> dict:
         """
-        Evidence-weighted skill match split into mandatory (must_have) and optional axes.
+        Evidence-weighted skill match via vector index ANN search.
+
+        At match time each JobSkillRequirement's stored embedding vector is used
+        to query the 'skill_embeddings' index for the nearest user Skill node.
+        No pre-computed MATCHES edges are needed — O(N) per ingestion, not O(U×J).
 
         contribution = importance_weight × seniority_factor × evidence_weight
-        evidence_weight: claimed_only=0.30, mentioned_once=0.50,
-                         project_backed=0.80, multiple_productions=1.00
-
         mandatory_score = matched_must_have_weight / total_must_have_weight
         optional_score  = matched_optional_weight  / total_optional_weight
-
-        Backward compat: existing nodes with importance='nice_to_have' fall through
-        to $w_default and are counted in the optional pool.
         """
+        threshold = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.72"))
         evidence_params = {
             "e_multi":   EvidenceWeight.MULTIPLE_PRODUCTIONS,
             "e_proj":    EvidenceWeight.PROJECT_BACKED,
@@ -419,16 +419,21 @@ class MatchingEngine:
             "e_unknown": EvidenceWeight.UNKNOWN,
         }
 
-        # ── Mandatory skills (must_have only) ──────────────────────────────────
+        # ── Mandatory skills — vector index ANN match ──────────────────────────
         mandatory_matched = await self.client.run_query(
             """
-            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
-                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
-                  -[:MATCHES]->(req:JobSkillRequirement)
-                  <-[:REQUIRES_SKILL]-(:JobSkillFamily)
-                  <-[:HAS_SKILL_FAMILY_REQ]-(:JobSkillRequirements)
-                  <-[:HAS_SKILL_REQUIREMENTS]-(j:Job {id: $job_id})
-            WHERE req.importance = 'must_have'
+            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            WHERE req.importance = 'must_have' AND req.embedding IS NOT NULL
+            CALL {
+                WITH req
+                CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
+                YIELD node AS s, score
+                WHERE s.user_id = $user_id AND score >= $threshold
+                RETURN s, score
+                ORDER BY score DESC
+                LIMIT 1
+            }
             WITH req, s,
                  CASE
                    WHEN req.min_years IS NULL OR s.years IS NULL THEN 1.0
@@ -448,7 +453,7 @@ class MatchingEngine:
                        x IN collect($w_must * seniority_factor * evidence_weight) |
                        acc + x) AS matched_weight
             """,
-            {"user_id": user_id, "job_id": job_id,
+            {"user_id": user_id, "job_id": job_id, "threshold": threshold,
              "w_must": SkillImportanceWeight.MUST_HAVE, **evidence_params},
         )
 
@@ -465,16 +470,21 @@ class MatchingEngine:
             {"job_id": job_id, "w_must": SkillImportanceWeight.MUST_HAVE},
         )
 
-        # ── Optional skills (optional / nice_to_have / unknown importance) ─────
+        # ── Optional skills — vector index ANN match ───────────────────────────
         optional_matched = await self.client.run_query(
             """
-            MATCH (u:User {id: $user_id})-[:HAS_SKILL_CATEGORY]->(:SkillCategory)
-                  -[:HAS_SKILL_FAMILY]->(:SkillFamily)-[:HAS_SKILL]->(s:Skill)
-                  -[:MATCHES]->(req:JobSkillRequirement)
-                  <-[:REQUIRES_SKILL]-(:JobSkillFamily)
-                  <-[:HAS_SKILL_FAMILY_REQ]-(:JobSkillRequirements)
-                  <-[:HAS_SKILL_REQUIREMENTS]-(j:Job {id: $job_id})
-            WHERE req.importance <> 'must_have'
+            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            WHERE req.importance <> 'must_have' AND req.embedding IS NOT NULL
+            CALL {
+                WITH req
+                CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
+                YIELD node AS s, score
+                WHERE s.user_id = $user_id AND score >= $threshold
+                RETURN s, score
+                ORDER BY score DESC
+                LIMIT 1
+            }
             WITH req, s,
                  CASE
                    WHEN req.min_years IS NULL OR s.years IS NULL THEN 1.0
@@ -494,7 +504,7 @@ class MatchingEngine:
                        x IN collect($w_optional * seniority_factor * evidence_weight) |
                        acc + x) AS matched_weight
             """,
-            {"user_id": user_id, "job_id": job_id,
+            {"user_id": user_id, "job_id": job_id, "threshold": threshold,
              "w_optional": SkillImportanceWeight.OPTIONAL, **evidence_params},
         )
 
@@ -552,83 +562,80 @@ class MatchingEngine:
 
     async def _compute_domain_score(self, user_id: str, job_id: str) -> dict:
         """
-        Domain score with depth weighting.
+        Depth-weighted domain match via vector index ANN search.
 
-        Each matched domain contributes: depth_weight / total_domains
+        Each matched domain contributes: depth_weight / total_job_domains
         depth weights: deep=1.00, moderate=0.70, shallow=0.40
 
-        Shallow domain experience is no longer equivalent to deep expertise.
+        Replaces exact Python string matching with semantic vector similarity so
+        that near-synonyms (e.g. "FinTech" vs "Financial Technology") are matched.
         """
-        records = await self.client.run_query(
+        threshold = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.72"))
+
+        # ── All job domain requirements (denominator + missing list) ───────────
+        all_reqs = await self.client.run_query(
             """
-            // Collect job domain requirements (the denominator)
             OPTIONAL MATCH (j:Job {id: $job_id})-[:HAS_DOMAIN_REQUIREMENTS]->
                   (:JobDomainRequirements)-[:HAS_DOMAIN_FAMILY_REQ]->
                   (:JobDomainFamily)-[:REQUIRES_DOMAIN]->(dr:JobDomainRequirement)
-            WITH collect({name: toLower(trim(dr.name))}) AS job_domains_raw
-
-            // Collect user domains (direct)
-            OPTIONAL MATCH (u:User {id: $user_id})-[:HAS_DOMAIN_CATEGORY]->
-                  (:DomainCategory)-[:HAS_DOMAIN_FAMILY]->
-                  (:DomainFamily)-[:HAS_DOMAIN]->(d:Domain)
-            WITH job_domains_raw,
-                 collect({name: toLower(trim(d.name)), depth: coalesce(d.depth, 'unknown')}) AS direct_domains
-
-            // Collect user domains inferred from projects
-            OPTIONAL MATCH (u2:User {id: $user_id})-[:HAS_PROJECT_CATEGORY]->
-                  (:ProjectCategory)-[:HAS_PROJECT]->(p:Project)-[:IN_DOMAIN]->(pd:Domain)
-            WITH job_domains_raw, direct_domains,
-                 collect({name: toLower(trim(pd.name)), depth: coalesce(pd.depth, 'unknown')}) AS project_domains
-            WITH job_domains_raw, direct_domains + project_domains AS all_user_domains
-
-            RETURN job_domains_raw, all_user_domains
+            RETURN collect(toLower(trim(dr.name))) AS all_names
             """,
-            {"user_id": user_id, "job_id": job_id},
+            {"job_id": job_id},
+        )
+        all_names = [
+            n for n in (all_reqs[0]["all_names"] if all_reqs else [])
+            if isinstance(n, str) and n
+        ]
+        if not all_names:
+            return {"score": 0.0, "matched": [], "missing": []}
+
+        # ── Vector-matched domains ─────────────────────────────────────────────
+        matched_rows = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})-[:HAS_DOMAIN_REQUIREMENTS]->(:JobDomainRequirements)
+                  -[:HAS_DOMAIN_FAMILY_REQ]->(:JobDomainFamily)-[:REQUIRES_DOMAIN]->(dr:JobDomainRequirement)
+            WHERE dr.embedding IS NOT NULL
+            CALL {
+                WITH dr
+                CALL db.index.vector.queryNodes('domain_embeddings', 50, dr.embedding)
+                YIELD node AS d, score
+                WHERE d.user_id = $user_id AND score >= $threshold
+                RETURN d, score
+                ORDER BY score DESC
+                LIMIT 1
+            }
+            WITH dr,
+                 CASE coalesce(d.depth, 'unknown')
+                   WHEN 'deep'     THEN $d_deep
+                   WHEN 'moderate' THEN $d_moderate
+                   WHEN 'shallow'  THEN $d_shallow
+                   ELSE                 $d_unknown
+                 END AS depth_weight
+            RETURN
+                collect(toLower(trim(dr.name))) AS matched_names,
+                sum(depth_weight) AS total_depth_weight
+            """,
+            {
+                "user_id": user_id, "job_id": job_id, "threshold": threshold,
+                "d_deep":     DomainDepthWeight.DEEP,
+                "d_moderate": DomainDepthWeight.MODERATE,
+                "d_shallow":  DomainDepthWeight.SHALLOW,
+                "d_unknown":  DomainDepthWeight.UNKNOWN,
+            },
         )
 
-        if not records:
-            return {"score": 0.0, "matched": [], "missing": []}
-
-        row             = records[0]
-        job_domains_raw = row.get("job_domains_raw") or []
-        user_domains    = row.get("all_user_domains") or []
-
-        if not job_domains_raw:
-            return {"score": 0.0, "matched": [], "missing": []}
-
-        job_names = [
-            d["name"]
-            for d in job_domains_raw
-            if isinstance(d, dict) and isinstance(d.get("name"), str) and d["name"]
+        matched_names = [
+            n for n in (matched_rows[0]["matched_names"] if matched_rows else [])
+            if isinstance(n, str) and n
         ]
-        # Build user domain lookup: name → best depth seen
-        user_depth_map: dict[str, str] = {}
-        for ud in user_domains:
-            name  = ud.get("name", "")
-            depth = ud.get("depth", "unknown")
-            if not isinstance(name, str) or not name:
-                continue
-            # Keep the best depth if the same domain appears multiple times
-            existing = user_depth_map.get(name, "unknown")
-            priority = {"deep": 3, "moderate": 2, "shallow": 1, "unknown": 0}
-            if priority.get(depth, 0) > priority.get(existing, 0):
-                user_depth_map[name] = depth
+        total_depth_weight = (matched_rows[0]["total_depth_weight"] if matched_rows else 0.0) or 0.0
 
-        matched = []
-        missing = []
-        total_depth_weight = 0.0
-        for jname in job_names:
-            if jname in user_depth_map:
-                matched.append(jname)
-                total_depth_weight += DomainDepthWeight.get(user_depth_map[jname])
-            else:
-                missing.append(jname)
+        missing = [n for n in all_names if n not in set(matched_names)]
+        # Score = sum(depth_weights of matched) / total_domains
+        # Max possible = each domain matched at full depth = len(all_names) × 1.0
+        score = total_depth_weight / len(all_names) if all_names else 0.0
 
-        # Score = sum(depth_weights of matched) / (total_domains × max_depth_weight)
-        # Max possible = each domain matched at full depth = len(job_names) × 1.0
-        score = total_depth_weight / len(job_names) if job_names else 0.0
-
-        return {"score": score, "matched": matched, "missing": missing}
+        return {"score": score, "matched": matched_names, "missing": missing}
 
     # ──────────────────────────────────────────────────────────────────────────
     # DIMENSION 3: SOFT SKILL ALIGNMENT SCORE

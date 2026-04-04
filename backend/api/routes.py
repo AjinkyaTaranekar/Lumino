@@ -56,7 +56,7 @@ from models.schemas import (
     MatchResult,
     RecordEventRequest,
     RejectMutationsRequest,
-    RelinkMatchesResponse,
+    ReembedResponse,
     ResolveFlagRequest,
     ResolveFlagResponse,
     RollbackResponse,
@@ -74,6 +74,7 @@ from services.ingestion import IngestionService
 from services.llm_extraction import LLMExtractionService
 from services.llm_ingestion import LLMIngestionService
 from services.matching_engine import MatchingEngine
+from services.vector_embedding import VectorEmbeddingService
 from services.visualization import VisualizationService
 
 logger = logging.getLogger(__name__)
@@ -1282,27 +1283,45 @@ async def delete_job(job_id: str, db: Neo4jClient = Depends(get_neo4j)):
 
 
 @router.post(
-    "/admin/relink-matches",
-    response_model=RelinkMatchesResponse,
+    "/admin/reset-vector-indexes",
     tags=["admin"],
-    summary="Refresh semantic MATCHES edges for one scope or the whole graph",
+    summary="Drop and recreate vector indexes at the configured dimension",
 )
-async def relink_matches(
+async def reset_vector_indexes(db: Neo4jClient = Depends(get_neo4j)):
+    """
+    Drop all four vector indexes and recreate them at EMBEDDING_DIMENSIONS.
+
+    Use this when switching embedding models that produce a different vector size
+    (e.g. 768 → 3072). After calling this endpoint, call POST /admin/reembed?scope=all
+    to regenerate all embedding vectors at the new dimension.
+    """
+    dims = int(os.environ.get("EMBEDDING_DIMENSIONS", "768"))
+    await db.drop_vector_indexes()
+    await db.setup_vector_indexes(dims)
+    return {"status": "recreated", "dimensions": dims}
+
+
+@router.post(
+    "/admin/reembed",
+    response_model=ReembedResponse,
+    tags=["admin"],
+    summary="Re-embed nodes for one scope or the whole graph",
+)
+async def reembed(
     scope: Literal["all", "user", "job"] = "all",
     entity_id: str | None = None,
-    regenerate_visualizations: bool = False,
     db: Neo4jClient = Depends(get_neo4j),
 ):
     """
-    Rebuild semantic MATCHES edges without re-ingesting source documents.
+    Regenerate embedding vectors on graph nodes without re-ingesting source documents.
+
+    Use after changing EMBEDDING_MODEL or EMBEDDING_DIMENSIONS, or to backfill
+    nodes ingested before the GraphRAG upgrade.
 
     Scope options:
-      - all: relink every user and job currently in Neo4j
-      - user: relink one user's skill/domain matches to all jobs
-      - job: relink one job's skill/domain matches against all users
-
-    Set regenerate_visualizations=true to also rebuild cached graph HTML files
-    for the processed entities after relinking.
+      - all:  re-embed every user and job in Neo4j
+      - user: re-embed one user's Skill and Domain nodes
+      - job:  re-embed one job's JobSkillRequirement and JobDomainRequirement nodes
     """
     if scope in {"user", "job"} and not entity_id:
         raise HTTPException(
@@ -1310,13 +1329,13 @@ async def relink_matches(
             detail="entity_id is required when scope is 'user' or 'job'",
         )
 
-    ingestor = LLMIngestionService(db)
-    viz = VisualizationService(db)
+    embedder = VectorEmbeddingService(db)
     users_processed = 0
     jobs_processed = 0
-    skill_matches_linked = 0
-    domain_matches_linked = 0
-    visualizations_regenerated = 0
+    skills_embedded = 0
+    domains_embedded = 0
+    skill_reqs_embedded = 0
+    domain_reqs_embedded = 0
 
     async def _user_exists(user_id: str) -> bool:
         rows = await db.run_query(
@@ -1332,63 +1351,45 @@ async def relink_matches(
         )
         return bool(rows and rows[0].get("count"))
 
-    async def _relink_user(user_id: str) -> None:
-        nonlocal users_processed, skill_matches_linked, domain_matches_linked
-        nonlocal visualizations_regenerated
-
-        counts = await ingestor.relink_user_matches(user_id)
-        users_processed += 1
-        skill_matches_linked += counts["skill_matches_linked"]
-        domain_matches_linked += counts["domain_matches_linked"]
-        if regenerate_visualizations:
-            await viz.generate_user_graph(user_id)
-            visualizations_regenerated += 1
-
-    async def _relink_job(job_id: str) -> None:
-        nonlocal jobs_processed, skill_matches_linked, domain_matches_linked
-        nonlocal visualizations_regenerated
-
-        counts = await ingestor.relink_job_matches(job_id)
-        jobs_processed += 1
-        skill_matches_linked += counts["skill_matches_linked"]
-        domain_matches_linked += counts["domain_matches_linked"]
-        if regenerate_visualizations:
-            await viz.generate_job_graph(job_id)
-            visualizations_regenerated += 1
-
     try:
         if scope == "user":
             if not await _user_exists(entity_id):
                 raise HTTPException(status_code=404, detail=f"User '{entity_id}' not found")
-            await _relink_user(entity_id)
+            counts = await embedder.reembed_user(entity_id)
+            users_processed += 1
+            skills_embedded += counts["skills_embedded"]
+            domains_embedded += counts["domains_embedded"]
         elif scope == "job":
             if not await _job_exists(entity_id):
                 raise HTTPException(status_code=404, detail=f"Job '{entity_id}' not found")
-            await _relink_job(entity_id)
+            counts = await embedder.reembed_job(entity_id)
+            jobs_processed += 1
+            skill_reqs_embedded += counts["skill_reqs_embedded"]
+            domain_reqs_embedded += counts["domain_reqs_embedded"]
         else:
-            user_rows = await db.run_query("MATCH (u:User) RETURN u.id AS id ORDER BY u.id")
-            job_rows = await db.run_query("MATCH (j:Job) RETURN j.id AS id ORDER BY j.id")
-            for row in user_rows:
-                if row.get("id"):
-                    await _relink_user(row["id"])
-            for row in job_rows:
-                if row.get("id"):
-                    await _relink_job(row["id"])
+            counts = await embedder.reembed_all()
+            users_processed = counts["users_processed"]
+            jobs_processed = counts["jobs_processed"]
+            skills_embedded = counts["skills_embedded"]
+            domains_embedded = counts["domains_embedded"]
+            skill_reqs_embedded = counts["skill_reqs_embedded"]
+            domain_reqs_embedded = counts["domain_reqs_embedded"]
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"Semantic relink failed for scope={scope} entity_id={entity_id}: {e}")
+        logger.exception(f"Reembed failed for scope={scope} entity_id={entity_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-    return RelinkMatchesResponse(
-        status="relinked",
+    return ReembedResponse(
+        status="embedded",
         scope=scope,
         entity_id=entity_id,
         users_processed=users_processed,
         jobs_processed=jobs_processed,
-        skill_matches_linked=skill_matches_linked,
-        domain_matches_linked=domain_matches_linked,
-        visualizations_regenerated=visualizations_regenerated,
+        skills_embedded=skills_embedded,
+        domains_embedded=domains_embedded,
+        skill_reqs_embedded=skill_reqs_embedded,
+        domain_reqs_embedded=domain_reqs_embedded,
     )
 
 

@@ -16,6 +16,7 @@ from database.neo4j_client import Neo4jClient
 from database.sqlite_client import SQLiteClient
 from services.llm_extraction import LLMExtractionService
 from services.llm_ingestion import LLMIngestionService
+from services.vector_embedding import VectorEmbeddingService
 from services.clarification_service import ClarificationService
 from services.job_tag_extractor import JobTagExtractor
 
@@ -28,6 +29,7 @@ class IngestionService:
         self._sqlite = sqlite_client
         self._llm_extractor = LLMExtractionService()
         self._llm_ingester = LLMIngestionService(neo4j_client)
+        self._embedder = VectorEmbeddingService(neo4j_client)
         self._tag_extractor = JobTagExtractor(neo4j_client)
 
     async def ingest_user(self, user_id: str, profile_text: str) -> dict:
@@ -39,8 +41,8 @@ class IngestionService:
 
         extraction = await self._llm_extractor.extract_user_profile(profile_text)
         await self._llm_ingester.ingest_user_profile(user_id, extraction)
-        skill_links = await self._llm_ingester.link_skill_matches(user_id)
-        domain_links = await self._llm_ingester.link_domain_matches(user_id)
+        skills_embedded = await self._embedder.embed_user_skills(user_id)
+        domains_embedded = await self._embedder.embed_user_domains(user_id)
 
         # Store interpretation flags for the clarification workflow
         flags_count = 0
@@ -77,8 +79,8 @@ class IngestionService:
             "coursework_extracted": len(getattr(extraction, "coursework", []) or []),
             "languages_extracted": len(getattr(extraction, "languages", []) or []),
             "volunteer_work_extracted": len(getattr(extraction, "volunteer_work", []) or []),
-            "skill_matches_linked": skill_links,
-            "domain_matches_linked": domain_links,
+            "skills_embedded": skills_embedded,
+            "domains_embedded": domains_embedded,
             "interpretation_flags": flags_count,
             "graph_verified": flags_count == 0,
             "clarification_questions": clarification_questions,
@@ -95,8 +97,8 @@ class IngestionService:
 
         extraction = await self._llm_extractor.extract_job_posting(job_text)
         await self._llm_ingester.ingest_job_posting(job_id, extraction, recruiter_id, raw_text=job_text)
-        skill_links = await self._llm_ingester.link_job_skill_matches(job_id)
-        domain_links = await self._llm_ingester.link_job_domain_matches(job_id)
+        skill_reqs_embedded = await self._embedder.embed_job_skill_reqs(job_id)
+        domain_reqs_embedded = await self._embedder.embed_job_domain_reqs(job_id)
         job_tags = await self._tag_extractor.extract_and_store_tags(job_id, job_text)
 
         result = {
@@ -107,8 +109,8 @@ class IngestionService:
             "skill_requirements_extracted": len(extraction.skill_requirements),
             "domain_requirements_extracted": len(extraction.domain_requirements),
             "work_styles_extracted": len(extraction.work_styles),
-            "skill_matches_linked": skill_links,
-            "domain_matches_linked": domain_links,
+            "skill_reqs_embedded": skill_reqs_embedded,
+            "domain_reqs_embedded": domain_reqs_embedded,
             "tags_extracted": job_tags,
         }
         logger.info(f"Job ingestion complete: {result}")

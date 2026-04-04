@@ -13,10 +13,11 @@ import asyncio
 import json
 import logging
 import os
+from typing import Optional
 
 from litellm import acompletion
 
-from models.schemas import UserProfileExtraction, JobPostingExtraction
+from models.schemas import UserProfileExtraction, JobPostingExtraction, SkillUsage
 from models.taxonomies import SKILL_TAXONOMY, DOMAIN_TAXONOMY
 
 logger = logging.getLogger(__name__)
@@ -57,7 +58,23 @@ class LLMExtractionService:
         self._model_name = os.environ.get("LLM_MODEL", "groq/llama-3.3-70b-versatile")
         self._skill_hint = _build_skill_taxonomy_hint()
         self._domain_hint = _build_domain_taxonomy_hint()
-        logger.info(f"LLM extraction service initialized with model: {self._model_name}")
+        self._temperature = self._resolve_temperature()
+        logger.info(
+            f"LLM extraction service initialized with model: {self._model_name} "
+            f"(temperature={self._temperature})"
+        )
+
+    def _resolve_temperature(self) -> float:
+        """
+        Gemini 3+ models require temperature=1.0 — LiteLLM warns and may behave
+        unpredictably at lower values. All other models use 0.1 for maximum
+        determinism on structured JSON extraction.
+        """
+        name = self._model_name.lower()
+        # Match gemini-3, gemini-3.x, gemini-3-flash-*, gemini-3-pro-*, etc.
+        if "gemini-3" in name or "gemini-exp" in name:
+            return 1.0
+        return 0.1
 
     @staticmethod
     def _unwrap_json(raw: str) -> str:
@@ -98,14 +115,26 @@ class LLMExtractionService:
             "═══ WHAT TO EXTRACT - SCAN THE ENTIRE PROFILE FOR ALL OF THESE ═══\n\n"
             "SKILLS: Every technical skill, tool, framework, library, language, platform mentioned.\n"
             "  - Assess evidence_strength honestly: listed-only vs project-backed.\n"
+            "  - context: if the skill appears in at least one project, write one sentence explaining\n"
+            "    the candidate's strongest or most notable use of it. E.g. 'Built async ML inference\n"
+            "    API in FastAPI serving 1M daily requests.' Leave null only if completely unconstrained.\n"
             "  - 'expert' requires multiple production project evidence.\n\n"
             "EXPERIENCES: Every work experience, internship, freelance, contract role.\n"
             "  - Extract concrete accomplishments with metrics where present.\n"
             "  - If vague, reflect that vagueness - do NOT invent specifics.\n\n"
             "PROJECTS: Every personal, academic, professional, open-source project.\n"
-            "  - For each project, describe HOW each skill was specifically used.\n"
+            "  - skills_demonstrated is MANDATORY and must be EXHAUSTIVE — list EVERY skill\n"
+            "    from the global skills list that appears anywhere in the project text.\n"
+            "  - For EACH skill in skills_demonstrated, you MUST fill in at minimum 'what' and 'how'.\n"
+            "    Use the project description text as evidence. Do NOT leave them null unless\n"
+            "    the text genuinely provides zero context.\n"
+            "  - 5W+H: what=WHAT was built, how=HOW the skill was applied (patterns/techniques),\n"
+            "    why=WHY chosen, scale=users/volume/team size, outcome=measurable result.\n"
+            "  - context=one-sentence summary of the most important 5W+H signals combined.\n"
             "  - Capture contribution_type honestly.\n\n"
-            "DOMAINS: Every industry, domain, or application area the person has worked in.\n\n"
+            "DOMAINS: Every industry, domain, or application area the person has worked in.\n"
+            "  - description: 1-2 sentences on what the candidate has actually built/done in this domain.\n"
+            "    E.g. 'Payment systems and PCI-DSS compliance — designed idempotent transaction flows.'\n\n"
             "EDUCATION: EVERY degree, diploma, certification program, bootcamp attended as a course.\n"
             "  - Include: degree type, field of study, institution, graduation year, GPA if stated,\n"
             "    honors (cum laude, dean's list, scholarships attached to degree), ongoing status.\n"
@@ -146,6 +175,19 @@ class LLMExtractionService:
             "  - Language proficiency inferred (not stated)\n"
             "The clarification_question must quote the actual resume text and ask a specific, "
             "answerable question. Use suggested_options for multiple-choice fields.\n\n"
+            "═══ CANONICAL NAMING — MANDATORY ═══\n"
+            "Always use the full, unambiguous canonical name for every entity. Never abbreviate.\n"
+            "  Skills/Tools: 'JavaScript' not 'JS', 'TypeScript' not 'TS', 'PostgreSQL' not 'Postgres',\n"
+            "    'Kubernetes' not 'K8s', 'Machine Learning' not 'ML' (when it's a skill, not a tool name)\n"
+            "  Degrees: 'Bachelor of Technology' not 'B.Tech' or 'BTech',\n"
+            "    'Master of Science' not 'M.S.' or 'MS', 'Bachelor of Science' not 'B.S.' or 'BS',\n"
+            "    'Doctor of Philosophy' not 'PhD' or 'Ph.D'\n"
+            "  Certifications: full official name, e.g. 'AWS Certified Solutions Architect' not 'AWS SAA'\n"
+            "  Companies: official full name\n"
+            "  Domains: full descriptive name, e.g. 'Financial Technology' not 'FinTech' "
+            "(unless FinTech is the canonical industry term)\n"
+            "  If a person writes 'B.Tech in CS', extract degree='Bachelor of Technology', "
+            "field_of_study='Computer Science'\n\n"
             "═══ SCHEMA CONSTRAINTS ═══\n"
             "- skill.family must be one of: Programming Languages, Web Frameworks, "
             "Databases, Cloud & DevOps, ML & AI, Data Engineering, Mobile Development, "
@@ -171,8 +213,16 @@ class LLMExtractionService:
             "  • Open source, volunteer, mentoring, community work\n"
             "  • Job preferences implied by career choices or stated explicitly\n"
             "  • Working style patterns revealed across projects and roles\n\n"
-            "For each project: describe HOW each skill was used, not just that it was used.\n"
-            "For each skill: honestly assess evidence_strength.\n"
+            "CRITICAL — PROJECT SKILL LINKAGE (most commonly missed):\n"
+            "  • After extracting all skills, go back through EVERY project description.\n"
+            "  • For each technology/tool/skill name that appears in the project text,\n"
+            "    add it to that project's skills_demonstrated list.\n"
+            "  • 'We built X using Python, FastAPI, and Redis' → skills_demonstrated must include\n"
+            "    Python, FastAPI, Redis — each with what/how/outcome from that project's context.\n"
+            "  • A skill may appear in skills_demonstrated of MULTIPLE projects.\n"
+            "  • Do NOT leave skills_demonstrated empty if any skills were mentioned in the project.\n\n"
+            "For each skill: honestly assess evidence_strength and fill 'context' if project-backed.\n"
+            "For each domain: fill 'description' with what was actually built in that domain.\n"
             "For the assessment: be direct about red flags, inflated claims, and genuine strengths.\n"
             "For every inference (not directly stated): create an interpretation_flag.\n\n"
             "Skill family reference:\n"
@@ -189,7 +239,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=self._temperature,
         )
         extracted = UserProfileExtraction.model_validate_json(raw_json)
         logger.info(
@@ -197,7 +247,198 @@ class LLMExtractionService:
             f"{len(extracted.projects)} projects, "
             f"{len(extracted.domains)} domains"
         )
+
+        # Second pass: enrich sparse project-skill links and fill missing context
+        extracted = await self._enrich_extraction(profile_text, extracted)
         return extracted
+
+    async def _enrich_extraction(
+        self,
+        profile_text: str,
+        extraction: UserProfileExtraction,
+    ) -> UserProfileExtraction:
+        """
+        Second-pass enrichment focused on two common failures from the first pass:
+        1. Projects with empty or sparse skills_demonstrated (missing edges in graph)
+        2. Skills/domains with no context/description despite project evidence
+
+        Only invoked when there are projects worth enriching. Cheap call — small
+        focused schema, no re-extraction of existing correct data.
+        """
+        skill_names = [s.name for s in extraction.skills if s.name and s.name.strip()]
+        if not skill_names or not extraction.projects:
+            return extraction
+
+        # Only enrich projects that have fewer links than skills mentioned in text
+        sparse_projects = [
+            p for p in extraction.projects
+            if p.name and len(p.skills_demonstrated) < max(2, len(skill_names) // 4)
+        ]
+        if not sparse_projects:
+            return extraction
+
+        enrichment_schema = {
+            "type": "object",
+            "properties": {
+                "enriched_projects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "project_name": {"type": "string"},
+                            "skills_demonstrated": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name": {"type": "string",
+                                                 "description": "Must exactly match a name from the provided skill list"},
+                                        "what": {"type": "string"},
+                                        "how": {"type": "string"},
+                                        "why": {"type": "string"},
+                                        "scale": {"type": "string"},
+                                        "outcome": {"type": "string"},
+                                        "context": {"type": "string"},
+                                    },
+                                    "required": ["name"],
+                                },
+                            },
+                        },
+                        "required": ["project_name", "skills_demonstrated"],
+                    },
+                },
+                "skill_context_updates": {
+                    "type": "array",
+                    "description": "Fill missing 'context' on skills that have project evidence",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "context": {"type": "string"},
+                        },
+                        "required": ["name", "context"],
+                    },
+                },
+                "domain_description_updates": {
+                    "type": "array",
+                    "description": "Fill missing 'description' on domains that have project evidence",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "description": {"type": "string"},
+                        },
+                        "required": ["name", "description"],
+                    },
+                },
+            },
+            "required": ["enriched_projects"],
+        }
+
+        project_summaries = "\n".join(
+            f"- {p.name}: {(p.description or 'no description')[:300]}"
+            for p in sparse_projects
+        )
+        skills_missing_context = [s.name for s in extraction.skills if s.name and not s.context]
+        domains_missing_desc = [d.name for d in extraction.domains if d.name and not d.description]
+
+        system_msg = (
+            "You are a precise data enrichment assistant. Cross-reference a profile text "
+            "with an extracted skills list to fill in missing project-skill relationships.\n\n"
+            "RULES:\n"
+            "1. skill names in output MUST exactly match one of the provided extracted skill names.\n"
+            "2. Only link a skill to a project if there is actual textual evidence.\n"
+            "3. For each link, extract what/how/outcome from the text — do not invent.\n"
+            "4. Return ONLY valid JSON matching this schema:\n\n"
+            + json.dumps(enrichment_schema, indent=2)
+        )
+
+        user_msg = (
+            f"Extracted skill names (use ONLY these exact names): {', '.join(skill_names)}\n\n"
+            f"Projects needing skill linkage:\n{project_summaries}\n\n"
+        )
+        if skills_missing_context:
+            user_msg += (
+                f"Skills missing context (fill if evidence exists): "
+                f"{', '.join(skills_missing_context[:10])}\n\n"
+            )
+        if domains_missing_desc:
+            user_msg += (
+                f"Domains missing description (fill if evidence exists): "
+                f"{', '.join(domains_missing_desc[:5])}\n\n"
+            )
+        user_msg += f"Profile text (search for evidence):\n{profile_text[:4000]}"
+
+        try:
+            raw_json = await self._call_with_retry(
+                model=self._model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                temperature=self._temperature,
+            )
+            enrichment = json.loads(raw_json)
+        except Exception as exc:
+            logger.warning("Enrichment pass failed (non-fatal): %s", exc)
+            return extraction
+
+        # ── Merge enriched project-skill links ────────────────────────────────
+        skill_name_set = set(skill_names)
+        enriched_map = {
+            ep["project_name"]: ep.get("skills_demonstrated", [])
+            for ep in enrichment.get("enriched_projects", [])
+        }
+        for project in extraction.projects:
+            enriched_links = enriched_map.get(project.name, [])
+            if not enriched_links:
+                continue
+            new_links: list[SkillUsage] = []
+            existing_skill_names = {su.name for su in project.skills_demonstrated}
+            for link in enriched_links:
+                name = (link.get("name") or "").strip()
+                if not name or name not in skill_name_set or name in existing_skill_names:
+                    continue
+                new_links.append(SkillUsage(
+                    name=name,
+                    what=link.get("what") or None,
+                    how=link.get("how") or None,
+                    why=link.get("why") or None,
+                    scale=link.get("scale") or None,
+                    outcome=link.get("outcome") or None,
+                    context=link.get("context") or None,
+                ))
+                existing_skill_names.add(name)
+            if new_links:
+                project.skills_demonstrated = list(project.skills_demonstrated) + new_links
+                logger.info(
+                    "Enrichment: added %d skill links to project '%s'",
+                    len(new_links), project.name,
+                )
+
+        # ── Merge skill context updates ────────────────────────────────────────
+        skill_map = {s.name: s for s in extraction.skills}
+        for update in enrichment.get("skill_context_updates", []):
+            name = (update.get("name") or "").strip()
+            ctx = (update.get("context") or "").strip()
+            if name in skill_map and ctx and not skill_map[name].context:
+                skill_map[name].context = ctx
+
+        # ── Merge domain description updates ──────────────────────────────────
+        domain_map = {d.name: d for d in extraction.domains}
+        for update in enrichment.get("domain_description_updates", []):
+            name = (update.get("name") or "").strip()
+            desc = (update.get("description") or "").strip()
+            if name in domain_map and desc and not domain_map[name].description:
+                domain_map[name].description = desc
+
+        logger.info(
+            "Enrichment pass complete: %d projects processed, %d skill links added",
+            len(enriched_map),
+            sum(len(v) for v in enriched_map.values()),
+        )
+        return extraction
 
     async def generate_match_explanation(
         self,
@@ -404,7 +645,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=1.0,
         )
 
         try:
@@ -488,7 +729,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.1,
+            temperature=self._temperature,
         )
         extracted = JobPostingExtraction.model_validate_json(raw_json)
         logger.info(
@@ -1007,7 +1248,7 @@ class LLMExtractionService:
                 {"role": "user", "content": user_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=0.3,
+            temperature=1.0,
         )
 
         try:
