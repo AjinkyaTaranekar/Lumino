@@ -21,6 +21,25 @@ from services.weights import recompute_weights
 
 logger = logging.getLogger(__name__)
 
+def _normalize_name(name: str | None) -> str | None:
+    """Strip whitespace and return None for empty/null names."""
+    if not name:
+        return None
+    stripped = name.strip()
+    return stripped if stripped else None
+
+
+def _build_lower_map(rows: list[dict], key: str = "name") -> dict[str, str]:
+    """
+    Build a lowercase → canonical display name lookup from existing DB rows.
+
+    Used to resolve incoming names case-insensitively against what is already
+    stored in Neo4j so that re-uploads with different capitalisation or minor
+    variants (e.g. 'python' vs 'Python', 'btech' vs 'Bachelor of Technology')
+    find the existing node rather than creating a duplicate.
+    """
+    return {r[key].lower(): r[key] for r in rows if r.get(key)}
+
 
 class LLMIngestionService:
     def __init__(self, client: Neo4jClient):
@@ -64,7 +83,20 @@ class LLMIngestionService:
         )
 
     async def _ingest_skills(self, user_id: str, skills: list) -> None:
+        # Pre-load existing skill names for case-insensitive dedup on re-upload.
+        # 'Python' and 'python' will both resolve to the already-stored form.
+        existing_rows = await self.client.run_query(
+            "MATCH (s:Skill {user_id: $user_id}) RETURN s.name AS name",
+            {"user_id": user_id},
+        )
+        lower_map = _build_lower_map(existing_rows)
+
         for skill in skills:
+            name = _normalize_name(skill.name)
+            if not name:
+                continue
+            # If an equivalent node already exists, use its stored display name
+            name = lower_map.get(name.lower(), name)
             await self.client.run_write(
                 """
                 MATCH (u:User {id: $user_id})
@@ -87,7 +119,7 @@ class LLMIngestionService:
                 {
                     "user_id": user_id,
                     "family": skill.family or "Other",
-                    "name": skill.name,
+                    "name": name,
                     "years": skill.years,
                     "level": skill.level,
                     "evidence_strength": getattr(skill, "evidence_strength", None),
@@ -96,7 +128,17 @@ class LLMIngestionService:
             )
 
     async def _ingest_projects(self, user_id: str, projects: list) -> None:
+        # Pre-load skill canonical names so DEMONSTRATES_SKILL edges find the
+        # right node even when the project mentions a variant name.
+        skill_rows = await self.client.run_query(
+            "MATCH (s:Skill {user_id: $user_id}) RETURN s.name AS name",
+            {"user_id": user_id},
+        )
+        skill_lower_map = _build_lower_map(skill_rows)
+
         for project in projects:
+            if not project.name or not project.name.strip():
+                continue
             # Create project node
             await self.client.run_write(
                 """
@@ -125,10 +167,12 @@ class LLMIngestionService:
             for skill_usage in project.skills_demonstrated:
                 # Support both SkillUsage objects and plain strings (backwards compat)
                 if isinstance(skill_usage, str):
-                    skill_name = skill_usage
+                    raw_name = _normalize_name(skill_usage)
+                    skill_name = skill_lower_map.get(raw_name.lower(), raw_name) if raw_name else None
                     context = what = how = why = scale = outcome = None
                 else:
-                    skill_name = skill_usage.name
+                    raw_name = _normalize_name(skill_usage.name)
+                    skill_name = skill_lower_map.get(raw_name.lower(), raw_name) if raw_name else None
                     context = skill_usage.context
                     what = skill_usage.what
                     how = skill_usage.how
@@ -139,6 +183,9 @@ class LLMIngestionService:
                     if not context:
                         parts = [p for p in [what, how, outcome] if p]
                         context = " | ".join(parts) if parts else None
+
+                if not skill_name:
+                    continue
 
                 await self.client.run_write(
                     """
@@ -182,7 +229,17 @@ class LLMIngestionService:
                 )
 
     async def _ingest_domains(self, user_id: str, domains: list) -> None:
+        existing_rows = await self.client.run_query(
+            "MATCH (d:Domain {user_id: $user_id}) RETURN d.name AS name",
+            {"user_id": user_id},
+        )
+        lower_map = _build_lower_map(existing_rows)
+
         for domain in domains:
+            name = _normalize_name(domain.name)
+            if not name:
+                continue
+            name = lower_map.get(name.lower(), name)
             await self.client.run_write(
                 """
                 MATCH (u:User {id: $user_id})
@@ -201,7 +258,7 @@ class LLMIngestionService:
                 {
                     "user_id": user_id,
                     "family": domain.family or "Other",
-                    "name": domain.name,
+                    "name": name,
                     "years": domain.years_experience,
                     "depth": domain.depth,
                     "description": getattr(domain, "description", None),
@@ -550,6 +607,9 @@ class LLMIngestionService:
 
     async def _ingest_job_skills(self, job_id: str, requirements: list) -> None:
         for req in requirements:
+            name = _normalize_name(req.name)
+            if not name:
+                continue
             await self.client.run_write(
                 """
                 MATCH (j:Job {id: $job_id})
@@ -569,7 +629,7 @@ class LLMIngestionService:
                 {
                     "job_id": job_id,
                     "family": req.family or "Other",
-                    "name": req.name,
+                    "name": name,
                     "required": req.required,
                     "importance": req.importance,
                     "min_years": req.min_years,
@@ -579,6 +639,9 @@ class LLMIngestionService:
 
     async def _ingest_job_domains(self, job_id: str, requirements: list) -> None:
         for req in requirements:
+            name = _normalize_name(req.name)
+            if not name:
+                continue
             await self.client.run_write(
                 """
                 MATCH (j:Job {id: $job_id})
@@ -597,7 +660,7 @@ class LLMIngestionService:
                 {
                     "job_id": job_id,
                     "family": req.family or "Other",
-                    "name": req.name,
+                    "name": name,
                     "min_years": req.min_years,
                     "importance": getattr(req, "importance", "must_have"),
                     "depth": getattr(req, "depth", None),
