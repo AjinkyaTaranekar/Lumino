@@ -345,12 +345,14 @@ async def explain_match(
             culture_bonus=result.culture_bonus,
             preference_bonus=result.preference_bonus,
             matched_skills=result.matched_skills,
+            inferred_skills=result.inferred_skills,
             missing_skills=result.missing_skills,
             matched_domains=result.matched_domains,
             missing_domains=result.missing_domains,
             paths=path_strings,
             perspective=perspective,
             rich_context=rich_context,
+            skill_match_details=[d.model_dump() for d in result.skill_match_details],
         )
     except Exception as e:
         logger.exception(f"LLM explanation failed: {e}")

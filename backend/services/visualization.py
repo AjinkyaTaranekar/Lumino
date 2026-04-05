@@ -174,6 +174,11 @@ _JOB_LABEL_FILTER = (
     "|-CourseworkCategory|-Course"
     "|-LanguageCategory|-Language"
     "|-VolunteerCategory|-VolunteerWork"
+    # Prevent APOC bidirectional traversal from following shared JobTag nodes
+    # into other Job subgraphs. JobTag nodes are global singletons (no job_id),
+    # so without this filter Job A → JobTag("remote") ← Job B pulls in Job B's
+    # entire subgraph. The root Job itself is never filtered by APOC labelFilter.
+    "|-Job|-JobTag"
     # NOTE: New deep job profile nodes are intentionally NOT excluded — they
     # belong to the job subgraph and should appear in job model visualizations.
 )
@@ -444,21 +449,41 @@ class VisualizationService:
 
     async def generate_match_graph(self, user_id: str, job_id: str) -> str:
         """
-        Generate a combined user+job pyvis graph showing match results.
+        Generate a combined user+job pyvis graph with 3-level match confidence.
 
-        Colour coding:
-          Green  (#27AE60) - matched Skill / JobSkillRequirement nodes
-          Orange (#E67E22) - missing job requirements (gap)
-          All others       - normal NODE_TYPE_COLORS
+        Node colours:
+          Exact    (#16A34A green)  — same skill name, highest confidence
+          Strong   (#0D9488 teal)   — keyword overlap in profile context
+          Inferred (#D97706 amber)  — semantic-only, no shared keywords
+          Gap      (#DC2626 red)    — required skill absent from profile
+          Other    — normal node type colour
 
-        Similarity edges (vector ANN matches) are drawn in bright green at double width.
-        Output: graph_match_{user_id}_{job_id}.html
+        Cross-graph edge styles:
+          Exact    — green,  solid, width=4
+          Strong   — teal,   solid, width=3
+          Inferred — amber,  dashed, width=2
         """
-        MATCH_COLOR = "#16A34A"      # green-600 - readable on white
-        MISSING_COLOR = "#D97706"    # amber-600 - readable on white
-        MATCH_EDGE_COLOR = "#22C55E" # green-500
+        # ── Match level config ────────────────────────────────────────────────
+        LEVEL_NODE_COLOR = {
+            "exact":    "#16A34A",   # green-600
+            "strong":   "#0D9488",   # teal-600
+            "inferred": "#D97706",   # amber-600
+        }
+        LEVEL_EDGE_COLOR = {
+            "exact":    "#22C55E",   # green-500
+            "strong":   "#14B8A6",   # teal-500
+            "inferred": "#FBBF24",   # amber-400
+        }
+        LEVEL_EDGE_WIDTH  = {"exact": 4, "strong": 3, "inferred": 2}
+        LEVEL_EDGE_DASHES = {"exact": False, "strong": False, "inferred": True}
+        LEVEL_LABEL       = {
+            "exact":    "Exact",
+            "strong":   "Strong",
+            "inferred": "Inferred",
+        }
+        MISSING_COLOR = "#DC2626"    # red-600
 
-        # Fetch both subgraphs with label filters to prevent cross-entity contamination
+        # ── Fetch subgraphs ───────────────────────────────────────────────────
         user_nodes, user_edges = await self._fetch_graph_data(
             user_id, "User", label_filter=_USER_LABEL_FILTER
         )
@@ -466,10 +491,11 @@ class VisualizationService:
             job_id, "Job", label_filter=_JOB_LABEL_FILTER
         )
 
-        # Fetch match overlay
+        # ── Fetch match overlay with confidence levels ────────────────────────
         matched_user_ids, matched_job_ids, missing_ids, matches_edges = (
             await self._fetch_match_overlay(user_id, job_id)
         )
+        # matched_user_ids / matched_job_ids are now dicts: {elementId: level}
 
         G = nx.DiGraph()
 
@@ -477,24 +503,24 @@ class VisualizationService:
         all_edges = user_edges + job_edges
 
         for node in all_nodes:
-            node_id = node.get("id", "")
-            label = str(node.get("label", ""))[:30]
+            node_id   = node.get("id", "")
+            label     = str(node.get("label", ""))[:30]
             node_type = node.get("type", "default")
 
-            if node_id in matched_user_ids or node_id in matched_job_ids:
-                color = MATCH_COLOR
-                tooltip_suffix = "  ✓ MATCHED"
+            level = matched_user_ids.get(node_id) or matched_job_ids.get(node_id)
+
+            if level:
+                color = LEVEL_NODE_COLOR[level]
+                level_label = LEVEL_LABEL[level]
+                tooltip_suffix = f"  ✓ {level_label} match"
+                node_font = {"color": "white", "size": 11}
             elif node_id in missing_ids:
                 color = MISSING_COLOR
-                tooltip_suffix = "  ✗ GAP"
+                tooltip_suffix = "  ✗ Gap — required, not in profile"
+                node_font = {"color": "white", "size": 11}
             else:
                 color = NODE_TYPE_COLORS.get(node_type, DEFAULT_NODE_COLOR)
                 tooltip_suffix = ""
-
-            # Font: matched/gap nodes are dark-background, so white text
-            if node_id in matched_user_ids or node_id in matched_job_ids or node_id in missing_ids:
-                node_font = {"color": "white", "size": 11}
-            else:
                 node_font = _node_font(node_type)
 
             G.add_node(
@@ -506,19 +532,6 @@ class VisualizationService:
                 font=node_font,
             )
 
-        for node in all_nodes:
-            node_id = node.get("id", "")
-            node_type = node.get("type", "default")
-            if node_id in matched_user_ids or node_id in matched_job_ids:
-                font = {"color": "white", "size": 11}
-            elif node_id in missing_ids:
-                font = {"color": "white", "size": 11}
-            else:
-                font = _node_font(node_type)
-            # Update font on already-added node
-            if node_id in G:
-                G.nodes[node_id]["font"] = font
-
         for edge in all_edges:
             src = edge.get("source_id", "")
             tgt = edge.get("target_id", "")
@@ -526,17 +539,25 @@ class VisualizationService:
             if src in G and tgt in G:
                 G.add_edge(src, tgt, title=rel, label=rel, color="#94A3B8")
 
-        # Add similarity edges (cross-graph, green)
+        # ── Cross-graph edges with level-based style ──────────────────────────
         for me in matches_edges:
-            src = me.get("source_id", "")
-            tgt = me.get("target_id", "")
+            src   = me.get("source_id", "")
+            tgt   = me.get("target_id", "")
+            level = me.get("level", "inferred")
             if src in G and tgt in G:
+                tooltip = (
+                    f"{me.get('skill_name','')} → {me.get('req_name','')}  "
+                    f"[{LEVEL_LABEL.get(level, level)}]  "
+                    f"sem={me.get('sem',0):.2f}  lex={me.get('lex',0):.2f}  "
+                    f"hybrid={me.get('hybrid',0):.2f}"
+                )
                 G.add_edge(
                     src, tgt,
-                    title="SIMILAR",
-                    label="~",
-                    color=MATCH_EDGE_COLOR,
-                    width=3,
+                    title=tooltip,
+                    label=LEVEL_LABEL.get(level, "~"),
+                    color=LEVEL_EDGE_COLOR[level],
+                    width=LEVEL_EDGE_WIDTH[level],
+                    dashes=LEVEL_EDGE_DASHES[level],
                 )
 
         net = Network(
@@ -592,55 +613,97 @@ class VisualizationService:
         logger.info(
             f"Generated match graph {user_id}↔{job_id}: "
             f"{total_nodes} nodes, {total_edges} edges, "
-            f"{len(matched_user_ids)} matched, {len(missing_ids)} gaps → {filepath}"
+            f"{len(matched_job_ids)} matched, {len(missing_ids)} gaps → {filepath}"
         )
         return filepath
 
     async def _fetch_match_overlay(
         self, user_id: str, job_id: str
-    ) -> tuple[set, set, set, list]:
+    ) -> tuple[dict, dict, set, list]:
         """
-        Return sets of element IDs for coloring the match graph, plus similarity edges.
+        Return match data for coloring the graph with 3 confidence levels.
 
-        Uses vector index ANN search instead of MATCHES edges — no pre-computed
-        edges needed. Mirrors the logic in MatchingEngine._compute_skill_score.
+        Uses the same hybrid semantic+lexical logic as MatchingEngine so the
+        graph and the score are always consistent.
 
         Returns:
-          matched_user_ids  - Skill elementIds that vector-match a job requirement
-          matched_job_ids   - JobSkillRequirement elementIds matched by this user
-          missing_ids       - JobSkillRequirement elementIds NOT matched by this user
-          matches_edges     - list of {source_id, target_id} for similarity edges
+          matched_user_ids  - {elementId: match_level} for matched Skill nodes
+          matched_job_ids   - {elementId: match_level} for matched JobSkillRequirement nodes
+          missing_ids       - set of JobSkillRequirement elementIds with no match
+          matches_edges     - list of edge dicts {source_id, target_id, level, sem, lex, hybrid,
+                              req_name, skill_name} for drawing cross-graph edges
         """
-        threshold = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.72"))
+        from services.matching_engine import MatchingEngine
 
-        # Matched pairs via vector ANN search
-        matched_records = await self.client.run_query(
+        sem_floor          = float(os.environ.get("SKILL_SEM_FLOOR",          "0.55"))
+        hybrid_threshold   = float(os.environ.get("SKILL_HYBRID_THRESHOLD",   "0.70"))
+        sem_only_threshold = float(os.environ.get("SKILL_SEM_ONLY_THRESHOLD", "0.88"))
+        sem_weight         = float(os.environ.get("SKILL_SEM_WEIGHT",         "0.65"))
+
+        candidates = await self.client.run_query(
             """
             MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
-                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+                  -[:HAS_SKILL_FAMILY_REQ]->(jsf:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
             WHERE req.embedding IS NOT NULL
             CALL {
                 WITH req
                 CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
                 YIELD node AS s, score
-                WHERE s.user_id = $user_id AND score >= $threshold
-                RETURN s, score
+                WHERE s.user_id = $user_id AND score >= $sem_floor
+                OPTIONAL MATCH (sfam:SkillFamily)-[:HAS_SKILL]->(s)
+                RETURN s, score, sfam
                 ORDER BY score DESC
                 LIMIT 1
             }
-            RETURN elementId(s) AS user_node_id, elementId(req) AS job_node_id
+            RETURN
+                elementId(s)   AS user_node_id,
+                elementId(req) AS job_node_id,
+                req.name       AS req_name,
+                req.context    AS req_context,
+                jsf.name       AS req_family,
+                s.name         AS skill_name,
+                s.context      AS skill_context,
+                sfam.name      AS skill_family,
+                score          AS semantic_score
             """,
-            {"user_id": user_id, "job_id": job_id, "threshold": threshold},
+            {"user_id": user_id, "job_id": job_id, "sem_floor": sem_floor},
         )
 
-        matched_user_ids = {r["user_node_id"] for r in matched_records}
-        matched_job_ids = {r["job_node_id"] for r in matched_records}
-        matches_edges = [
-            {"source_id": r["user_node_id"], "target_id": r["job_node_id"]}
-            for r in matched_records
-        ]
+        matched_user_ids: dict[str, str] = {}
+        matched_job_ids:  dict[str, str] = {}
+        matches_edges: list[dict] = []
 
-        # Missing: all skill requirements not in the matched set
+        for r in candidates:
+            req_name   = (r.get("req_name")   or "").strip()
+            skill_name = (r.get("skill_name") or "").strip()
+            sem_score  = float(r.get("semantic_score") or 0.0)
+
+            job_text  = " ".join(filter(None, [req_name,   r.get("req_family"),   r.get("req_context")]))
+            user_text = " ".join(filter(None, [skill_name, r.get("skill_family"), r.get("skill_context")]))
+            lex_score = MatchingEngine._lexical_score(job_text, user_text)
+
+            matched, method, hybrid = MatchingEngine._decide_match(
+                req_name, skill_name, sem_score, lex_score,
+                hybrid_threshold, sem_only_threshold, sem_weight,
+            )
+            if not matched:
+                continue
+
+            uid = r["user_node_id"]
+            jid = r["job_node_id"]
+            matched_user_ids[uid] = method
+            matched_job_ids[jid]  = method
+            matches_edges.append({
+                "source_id":  uid,
+                "target_id":  jid,
+                "level":      method,           # "exact" | "strong" | "inferred"
+                "sem":        round(sem_score, 2),
+                "lex":        round(lex_score, 2),
+                "hybrid":     round(hybrid, 2),
+                "req_name":   req_name,
+                "skill_name": skill_name,
+            })
+
         all_req_records = await self.client.run_query(
             """
             MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
@@ -650,7 +713,7 @@ class VisualizationService:
             {"job_id": job_id},
         )
         all_req_ids = {r["req_id"] for r in all_req_records}
-        missing_ids = all_req_ids - matched_job_ids
+        missing_ids = all_req_ids - set(matched_job_ids.keys())
 
         return matched_user_ids, matched_job_ids, missing_ids, matches_edges
 
@@ -678,20 +741,45 @@ class VisualizationService:
         return html
 
     def _inject_legend(self, filepath: str) -> None:
-        """Inject a Lumino-styled color legend into the match graph HTML."""
+        """Inject a Lumino-styled colour legend into the match graph HTML."""
         legend_html = """
 <div style="
     position: fixed; top: 12px; left: 12px; z-index: 9999;
     background: white; border: 1px solid #e2e8f0;
-    border-radius: 10px; padding: 10px 14px;
+    border-radius: 10px; padding: 12px 16px;
     font-family: Inter, system-ui, sans-serif; font-size: 12px;
-    line-height: 2; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-    pointer-events: none; color: #0f172a;">
-  <b style="font-size:12px; color:#0f172a; letter-spacing:0.05em; text-transform:uppercase;">Match Legend</b><br>
-  <span style="color:#16A34A; font-size:16px;">&#9679;</span> Matched skill / domain<br>
-  <span style="color:#D97706; font-size:16px;">&#9679;</span> Gap (required, not in profile)<br>
-  <span style="color:#94A3B8; font-size:16px;">&#9679;</span> Other node<br>
-  <span style="color:#22C55E; font-weight:bold;">&#9472;&#9472;</span> Similarity edge
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    pointer-events: none; color: #0f172a; min-width: 230px;">
+  <b style="font-size:11px; color:#64748b; letter-spacing:0.08em; text-transform:uppercase;">
+    Match Confidence
+  </b>
+  <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="display:inline-block; width:28px; height:4px; background:#22C55E; border-radius:2px;"></span>
+      <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#16A34A;"></span>
+      <span><b>Exact</b> &mdash; same skill name</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="display:inline-block; width:28px; height:3px; background:#14B8A6; border-radius:2px;"></span>
+      <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#0D9488;"></span>
+      <span><b>Strong</b> &mdash; shared keywords in profile</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="display:inline-block; width:28px; height:2px; background:#FBBF24;
+                   border-top: 2px dashed #FBBF24; border-radius:0;"></span>
+      <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#D97706;"></span>
+      <span><b>Inferred</b> &mdash; conceptually similar, verify</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="display:inline-block; width:28px;"></span>
+      <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background:#DC2626;"></span>
+      <span><b>Gap</b> &mdash; required, not in profile</span>
+    </div>
+  </div>
+  <div style="margin-top:8px; padding-top:8px; border-top:1px solid #f1f5f9;
+              font-size:10px; color:#94a3b8; line-height:1.5;">
+    Hover an edge to see<br>semantic &amp; keyword scores
+  </div>
 </div>
 """
         with open(filepath, "r", encoding="utf-8") as f:

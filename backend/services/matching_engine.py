@@ -33,7 +33,7 @@ Name normalization: toLower(trim(...)) applied in all Cypher comparisons.
 import logging
 import os
 from database.neo4j_client import Neo4jClient
-from models.schemas import MatchResult, BatchMatchResponse, CandidateResult, BatchCandidateResponse
+from models.schemas import MatchResult, BatchMatchResponse, CandidateResult, BatchCandidateResponse, SkillMatchDetail
 from models.taxonomies import (
     MatchWeight,
     SkillImportanceWeight,
@@ -185,9 +185,13 @@ class MatchingEngine:
             culture_bonus=round(culture_bonus, 4),
             preference_bonus=round(preference_bonus, 4),
             matched_skills=skill_data.get("matched", []),
+            inferred_skills=skill_data.get("inferred", []),
             missing_skills=skill_data.get("missing", []),
             matched_domains=domain_data.get("matched", []),
             missing_domains=domain_data.get("missing", []),
+            skill_match_details=[
+                SkillMatchDetail(**d) for d in skill_data.get("match_details", [])
+            ],
             behavioral_risk_flags=soft_data.get("risk_flags", []),
             explanation=self._build_explanation(
                 mandatory_score, domain_score, soft_skill_score,
@@ -398,63 +402,262 @@ class MatchingEngine:
     # DIMENSION 1: EVIDENCE-WEIGHTED SKILL SCORE
     # ──────────────────────────────────────────────────────────────────────────
 
-    async def _compute_skill_score(self, user_id: str, job_id: str) -> dict:
-        """
-        Evidence-weighted skill match via vector index ANN search.
+    # ── Hybrid matching helpers ────────────────────────────────────────────────
 
-        At match time each JobSkillRequirement's stored embedding vector is used
-        to query the 'skill_embeddings' index for the nearest user Skill node.
-        No pre-computed MATCHES edges are needed — O(N) per ingestion, not O(U×J).
+    # Generic terms that appear in almost every skill's context — not useful
+    # for distinguishing specific skills from each other.
+    _LEX_STOPWORDS: frozenset[str] = frozenset({
+        "skill", "experience", "knowledge", "proficiency", "ability", "using",
+        "with", "and", "the", "for", "in", "of", "to", "a", "an", "is", "are",
+        "development", "programming", "engineer", "software", "application",
+        "system", "service", "services", "tool", "tools", "language", "framework",
+        "backend", "frontend", "fullstack", "full", "stack", "web", "mobile",
+        "cloud", "data", "api", "code", "coding", "build", "building", "design",
+        "implement", "implementation", "work", "working", "used", "use", "years",
+        "level", "advanced", "intermediate", "beginner", "expert", "senior",
+        "junior", "context", "project", "projects", "team", "teams",
+    })
 
-        contribution = importance_weight × seniority_factor × evidence_weight
-        mandatory_score = matched_must_have_weight / total_must_have_weight
-        optional_score  = matched_optional_weight  / total_optional_weight
+    @classmethod
+    def _profile_tokens(cls, *text_parts: str | None) -> set[str]:
         """
-        threshold = float(os.environ.get("SEMANTIC_MATCH_THRESHOLD", "0.72"))
-        evidence_params = {
-            "e_multi":   EvidenceWeight.MULTIPLE_PRODUCTIONS,
-            "e_proj":    EvidenceWeight.PROJECT_BACKED,
-            "e_once":    EvidenceWeight.MENTIONED_ONCE,
-            "e_claim":   EvidenceWeight.CLAIMED_ONLY,
-            "e_unknown": EvidenceWeight.UNKNOWN,
+        Tokenize and filter skill profile text (name + family + context).
+        Strips generic tech stopwords so only distinctive terms remain.
+        Preserves C#, C++, .NET-style tokens.
+        """
+        import re as _re
+        combined = " ".join(p for p in text_parts if p)
+        raw = _re.sub(r"[^a-z0-9#+.]", " ", combined.lower()).split()
+        # Split "react.js" → ["react", "js"] while keeping "c#", "c++"
+        tokens: set[str] = set()
+        for tok in raw:
+            if "#" in tok or "+" in tok:
+                tokens.add(tok)
+            else:
+                for part in tok.split("."):
+                    if part:
+                        tokens.add(part)
+        return tokens - cls._LEX_STOPWORDS - {""}
+
+    @classmethod
+    def _lexical_score(cls, job_text: str, user_text: str) -> float:
+        """
+        Profile-level BM25-inspired lexical overlap.
+
+        Computes the fraction of distinctive job skill terms that appear in the
+        user's skill text (name + family + context description).  Using full
+        profile text — not just skill names — means the signal scales naturally
+        to any tech stack without hardcoding synonyms.
+
+        Returns a [0, 1] precision score: 1.0 = all job terms found in user text.
+        """
+        job_tokens  = cls._profile_tokens(job_text)
+        user_tokens = cls._profile_tokens(user_text)
+        if not job_tokens:
+            return 0.0
+        overlap = job_tokens & user_tokens
+        return len(overlap) / len(job_tokens)
+
+    # Confidence multiplier applied to inferred matches in score calculation.
+    # Inferred = semantic-only, no shared keywords — we trust it less.
+    _INFERRED_CONFIDENCE: float = 0.75
+
+    @staticmethod
+    def _decide_match(
+        req_name: str,
+        skill_name: str,
+        sem_score: float,
+        lex_score: float,
+        hybrid_threshold: float,
+        sem_only_threshold: float,
+        sem_weight: float,
+        req_family: str | None = None,
+        skill_family: str | None = None,
+    ) -> tuple[bool, str | None, float]:
+        """
+        Two-gate hybrid decision:
+          • lex >= 0.20  → hybrid gate: sem*w + lex*(1-w) >= hybrid_threshold
+          • lex <  0.20  → semantic-only gate: sem >= effective_threshold
+                           Base threshold: sem_only_threshold (default 0.88)
+                           Cross-family penalty: raised to 0.93 when skill families
+                           differ (e.g. "Go"/Programming ↔ "Algorithms"/CS Theory).
+                           This prevents generic short-name embeddings from
+                           matching conceptually unrelated skills.
+
+        Returns (matched, method, hybrid_score).
+        method: "exact" | "strong" | "inferred" | None
+        """
+        hybrid = round(sem_weight * sem_score + (1.0 - sem_weight) * lex_score, 4)
+
+        if lex_score >= 0.20:
+            matched = hybrid >= hybrid_threshold
+            method  = ("exact" if lex_score >= 0.90 else "strong") if matched else None
+        else:
+            # Tighten when families are known and differ
+            families_differ = (
+                req_family and skill_family and
+                req_family.lower().strip() != skill_family.lower().strip()
+            )
+            effective_threshold = 0.93 if families_differ else sem_only_threshold
+            matched = sem_score >= effective_threshold
+            method  = "inferred" if matched else None
+
+        return matched, method, hybrid
+
+    async def _score_skill_bucket(
+        self,
+        user_id: str,
+        job_id: str,
+        importance_filter: str,
+        importance_label: str,
+        importance_weight: float,
+        sem_floor: float,
+        hybrid_threshold: float,
+        sem_only_threshold: float,
+        sem_weight: float,
+    ) -> tuple[list[str], list[str], float, list[dict]]:
+        """
+        Fetch ANN candidates for one importance bucket, apply hybrid scoring.
+
+        Returns (confirmed_names, inferred_names, matched_weight, match_details).
+
+        confirmed = exact + strong matches (full credit in score)
+        inferred  = semantic-only matches  (0.75× credit, shown separately)
+        """
+        ev_map = {
+            "multiple_productions": EvidenceWeight.MULTIPLE_PRODUCTIONS,
+            "project_backed":       EvidenceWeight.PROJECT_BACKED,
+            "mentioned_once":       EvidenceWeight.MENTIONED_ONCE,
+            "claimed_only":         EvidenceWeight.CLAIMED_ONLY,
         }
 
-        # ── Mandatory skills — vector index ANN match ──────────────────────────
-        mandatory_matched = await self.client.run_query(
-            """
-            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
-                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
-            WHERE req.importance = 'must_have' AND req.embedding IS NOT NULL
-            CALL {
+        candidates = await self.client.run_query(
+            f"""
+            MATCH (j:Job {{id: $job_id}})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
+                  -[:HAS_SKILL_FAMILY_REQ]->(jsf:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
+            WHERE req.importance {importance_filter} AND req.embedding IS NOT NULL
+            CALL {{
                 WITH req
                 CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
                 YIELD node AS s, score
-                WHERE s.user_id = $user_id AND score >= $threshold
-                RETURN s, score
+                WHERE s.user_id = $user_id AND score >= $sem_floor
+                OPTIONAL MATCH (sfam:SkillFamily)-[:HAS_SKILL]->(s)
+                RETURN s, score, sfam
                 ORDER BY score DESC
                 LIMIT 1
-            }
-            WITH req, s,
-                 CASE
-                   WHEN req.min_years IS NULL OR s.years IS NULL THEN 1.0
-                   WHEN s.years >= req.min_years               THEN 1.0
-                   ELSE s.years / toFloat(req.min_years)
-                 END AS seniority_factor,
-                 CASE coalesce(s.evidence_strength, 'unknown')
-                   WHEN 'multiple_productions' THEN $e_multi
-                   WHEN 'project_backed'       THEN $e_proj
-                   WHEN 'mentioned_once'       THEN $e_once
-                   WHEN 'claimed_only'         THEN $e_claim
-                   ELSE $e_unknown
-                 END AS evidence_weight
+            }}
             RETURN
-                collect(toLower(trim(req.name))) AS matched_names,
-                reduce(acc = 0.0,
-                       x IN collect($w_must * seniority_factor * evidence_weight) |
-                       acc + x) AS matched_weight
+                req.name       AS req_name,
+                req.context    AS req_context,
+                jsf.name       AS req_family,
+                req.min_years  AS req_min_years,
+                s.name         AS skill_name,
+                s.context      AS skill_context,
+                sfam.name      AS skill_family,
+                toFloat(s.years)                         AS skill_years,
+                s.level                                  AS skill_level,
+                coalesce(s.evidence_strength, 'unknown') AS evidence_strength,
+                score                                    AS semantic_score
             """,
-            {"user_id": user_id, "job_id": job_id, "threshold": threshold,
-             "w_must": SkillImportanceWeight.MUST_HAVE, **evidence_params},
+            {"user_id": user_id, "job_id": job_id, "sem_floor": sem_floor},
+        )
+
+        confirmed_names: list[str] = []
+        inferred_names:  list[str] = []
+        matched_weight = 0.0
+        details: list[dict] = []
+        seen_reqs: set[str] = set()
+
+        for row in candidates:
+            req_name    = (row.get("req_name")    or "").strip()
+            skill_name  = (row.get("skill_name")  or "").strip()
+            req_family  = (row.get("req_family")  or "").strip()
+            skill_family = (row.get("skill_family") or "").strip()
+            sem_score   = float(row.get("semantic_score") or 0.0)
+
+            job_text  = " ".join(filter(None, [req_name,   req_family,   row.get("req_context")]))
+            user_text = " ".join(filter(None, [skill_name, skill_family, row.get("skill_context")]))
+            lex_score = self._lexical_score(job_text, user_text)
+
+            matched, method, hybrid = self._decide_match(
+                req_name, skill_name, sem_score, lex_score,
+                hybrid_threshold, sem_only_threshold, sem_weight,
+                req_family=req_family or None,
+                skill_family=skill_family or None,
+            )
+
+            details.append({
+                "job_skill":      req_name.lower(),
+                "user_skill":     skill_name.lower(),
+                "semantic_score": round(sem_score, 4),
+                "lexical_score":  round(lex_score, 4),
+                "hybrid_score":   hybrid,
+                "matched":        matched,
+                "match_method":   method,
+                "importance":     importance_label,
+            })
+
+            if not matched:
+                continue
+
+            req_key = req_name.lower()
+            if req_key in seen_reqs:
+                continue
+            seen_reqs.add(req_key)
+
+            # Inferred matches go to their own list and score at reduced weight
+            if method == "inferred":
+                inferred_names.append(req_key)
+                confidence = self._INFERRED_CONFIDENCE
+            else:
+                confirmed_names.append(req_key)
+                confidence = 1.0
+
+            req_min    = row.get("req_min_years")
+            user_years = row.get("skill_years")
+            if req_min is None or user_years is None:
+                seniority_factor = 1.0
+            elif user_years >= float(req_min):
+                seniority_factor = 1.0
+            else:
+                seniority_factor = user_years / float(req_min)
+
+            ev_weight = ev_map.get(
+                row.get("evidence_strength", "unknown"),
+                EvidenceWeight.UNKNOWN,
+            )
+            matched_weight += importance_weight * seniority_factor * ev_weight * confidence
+
+        return confirmed_names, inferred_names, matched_weight, details
+
+    async def _compute_skill_score(self, user_id: str, job_id: str) -> dict:
+        """
+        Hybrid semantic + lexical skill match.
+
+        Two-gate matching:
+          1. Lexical overlap present (lex >= 0.20):
+               hybrid = sem*0.65 + lex*0.35 >= 0.70   (name-overlap gate)
+          2. No lexical overlap (lex < 0.20):
+               sem >= 0.88                              (strict semantic gate)
+
+        Gate 1 catches "React" ↔ "React.js" and "Kubernetes" ↔ "k8s" (with alias tokens).
+        Gate 2 catches "Machine Learning" ↔ "ML" (very high semantic, no token overlap)
+          while rejecting "Java" ↔ "Scala" (lower semantic, no token overlap).
+
+        All thresholds are configurable via env vars.
+        """
+        sem_floor          = float(os.environ.get("SKILL_SEM_FLOOR",          "0.55"))
+        hybrid_threshold   = float(os.environ.get("SKILL_HYBRID_THRESHOLD",   "0.70"))
+        sem_only_threshold = float(os.environ.get("SKILL_SEM_ONLY_THRESHOLD", "0.88"))
+        sem_weight         = float(os.environ.get("SKILL_SEM_WEIGHT",         "0.65"))
+
+        # ── Mandatory bucket ───────────────────────────────────────────────────
+        m_confirmed, m_inferred, m_matched_weight, m_details = await self._score_skill_bucket(
+            user_id, job_id,
+            importance_filter="= 'must_have'", importance_label="must_have",
+            importance_weight=SkillImportanceWeight.MUST_HAVE,
+            sem_floor=sem_floor, hybrid_threshold=hybrid_threshold,
+            sem_only_threshold=sem_only_threshold, sem_weight=sem_weight,
         )
 
         mandatory_all = await self.client.run_query(
@@ -465,47 +668,18 @@ class MatchingEngine:
             WHERE req.importance = 'must_have'
             RETURN
                 collect(toLower(trim(req.name))) AS all_names,
-                reduce(acc = 0.0, x IN collect($w_must) | acc + x) AS total_weight
+                reduce(acc = 0.0, x IN collect($w) | acc + x) AS total_weight
             """,
-            {"job_id": job_id, "w_must": SkillImportanceWeight.MUST_HAVE},
+            {"job_id": job_id, "w": SkillImportanceWeight.MUST_HAVE},
         )
 
-        # ── Optional skills — vector index ANN match ───────────────────────────
-        optional_matched = await self.client.run_query(
-            """
-            MATCH (j:Job {id: $job_id})-[:HAS_SKILL_REQUIREMENTS]->(:JobSkillRequirements)
-                  -[:HAS_SKILL_FAMILY_REQ]->(:JobSkillFamily)-[:REQUIRES_SKILL]->(req:JobSkillRequirement)
-            WHERE req.importance <> 'must_have' AND req.embedding IS NOT NULL
-            CALL {
-                WITH req
-                CALL db.index.vector.queryNodes('skill_embeddings', 50, req.embedding)
-                YIELD node AS s, score
-                WHERE s.user_id = $user_id AND score >= $threshold
-                RETURN s, score
-                ORDER BY score DESC
-                LIMIT 1
-            }
-            WITH req, s,
-                 CASE
-                   WHEN req.min_years IS NULL OR s.years IS NULL THEN 1.0
-                   WHEN s.years >= req.min_years               THEN 1.0
-                   ELSE s.years / toFloat(req.min_years)
-                 END AS seniority_factor,
-                 CASE coalesce(s.evidence_strength, 'unknown')
-                   WHEN 'multiple_productions' THEN $e_multi
-                   WHEN 'project_backed'       THEN $e_proj
-                   WHEN 'mentioned_once'       THEN $e_once
-                   WHEN 'claimed_only'         THEN $e_claim
-                   ELSE $e_unknown
-                 END AS evidence_weight
-            RETURN
-                collect(toLower(trim(req.name))) AS matched_names,
-                reduce(acc = 0.0,
-                       x IN collect($w_optional * seniority_factor * evidence_weight) |
-                       acc + x) AS matched_weight
-            """,
-            {"user_id": user_id, "job_id": job_id, "threshold": threshold,
-             "w_optional": SkillImportanceWeight.OPTIONAL, **evidence_params},
+        # ── Optional bucket ────────────────────────────────────────────────────
+        o_confirmed, o_inferred, o_matched_weight, o_details = await self._score_skill_bucket(
+            user_id, job_id,
+            importance_filter="<> 'must_have'", importance_label="optional",
+            importance_weight=SkillImportanceWeight.OPTIONAL,
+            sem_floor=sem_floor, hybrid_threshold=hybrid_threshold,
+            sem_only_threshold=sem_only_threshold, sem_weight=sem_weight,
         )
 
         optional_all = await self.client.run_query(
@@ -516,33 +690,25 @@ class MatchingEngine:
             WHERE req.importance <> 'must_have'
             RETURN
                 collect(toLower(trim(req.name))) AS all_names,
-                reduce(acc = 0.0, x IN collect($w_optional) | acc + x) AS total_weight
+                reduce(acc = 0.0, x IN collect($w) | acc + x) AS total_weight
             """,
-            {"job_id": job_id, "w_optional": SkillImportanceWeight.OPTIONAL},
+            {"job_id": job_id, "w": SkillImportanceWeight.OPTIONAL},
         )
 
         # ── Aggregate ──────────────────────────────────────────────────────────
-        m_matched_names  = mandatory_matched[0]["matched_names"] if mandatory_matched else []
-        m_matched_weight = mandatory_matched[0]["matched_weight"] if mandatory_matched else 0.0
-        m_all_names      = mandatory_all[0]["all_names"] if mandatory_all else []
-        m_total_weight   = mandatory_all[0]["total_weight"] if mandatory_all else 0.0
+        m_all_names    = [n for n in (mandatory_all[0]["all_names"] if mandatory_all else [])
+                          if isinstance(n, str) and n]
+        m_total_weight = mandatory_all[0]["total_weight"] if mandatory_all else 0.0
 
-        o_matched_names  = optional_matched[0]["matched_names"] if optional_matched else []
-        o_matched_weight = optional_matched[0]["matched_weight"] if optional_matched else 0.0
-        o_all_names      = optional_all[0]["all_names"] if optional_all else []
-        o_total_weight   = optional_all[0]["total_weight"] if optional_all else 0.0
+        o_all_names    = [n for n in (optional_all[0]["all_names"] if optional_all else [])
+                          if isinstance(n, str) and n]
+        o_total_weight = optional_all[0]["total_weight"] if optional_all else 0.0
 
-        # OPTIONAL MATCH + collect(...) can yield null entries when a job has no
-        # requirements in that bucket. Strip them before building API models.
-        m_matched_names = [name for name in m_matched_names if isinstance(name, str) and name]
-        m_all_names = [name for name in m_all_names if isinstance(name, str) and name]
-        o_matched_names = [name for name in o_matched_names if isinstance(name, str) and name]
-        o_all_names = [name for name in o_all_names if isinstance(name, str) and name]
-
-        mandatory_set     = set(m_matched_names)
-        optional_set      = set(o_matched_names)
-        missing_mandatory = [n for n in m_all_names if n not in mandatory_set]
-        missing_optional  = [n for n in o_all_names if n not in optional_set]
+        # All matched names (confirmed + inferred) for missing-set subtraction
+        m_matched_all = set(m_confirmed) | set(m_inferred)
+        o_matched_all = set(o_confirmed) | set(o_inferred)
+        missing_mandatory = [n for n in m_all_names if n not in m_matched_all]
+        missing_optional  = [n for n in o_all_names if n not in o_matched_all]
 
         mandatory_score = (m_matched_weight / m_total_weight) if m_total_weight > 0 else 0.0
         optional_score  = (o_matched_weight / o_total_weight) if o_total_weight > 0 else 0.0
@@ -550,10 +716,12 @@ class MatchingEngine:
         return {
             "mandatory_score":  mandatory_score,
             "optional_score":   optional_score,
-            "matched":          m_matched_names,
+            "matched":          m_confirmed,                    # exact + strong only
+            "inferred":         m_inferred + o_inferred,        # semantic-only, shown separately
             "missing":          missing_mandatory,
-            "optional_matched": o_matched_names,
+            "optional_matched": o_confirmed,
             "optional_missing": missing_optional,
+            "match_details":    m_details + o_details,
         }
 
     # ──────────────────────────────────────────────────────────────────────────

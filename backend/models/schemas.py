@@ -778,6 +778,18 @@ class MatchedSkill(BaseModel):
     contribution: float
 
 
+class SkillMatchDetail(BaseModel):
+    """Per-pair match trace for hybrid semantic+lexical scoring."""
+    job_skill: str
+    user_skill: str
+    semantic_score: float
+    lexical_score: float
+    hybrid_score: float
+    matched: bool
+    match_method: Optional[str]  # "exact" | "name_overlap" | "semantic" | None if rejected
+    importance: str               # "must_have" or other
+
+
 class MatchResult(BaseModel):
     job_id: str
     job_title: str
@@ -794,10 +806,22 @@ class MatchResult(BaseModel):
     culture_bonus: float        # work-style preference match ratio (old lightweight version)
     preference_bonus: float     # remote/company_size match ratio
     # Match detail
-    matched_skills: List[str]
+    matched_skills: List[str]   # exact + strong — confirmed matches
+    inferred_skills: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Skills matched via semantic similarity only (no keyword overlap). "
+            "Shown separately because they need human verification — the model "
+            "found a conceptual link but the candidate has not explicitly listed this skill."
+        )
+    )
     missing_skills: List[str]
     matched_domains: List[str]
     missing_domains: List[str]
+    skill_match_details: List[SkillMatchDetail] = Field(
+        default_factory=list,
+        description="Per-pair hybrid match trace (semantic + lexical scores, method, pass/fail)"
+    )
     behavioral_risk_flags: List[str] = Field(
         default_factory=list,
         description="Risk signals from BehavioralInsight nodes that conflict with dealbreaker soft skills"

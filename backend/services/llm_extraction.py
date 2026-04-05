@@ -42,6 +42,57 @@ def _build_domain_taxonomy_hint() -> str:
     )
 
 
+def _format_skill_match_details(details: list[dict] | None) -> str:
+    """
+    Format hybrid match details into a prompt section that explains to the LLM
+    exactly how each skill was (or was not) matched and why.
+    """
+    if not details:
+        return ""
+
+    matched = [d for d in details if d.get("matched")]
+    rejected = [d for d in details if not d.get("matched")]
+
+    lines = ["\n\n═══ SKILL MATCHING TRACE (hybrid semantic + lexical) ═══"]
+
+    if matched:
+        lines.append("Confirmed matches:")
+        for d in matched:
+            method = d.get("match_method", "?")
+            sem    = d.get("semantic_score", 0)
+            lex    = d.get("lexical_score", 0)
+            hyb    = d.get("hybrid_score", 0)
+            imp    = d.get("importance", "")
+            method_label = {
+                "exact":    "exact name match",
+                "strong":   "shared keywords in profile context",
+                "inferred": "semantic only — no shared keywords, verify carefully",
+            }.get(method, method)
+            lines.append(
+                f"  ✓ [{imp}] job:'{d['job_skill']}' ← user:'{d['user_skill']}'"
+                f"  sem={sem:.2f} lex={lex:.2f} hybrid={hyb:.2f}  [{method_label}]"
+            )
+
+    if rejected:
+        lines.append("Rejected candidates (below threshold):")
+        for d in rejected:
+            sem = d.get("semantic_score", 0)
+            lex = d.get("lexical_score", 0)
+            hyb = d.get("hybrid_score", 0)
+            imp = d.get("importance", "")
+            lines.append(
+                f"  ✗ [{imp}] job:'{d['job_skill']}' ↔ user:'{d['user_skill']}'"
+                f"  sem={sem:.2f} lex={lex:.2f} hybrid={hyb:.2f}  [rejected — too dissimilar]"
+            )
+
+    lines.append(
+        "Note: sem=semantic similarity, lex=profile keyword overlap (both 0-1), hybrid=weighted combination. "
+        "Levels — Exact: same name; Strong: shared keywords; Inferred: semantic only (treat with caution). "
+        "Rejected: hybrid<0.70 (with overlap) or sem<0.88 (without overlap)."
+    )
+    return "\n".join(lines)
+
+
 class LLMExtractionService:
     """
     Wraps LiteLLM for structured JSON extraction.
@@ -451,12 +502,14 @@ class LLMExtractionService:
         culture_bonus: float,
         preference_bonus: float,
         matched_skills: list[str],
-        missing_skills: list[str],
-        matched_domains: list[str],
-        missing_domains: list[str],
-        paths: list[str],
+        inferred_skills: list[str] | None = None,
+        missing_skills: list[str] | None = None,
+        matched_domains: list[str] | None = None,
+        missing_domains: list[str] | None = None,
+        paths: list[str] | None = None,
         perspective: str = "recruiter",
         rich_context: dict | None = None,
+        skill_match_details: list[dict] | None = None,
     ) -> dict:
         """
         Generate a structured, evidence-based explanation of a user-job match.
@@ -512,16 +565,22 @@ class LLMExtractionService:
         if not skill_lines and matched_skills:
             skill_lines = [f"  • {s}" for s in matched_skills]
 
+        # ── Inferred skills (semantic-only, shown separately) ────────────────────
+        inferred_lines: list[str] = []
+        for s in (inferred_skills or []):
+            inferred_lines.append(f"  ~ {s}  [inferred — 75% score weight, needs verification]")
+
         # ── Format gaps ──────────────────────────────────────────────────────────
+        _missing = missing_skills or []
         must_gap_lines = []
         for g in ctx.get("missing_must_have", []):
             sk = g.get("skill", "?")
             my = g.get("min_years")
             must_gap_lines.append(f"  • {sk} (must_have{f', {my}yr min' if my else ''})")
         if not must_gap_lines:
-            must_gap_lines = [f"  • {s}" for s in missing_skills if s]
+            must_gap_lines = [f"  • {s}" for s in _missing if s]
 
-        nice_gaps = ctx.get("missing_nice", [m for m in missing_skills if m not in
+        nice_gaps = ctx.get("missing_nice", [m for m in _missing if m not in
                              [g.get("skill", "") for g in ctx.get("missing_must_have", [])]])
         nice_gap_str = ", ".join(nice_gaps[:6]) if nice_gaps else "None"
 
@@ -613,9 +672,13 @@ class LLMExtractionService:
             f"Match scores: Overall {round(total_score * 100)}% "
             f"(Skills 65%→{round(skill_score * 100)}%, Domain 35%→{round(domain_score * 100)}%) "
             f"| Culture bonus: {round(culture_bonus * 100)}% | Preference bonus: {round(preference_bonus * 100)}%\n\n"
-            "═══ MATCHED SKILLS (with evidence quality + how actually used) ═══\n"
+            "═══ CONFIRMED SKILLS (exact or strong keyword match — high confidence) ═══\n"
             + ("\n".join(skill_lines) or "  None")
             + "\n\n"
+            "═══ INFERRED SKILLS (semantic-only — conceptually related, NOT explicitly listed) ═══\n"
+            + ("\n".join(inferred_lines) or "  None")
+            + "\n"
+            "  ↑ These count at 75% score weight. Mention them as 'may be transferable' NOT as confirmed.\n\n"
             "═══ CRITICAL GAPS (must-have skills not in profile) ═══\n"
             + ("\n".join(must_gap_lines) or "  None - all must-haves covered")
             + "\n\n"
@@ -631,6 +694,7 @@ class LLMExtractionService:
             + f"\nRed flags / concerns:\n{red_flag_str}\n"
             + f"\nInflated skill claims:\n{inflated_str}\n"
             + five_wh_str
+            + _format_skill_match_details(skill_match_details)
             + "\n\n"
             f"{person_instr}\n"
             f"{output_guidance}\n\n"

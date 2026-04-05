@@ -120,7 +120,7 @@ class LLMIngestionService:
                     "user_id": user_id,
                     "family": skill.family or "Other",
                     "name": name,
-                    "years": skill.years,
+                    "years": float(skill.years) if isinstance(skill.years, (int, float)) else None,
                     "level": skill.level,
                     "evidence_strength": getattr(skill, "evidence_strength", None),
                     "context": getattr(skill, "context", None),
