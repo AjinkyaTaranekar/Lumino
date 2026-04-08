@@ -649,6 +649,9 @@ class LLMExtractionService:
             "You have access to the candidate's actual graph data: how skills were used, at what scale, "
             "with what evidence quality - not just which skill names match. "
             "Your analysis must go beyond surface-level name matching to assess genuine fit.\n\n"
+            "STRICT RULE: Only reference information explicitly provided in the data below. "
+            "Do NOT invent years of experience, project names, company names, skill levels, or any other details "
+            "not present in the prompt. If data is missing or unknown, say so — never guess or extrapolate.\n\n"
             "Return ONLY valid JSON matching this exact schema:\n"
             "{\n"
             '  "verdict": "Strong match" | "Good match" | "Moderate match" | "Weak match" | "Not recommended",\n'
@@ -702,20 +705,31 @@ class LLMExtractionService:
             "evidence levels, and context from the data above. Do NOT be generic."
         )
 
+        # Always generate in recruiter (third-person) perspective first for factual consistency,
+        # then adapt pronouns for seeker view. This prevents two independent LLM calls from
+        # producing different factual claims.
+        recruiter_msg = user_msg.replace(person_instr, (
+            f"Write in THIRD PERSON about candidate '{user_id}'. "
+            "Tone: professional recruiter/hiring manager lens - direct, honest, evidence-based."
+        )).replace(output_guidance, (
+            "For 'why_they_fit': reference the candidate by name or 'the candidate'.\n"
+            "For 'honest_take': be direct about risks and genuine strengths.\n"
+            "For 'recommendation': advise the hiring team on next steps."
+        ))
+
         raw = await self._call_with_retry(
             model=self._model_name,
             messages=[
                 {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg},
+                {"role": "user", "content": recruiter_msg},
             ],
             response_format={"type": "json_object"},
-            temperature=1.0,
+            temperature=self._temperature,
         )
 
         try:
-            return _j.loads(raw)
+            result = _j.loads(raw)
         except Exception:
-            # Fallback: wrap raw text so callers always get a dict
             return {
                 "verdict": "Unknown",
                 "headline": raw[:200] if raw else "Explanation unavailable",
@@ -727,6 +741,39 @@ class LLMExtractionService:
                 "recommendation": "",
                 "interview_focus": [],
             }
+
+        # If seeker view requested, adapt pronouns via a second lightweight call
+        if perspective == "seeker":
+            adapt_raw = await self._call_with_retry(
+                model=self._model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You rewrite text from third-person to second-person perspective. "
+                            "Change ONLY pronouns and addressing style. "
+                            "Do NOT change any facts, skill names, evidence levels, scores, gaps, or assessments. "
+                            "Return valid JSON with the exact same keys as the input."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Rewrite this match explanation from third-person (about '{user_id}') "
+                            f"to second-person (addressing '{user_id}' directly as 'you/your'). "
+                            f"Keep every fact identical:\n\n{raw}"
+                        ),
+                    },
+                ],
+                response_format={"type": "json_object"},
+                temperature=self._temperature,
+            )
+            try:
+                return _j.loads(adapt_raw)
+            except Exception:
+                return result  # fall back to recruiter version if adaptation fails
+
+        return result
 
     async def extract_job_posting(self, job_text: str) -> JobPostingExtraction:
         """
