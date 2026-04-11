@@ -790,7 +790,6 @@ class VisualizationService:
 """
         with open(filepath, "r", encoding="utf-8") as f:
             html = f.read()
-        html = html.replace("<body", legend_html + "<body", 1)
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(html)
 

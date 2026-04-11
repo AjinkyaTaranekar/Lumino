@@ -236,20 +236,6 @@ export default function GraphViewer({
             onLoad={() => setStatus('ready')}
           />
         )}
-
-        {status === 'ready' && (
-          <div className="absolute left-3 bottom-3 z-20 rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-3 py-2 shadow-sm">
-            <p className="text-[10px] font-semibold text-slate-500 mb-1">Legend</p>
-            <div className="flex items-center gap-3 flex-wrap">
-              {LEGEND_ITEMS.map((item) => (
-                <span key={item.label} className="inline-flex items-center gap-1 text-[10px] text-slate-600">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                  {item.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
