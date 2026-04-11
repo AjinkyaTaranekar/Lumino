@@ -111,10 +111,10 @@ export default function ResumeManager() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-indigo-950 tracking-tight">
-              Build Your Career Graph
+              Build Your Digital Twin
             </h1>
             <p className="text-slate-500 mt-2 text-sm leading-relaxed">
-              We extract skills, evidence, and career context from your resume to generate explainable matches and practical next steps.
+              We use LLM interpretation of your resume to build a digital twin for explainable matching and practical next steps.
             </p>
           </div>
           <Link

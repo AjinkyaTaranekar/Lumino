@@ -91,13 +91,13 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
         Welcome {name}, let's build your winning profile
       </h1>
       <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto mb-8">
-        In the next few steps, Lumino turns your resume into an explainable career graph so you can see why each role fits and what to improve next.
+        In the next few steps, Lumino turns your resume into an AI-generated digital twin so you can see why each role fits and what to improve next.
       </p>
 
       <div className="grid grid-cols-3 gap-4 mb-10 text-left">
         {[
           { icon: FileText, title: 'Upload Resume', desc: 'We extract skills, impact, and domain signals' },
-          { icon: Sparkles, title: 'AI Analysis', desc: 'We create an explainable career graph' },
+          { icon: Sparkles, title: 'AI Analysis', desc: 'We create your interpreted digital twin' },
           { icon: ShieldCheck, title: 'Quick Verify', desc: 'You confirm high-impact interpretations' },
         ].map(({ icon: Icon, title, desc }) => (
           <div key={title} className="card-lumino p-4 text-center">
@@ -681,8 +681,8 @@ function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
               key={t}
               onClick={() => toggleEmpType(t)}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${empTypes.includes(t)
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
                 }`}
             >
               {t}
@@ -780,8 +780,8 @@ function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
               onClick={() => toggleValue(v)}
               disabled={!values.includes(v) && values.length >= 3}
               className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${values.includes(v)
-                  ? 'bg-violet-600 text-white border-violet-600'
-                  : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                ? 'bg-violet-600 text-white border-violet-600'
+                : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
                 }`}
             >
               {v}

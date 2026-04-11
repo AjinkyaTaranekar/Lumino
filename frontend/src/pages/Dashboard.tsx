@@ -428,9 +428,9 @@ function UserDashboard() {
               bg: 'bg-indigo-50',
             },
             {
-              label: 'Career Graph',
+              label: 'Digital Twin',
               value: 'Active',
-              sub: 'knowledge graph',
+              sub: 'LLM interpretation',
               icon: Network,
               color: 'text-purple-500',
               bg: 'bg-purple-50',
@@ -505,22 +505,23 @@ function UserDashboard() {
           )}
         </AnimatePresence>
 
-        {/* ── Career Graph CTA ── */}
+        {/* ── Digital Twin CTA ── */}
         <section
           className="card-lumino p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5"
-          aria-label="Career Graph"
+          aria-label="Digital Twin"
         >
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
             <Network size={24} className="text-indigo-500" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-indigo-950">Career Graph Profile</h3>
+            <h3 className="text-base font-bold text-indigo-950">AI Digital Twin Profile</h3>
             <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">
-              Your skills, experience, and goals modelled as a semantic graph. Explore and refine to improve match accuracy.
+              An LLM-generated interpretation of your skills, experience, and goals.
+              Review and refine it to improve match accuracy and decision trust.
             </p>
           </div>
           <Link to="/user/model" className="btn-primary flex-shrink-0">
-            Open Career Graph →
+            Review Digital Twin →
           </Link>
         </section>
 

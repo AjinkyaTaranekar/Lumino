@@ -237,11 +237,12 @@ class VisualizationService:
             user_id, "User", label_filter=_USER_LABEL_FILTER
         )
 
-        # Safety post-filter: drop any job-hierarchy nodes that slipped through
-        allowed_ids = {n["id"] for n in nodes_data if n.get("type", "") in USER_NODE_TYPES}
-        nodes_data = [n for n in nodes_data if n["id"] in allowed_ids]
-        edges_data = [e for e in edges_data
-                      if e["source_id"] in allowed_ids and e["target_id"] in allowed_ids]
+        # Safety post-filter: enforce strict user scope for digital twin rendering.
+        nodes_data, edges_data = self._scope_user_subgraph(
+            user_id=user_id,
+            nodes_data=nodes_data,
+            edges_data=edges_data,
+        )
 
         if not nodes_data:
             logger.warning(f"No nodes found for user {user_id}")
@@ -486,6 +487,11 @@ class VisualizationService:
         # ── Fetch subgraphs ───────────────────────────────────────────────────
         user_nodes, user_edges = await self._fetch_graph_data(
             user_id, "User", label_filter=_USER_LABEL_FILTER
+        )
+        user_nodes, user_edges = self._scope_user_subgraph(
+            user_id=user_id,
+            nodes_data=user_nodes,
+            edges_data=user_edges,
         )
         job_nodes, job_edges = await self._fetch_graph_data(
             job_id, "Job", label_filter=_JOB_LABEL_FILTER
@@ -1002,8 +1008,9 @@ class VisualizationService:
     ) -> tuple[list[dict], list[dict]]:
         """Subgraph extraction using APOC (preferred)."""
         query_params = {"node_id": node_id}
-        # Build APOC config - include labelFilter only when provided
-        apoc_config = "maxLevel: 6"
+        # Build APOC config - force directional traversal to match pure Cypher fallback
+        # and avoid cross-entity traversal via incoming shared edges.
+        apoc_config = "maxLevel: 6, relationshipFilter: '>'"
         if label_filter:
             apoc_config += f", labelFilter: '{label_filter}'"
 
@@ -1016,8 +1023,11 @@ class VisualizationService:
             WITH n
             RETURN DISTINCT
                 elementId(n) AS id,
+                n.id AS entity_id,
                 coalesce(n.name, n.title, n.degree, n.role, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
                 labels(n)[0] AS type,
+                n.user_id AS user_id,
+                n.job_id AS job_id,
                 n.weight AS weight,
                 n.years AS years,
                 n.level AS level,
@@ -1057,8 +1067,11 @@ class VisualizationService:
             WITH DISTINCT n
             RETURN
                 elementId(n) AS id,
+                n.id AS entity_id,
                 coalesce(n.name, n.title, n.degree, n.role, n.id, n.pattern, n.style, n.type, labels(n)[0], '') AS label,
                 labels(n)[0] AS type,
+                n.user_id AS user_id,
+                n.job_id AS job_id,
                 n.weight AS weight,
                 n.years AS years,
                 n.level AS level,
@@ -1082,3 +1095,43 @@ class VisualizationService:
         )
 
         return nodes, edges
+
+    @staticmethod
+    def _scope_user_subgraph(
+        user_id: str,
+        nodes_data: list[dict],
+        edges_data: list[dict],
+    ) -> tuple[list[dict], list[dict]]:
+        """Keep only nodes/edges that belong to the requested user's digital twin."""
+
+        def _keep_node(node: dict) -> bool:
+            node_type = node.get("type", "")
+            if node_type not in USER_NODE_TYPES:
+                return False
+
+            # Keep only the requested root user node.
+            if node_type == "User":
+                return node.get("entity_id") == user_id
+
+            # For user-scoped nodes, enforce owner match when available.
+            owner = node.get("user_id")
+            if owner is not None:
+                return owner == user_id
+
+            # Only shared category hubs may be ownerless.
+            return node_type in {
+                "SkillCategory", "ProjectCategory", "DomainCategory",
+                "ExperienceCategory", "PreferenceCategory", "PatternCategory",
+                "EducationCategory", "CertificationCategory", "AchievementCategory",
+                "PublicationCategory", "CourseworkCategory", "LanguageCategory",
+                "VolunteerCategory",
+            }
+
+        allowed_ids = {n["id"] for n in nodes_data if _keep_node(n)}
+        scoped_nodes = [n for n in nodes_data if n["id"] in allowed_ids]
+        scoped_edges = [
+            e
+            for e in edges_data
+            if e["source_id"] in allowed_ids and e["target_id"] in allowed_ids
+        ]
+        return scoped_nodes, scoped_edges

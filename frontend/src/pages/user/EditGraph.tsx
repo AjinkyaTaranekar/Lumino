@@ -210,7 +210,7 @@ export default function EditGraph() {
           <button
             onClick={() => navigate('/user/model')}
             className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-indigo-950 transition-colors flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
-            aria-label="Back to career graph"
+            aria-label="Back to digital twin"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Graph
@@ -275,7 +275,7 @@ export default function EditGraph() {
                 generateFn={() => api.generateUserViz(userId!)}
                 iframeSrc={iframeSrc}
                 height="100%"
-                title="Career Knowledge Graph"
+                title="Digital Twin (LLM interpretation)"
               />
             </div>
 

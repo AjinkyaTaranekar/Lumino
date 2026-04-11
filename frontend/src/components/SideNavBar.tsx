@@ -38,7 +38,7 @@ export function SideNavBar() {
       { label: 'Preference Intelligence', to: '/user/interests', icon: Heart },
       { label: 'Upload Resume', to: '/resume', icon: Upload },
       { label: 'Profile Accuracy', to: '/user/clarifications', icon: ShieldAlert },
-      { label: 'Career Graph', to: '/user/model', icon: Network },
+      { label: 'Digital Twin', to: '/user/model', icon: Network },
       { label: 'Resume Guide', to: '/user/guidelines', icon: BookOpen },
     ]
     : user?.role === 'RECRUITER'
