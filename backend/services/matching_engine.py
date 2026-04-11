@@ -146,6 +146,8 @@ class MatchingEngine:
         pref_data          = await self._compute_preference_bonus(user_id, job_id)
         edu_data           = await self._compute_education_fit(user_id, job_id)
         qual_data          = await self._compute_preferred_qual_bonus(user_id, job_id)
+        career_data        = await self._compute_career_level_fit(user_id, job_id)
+        quality_data       = await self._compute_profile_quality_multiplier(user_id)
 
         mandatory_score    = skill_data.get("mandatory_score", 0.0) or 0.0
         optional_score     = skill_data.get("optional_score", 0.0) or 0.0
@@ -156,10 +158,25 @@ class MatchingEngine:
         preference_bonus   = pref_data.get("bonus", 0.0) or 0.0
         education_fit      = edu_data.get("score", 0.0) or 0.0
         preferred_qual_bonus = qual_data.get("bonus", 0.0) or 0.0
+        career_fit         = career_data.get("multiplier", 1.0)
+        profile_quality    = quality_data.get("multiplier", 1.0)
 
-        graph_score = self._compute_total_score(
+        raw_score = self._compute_total_score(
             mandatory_score, optional_score, domain_score, soft_skill_score, culture_fit_score
         )
+
+        # ── Mandatory skill knockout cap ───────────────────────────────────────
+        # A candidate who matches zero must_have skills cannot float to the top
+        # on domain/soft/culture alone. Hard-cap their score at 0.30 so recruiters
+        # never see them above candidates who actually meet the core requirements.
+        has_mandatory_reqs = skill_data.get("has_mandatory_reqs", False)
+        if mandatory_score == 0.0 and has_mandatory_reqs:
+            raw_score = min(raw_score, 0.30)
+
+        # Apply career-level fitness: prevents an intern ranking above a mid-level
+        # candidate on a senior role just because tech skills match.
+        # Apply profile quality multiplier: weak/misleading profiles rank lower.
+        graph_score = raw_score * career_fit * profile_quality
 
         # ── Analytics interest score ───────────────────────────────────────────
         interest_score = 0.5  # neutral default when no analytics data
@@ -205,6 +222,11 @@ class MatchingEngine:
             preferred_qual_bonus=round(preferred_qual_bonus, 4),
             met_education_reqs=edu_data.get("met", []),
             gap_education_reqs=edu_data.get("gaps", []),
+            career_level_fit=round(career_fit, 4),
+            user_seniority=career_data.get("user_seniority"),
+            job_seniority=career_data.get("job_seniority"),
+            profile_quality_score=round(profile_quality, 4),
+            profile_signal=quality_data.get("signal", "unknown"),
         )
 
     async def _get_matched_interest_tags(self, user_id: str, job_tags: list[str]) -> list[str]:
@@ -397,6 +419,314 @@ class MatchingEngine:
                 optional_skill_score * MatchWeight.SKILLS_OPTIONAL +
                 domain_score         * MatchWeight.DOMAIN
             )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # CAREER LEVEL FITNESS MULTIPLIER
+    # ──────────────────────────────────────────────────────────────────────────
+
+    # Numeric seniority scale used for gap calculation
+    _SENIORITY_SCALE: dict[str, int] = {
+        "intern":     0,
+        "junior":     1,
+        "mid":        2,
+        "senior":     3,
+        "staff_plus": 4,
+    }
+
+    @classmethod
+    def _infer_job_seniority(cls, title: str | None, exp_years_min: int | None) -> tuple[str, int]:
+        """
+        Derive a job's seniority label and numeric level from title keywords
+        and minimum years-of-experience requirement.
+
+        Returns (label, numeric_level) where numeric_level uses _SENIORITY_SCALE.
+        """
+        title_lower = (title or "").lower()
+
+        # Title-keyword detection (ordered most-specific first)
+        title_level: int | None = None
+        if any(kw in title_lower for kw in ("intern", "internship", "trainee", "graduate program")):
+            title_level = 0
+        elif any(kw in title_lower for kw in ("junior", "jr.", "jr ", "entry level", "entry-level", "associate ")):
+            title_level = 1
+        elif any(kw in title_lower for kw in (" mid ", "mid-level", "mid level")):
+            title_level = 2
+        elif any(kw in title_lower for kw in ("senior", "sr.", "sr ", " sr")):
+            title_level = 3
+        elif any(kw in title_lower for kw in (
+            " lead", "principal", "staff engineer", "staff dev", "architect",
+            "director", "vp of", "head of", "engineering manager", "em ",
+        )):
+            title_level = 4
+
+        # Years-min → numeric level
+        years_level: int | None = None
+        if exp_years_min is not None:
+            y = int(exp_years_min)
+            if y <= 0:
+                years_level = 0
+            elif y <= 2:
+                years_level = 1
+            elif y <= 5:
+                years_level = 2
+            elif y <= 9:
+                years_level = 3
+            else:
+                years_level = 4
+
+        # Combine: take the max signal; fall back to mid(2) if neither is available
+        if title_level is not None and years_level is not None:
+            level = max(title_level, years_level)
+        elif title_level is not None:
+            level = title_level
+        elif years_level is not None:
+            level = years_level
+        else:
+            level = 2  # default: assume mid-level when no signal
+
+        label_map = {0: "intern", 1: "junior", 2: "mid", 3: "senior", 4: "staff_plus"}
+        return label_map[level], level
+
+    @classmethod
+    def _infer_user_seniority(
+        cls,
+        assessment_level: str | None,
+        total_career_years: float,
+        has_leadership: bool,
+    ) -> tuple[str, int]:
+        """
+        Determine user's effective seniority label and numeric level.
+
+        Priority:
+          1. CriticalAssessment.seniority_assessment (LLM-evaluated evidence-based level)
+          2. Total career years from Experience nodes (fallback)
+          3. Leadership signals bump borderline cases up by 0.5 (rounded)
+        """
+        # Map direct assessment to level
+        assessment_map = {
+            "junior":     1,
+            "mid":        2,
+            "senior":     3,
+            "staff_plus": 4,
+        }
+        if assessment_level and assessment_level in assessment_map:
+            level = assessment_map[assessment_level]
+            label = assessment_level
+        else:
+            # Fall back to career years
+            if total_career_years <= 1.0:
+                level, label = 0, "intern"
+            elif total_career_years <= 3.0:
+                level, label = 1, "junior"
+            elif total_career_years <= 6.0:
+                level, label = 2, "mid"
+            elif total_career_years <= 10.0:
+                level, label = 3, "senior"
+            else:
+                level, label = 4, "staff_plus"
+
+        # Leadership signals can bump someone at a border (e.g. mid→senior)
+        # but never inflate more than one level
+        if has_leadership and level < 4:
+            level = min(level + 1, 3)  # cap at senior; staff_plus needs explicit assessment
+            label_map = {0: "intern", 1: "junior", 2: "mid", 3: "senior", 4: "staff_plus"}
+            label = label_map[level]
+
+        return label, level
+
+    @classmethod
+    def _career_fit_multiplier(
+        cls,
+        user_level: int,
+        job_level: int,
+        job_is_leadership: bool,
+        user_has_leadership: bool,
+    ) -> float:
+        """
+        Return a [0, 1] multiplier representing career-level fit.
+
+        diff = user_level - job_level:
+          >= 0       : 1.00  (at par or overqualified by 1 — fine)
+          == -1      : 0.65  (one step below — stretch role, possible)
+          == -2      : 0.35  (two steps below — significant mismatch)
+          <= -3      : 0.15  (three+ steps below — very unlikely to be appropriate)
+          >= 2       : 0.90  (over-qualified by 2 — may not be interested)
+          >= 3       : 0.80  (very over-qualified)
+
+        Leadership penalty: senior/staff_plus roles that demand leadership
+        when the user shows no leadership signals → −0.10 additional penalty.
+        """
+        diff = user_level - job_level
+
+        if diff >= 3:
+            base = 0.80
+        elif diff == 2:
+            base = 0.90
+        elif diff >= 0:
+            base = 1.00
+        elif diff == -1:
+            base = 0.65
+        elif diff == -2:
+            base = 0.35
+        else:
+            base = 0.15
+
+        # Leadership gap penalty
+        if job_is_leadership and not user_has_leadership:
+            base = max(0.0, base - 0.10)
+
+        return base
+
+    async def _compute_career_level_fit(self, user_id: str, job_id: str) -> dict:
+        """
+        Compute a career-level fitness multiplier for a user-job pair.
+
+        Combines:
+          - User seniority (CriticalAssessment > career years)
+          - Job seniority (title keywords > experience_years_min)
+          - Leadership signal gap for senior/staff+ roles
+
+        Returns:
+          {
+            "multiplier": float,       # applied to total_score
+            "user_seniority": str,     # inferred user level label
+            "job_seniority":  str,     # inferred job level label
+          }
+        """
+        # ── User data ──────────────────────────────────────────────────────────
+        user_rows = await self.client.run_query(
+            """
+            MATCH (u:User {id: $user_id})
+            OPTIONAL MATCH (u)-[:HAS_ASSESSMENT]->(a:CriticalAssessment)
+            OPTIONAL MATCH (u)-[:HAS_EXPERIENCE_CATEGORY]->(:ExperienceCategory)
+                          -[:HAS_EXPERIENCE]->(e:Experience)
+            OPTIONAL MATCH (u)-[:HAS_CULTURE_IDENTITY]->(ci:CultureIdentity)
+            WITH a, ci,
+                 sum(coalesce(toFloat(e.duration_years), 0.0)) AS total_years
+            RETURN
+                a.seniority_assessment AS seniority_assessment,
+                a.ownership_signals    AS ownership_signals,
+                total_years            AS total_years,
+                ci.leadership_style    AS leadership_style
+            LIMIT 1
+            """,
+            {"user_id": user_id},
+        )
+        user_row = user_rows[0] if user_rows else {}
+
+        assessment_level = user_row.get("seniority_assessment")
+        total_years      = float(user_row.get("total_years") or 0.0)
+        leadership_style = (user_row.get("leadership_style") or "").lower()
+        ownership_raw    = user_row.get("ownership_signals") or []
+        if isinstance(ownership_raw, str):
+            try:
+                import json as _j
+                ownership_raw = _j.loads(ownership_raw)
+            except Exception:
+                ownership_raw = [ownership_raw] if ownership_raw else []
+
+        # A user has "leadership" if their style isn't purely IC or they have ownership signals
+        user_has_leadership = bool(
+            ownership_raw
+            or leadership_style in ("manager", "lead", "tech_lead", "mentor", "team_lead")
+        )
+
+        # ── Job data ───────────────────────────────────────────────────────────
+        job_rows = await self.client.run_query(
+            """
+            MATCH (j:Job {id: $job_id})
+            RETURN j.title AS title,
+                   j.experience_years_min AS experience_years_min
+            LIMIT 1
+            """,
+            {"job_id": job_id},
+        )
+        job_row = job_rows[0] if job_rows else {}
+        job_title    = job_row.get("title")
+        exp_years_min = job_row.get("experience_years_min")
+
+        # ── Infer levels ───────────────────────────────────────────────────────
+        user_label, user_level = self._infer_user_seniority(
+            assessment_level, total_years, user_has_leadership
+        )
+        job_label, job_level = self._infer_job_seniority(job_title, exp_years_min)
+
+        # A job is "leadership" if it's senior/staff+ and has leadership-related soft skill reqs
+        leadership_reqs = await self.client.run_query(
+            """
+            OPTIONAL MATCH (j:Job {id: $job_id})-[:REQUIRES_QUALITY]->(s:SoftSkillRequirement)
+            WHERE toLower(s.quality) IN ['ownership', 'mentorship', 'cross_functional']
+               OR toLower(s.name) CONTAINS 'lead'
+               OR toLower(s.name) CONTAINS 'manag'
+               OR toLower(s.name) CONTAINS 'mentor'
+            RETURN count(s) AS cnt
+            """,
+            {"job_id": job_id},
+        )
+        leadership_count = (leadership_reqs[0]["cnt"] if leadership_reqs else 0) or 0
+        job_is_leadership = (job_level >= 3) and (leadership_count > 0)
+
+        multiplier = self._career_fit_multiplier(
+            user_level, job_level, job_is_leadership, user_has_leadership
+        )
+
+        return {
+            "multiplier":      multiplier,
+            "user_seniority":  user_label,
+            "job_seniority":   job_label,
+        }
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # PROFILE QUALITY MULTIPLIER
+    # ──────────────────────────────────────────────────────────────────────────
+
+    async def _compute_profile_quality_multiplier(self, user_id: str) -> dict:
+        """
+        Penalize candidates whose profile signal quality is weak or misleading.
+
+        CriticalAssessment.overall_signal mapping:
+          strong     → 1.00  (concrete evidence, real impact)
+          moderate   → 0.90  (some evidence but gaps)
+          weak       → 0.70  (vague, no quantified impact, buzzword-heavy)
+          misleading → 0.50  (claims inconsistent with evidence)
+          unknown    → 1.00  (no assessment yet — don't penalize)
+
+        Red flag penalty: −0.05 per flag in CriticalAssessment.red_flags, capped at −0.20.
+        Combined multiplier cannot go below 0.10.
+
+        Returns {"multiplier": float, "signal": str}
+        """
+        rows = await self.client.run_query(
+            """
+            OPTIONAL MATCH (u:User {id: $user_id})-[:HAS_ASSESSMENT]->(a:CriticalAssessment)
+            RETURN a.overall_signal AS signal, a.red_flags AS red_flags
+            LIMIT 1
+            """,
+            {"user_id": user_id},
+        )
+        row = rows[0] if rows else {}
+        signal = row.get("signal") or "unknown"
+        red_flags_raw = row.get("red_flags") or []
+        if isinstance(red_flags_raw, str):
+            try:
+                import json as _j
+                red_flags_raw = _j.loads(red_flags_raw)
+            except Exception:
+                red_flags_raw = [red_flags_raw] if red_flags_raw else []
+
+        signal_map = {
+            "strong":     1.00,
+            "moderate":   0.90,
+            "weak":       0.70,
+            "misleading": 0.50,
+        }
+        base = signal_map.get(signal, 1.0)
+
+        flag_count = len(red_flags_raw) if isinstance(red_flags_raw, list) else 0
+        red_flag_penalty = min(flag_count * 0.05, 0.20)
+
+        multiplier = max(0.10, base - red_flag_penalty)
+        return {"multiplier": round(multiplier, 4), "signal": signal}
 
     # ──────────────────────────────────────────────────────────────────────────
     # DIMENSION 1: EVIDENCE-WEIGHTED SKILL SCORE
@@ -714,14 +1044,15 @@ class MatchingEngine:
         optional_score  = (o_matched_weight / o_total_weight) if o_total_weight > 0 else 0.0
 
         return {
-            "mandatory_score":  mandatory_score,
-            "optional_score":   optional_score,
-            "matched":          m_confirmed,                    # exact + strong only
-            "inferred":         m_inferred + o_inferred,        # semantic-only, shown separately
-            "missing":          missing_mandatory,
-            "optional_matched": o_confirmed,
-            "optional_missing": missing_optional,
-            "match_details":    m_details + o_details,
+            "mandatory_score":   mandatory_score,
+            "optional_score":    optional_score,
+            "matched":           m_confirmed,                    # exact + strong only
+            "inferred":          m_inferred + o_inferred,        # semantic-only, shown separately
+            "missing":           missing_mandatory,
+            "optional_matched":  o_confirmed,
+            "optional_missing":  missing_optional,
+            "match_details":     m_details + o_details,
+            "has_mandatory_reqs": m_total_weight > 0,            # job has must_have requirements
         }
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -912,7 +1243,7 @@ class MatchingEngine:
             elif has_evidence:
                 matched_weight += 1.0
             else:
-                matched_weight += 0.5  # neutral - no data either way
+                matched_weight += 0.0  # no evidence = no credit; neutral default belongs at weight-redistribution layer
 
         score = matched_weight / total if total > 0 else None
 

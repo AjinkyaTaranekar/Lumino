@@ -754,6 +754,34 @@ class JobPostingExtraction(BaseModel):
 # FASTAPI REQUEST / RESPONSE SCHEMAS
 # ──────────────────────────────────────────────────────────────────────────────
 
+class CareerPreferencesRequest(BaseModel):
+    """
+    Career preferences captured during onboarding or from the Verify Profile page.
+    All fields are optional — partial saves are fine, existing nodes are updated.
+    """
+    employment_types: List[str] = Field(
+        default_factory=list,
+        description="e.g. ['full-time', 'contract']. Values: full-time, part-time, contract, freelance, internship"
+    )
+    salary_min: Optional[int] = Field(default=None, description="Minimum expected annual salary (integer)")
+    salary_max: Optional[int] = Field(default=None, description="Maximum expected annual salary (integer)")
+    salary_currency: Optional[str] = Field(default="USD", description="Currency code e.g. USD, EUR, GBP, INR")
+    location: Optional[str] = Field(default=None, description="Preferred city / country or 'Remote'")
+    remote_only: bool = Field(default=False, description="True if candidate only wants fully remote roles")
+    work_authorization: Optional[str] = Field(
+        default=None,
+        description="authorized / need_sponsorship / have_work_permit"
+    )
+    career_goal: Optional[str] = Field(
+        default=None,
+        description="1-3 sentence description of their next career goal"
+    )
+    values: List[str] = Field(
+        default_factory=list,
+        description="Top 3 work values e.g. ['work-life-balance', 'growth', 'impact']"
+    )
+
+
 class IngestUserRequest(BaseModel):
     user_id: str = Field(description="Unique identifier for the user")
     profile_text: str = Field(
@@ -860,6 +888,36 @@ class MatchResult(BaseModel):
     gap_education_reqs: List[str] = Field(
         default_factory=list,
         description="Required education requirements the user does not meet"
+    )
+    # Career level fitness
+    career_level_fit: float = Field(
+        default=1.0,
+        description=(
+            "Career level fit multiplier (0-1) applied to total_score. "
+            "1.0 = user seniority matches job requirements; "
+            "< 1.0 = mismatch penalty (intern applying to senior role scores 0.15-0.35, "
+            "one level below scores 0.65)."
+        )
+    )
+    user_seniority: Optional[str] = Field(
+        default=None,
+        description="Inferred user seniority level: intern/junior/mid/senior/staff_plus"
+    )
+    job_seniority: Optional[str] = Field(
+        default=None,
+        description="Inferred job seniority level: intern/junior/mid/senior/staff_plus"
+    )
+    profile_quality_score: float = Field(
+        default=1.0,
+        description=(
+            "Profile quality multiplier (0-1) from CriticalAssessment. "
+            "strong=1.0, moderate=0.90, weak=0.70, misleading=0.50. "
+            "Further reduced by red flag count (−0.05 each, capped −0.20)."
+        )
+    )
+    profile_signal: str = Field(
+        default="unknown",
+        description="CriticalAssessment.overall_signal: strong/moderate/weak/misleading/unknown"
     )
 
 

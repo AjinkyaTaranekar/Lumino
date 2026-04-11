@@ -1,17 +1,23 @@
 import {
   AlertTriangle,
   ArrowRight,
+  Briefcase,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
   FileText,
+  Heart,
   HelpCircle,
   Info,
   Loader,
+  MapPin,
   MessageSquare,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Target,
+  TrendingUp,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -411,6 +417,207 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
   );
 }
 
+// ─── Profile Booster ──────────────────────────────────────────────────────────
+
+const VALUE_OPTIONS = [
+  'Work-life balance', 'Career growth', 'Meaningful impact', 'Compensation',
+  'Innovation', 'Stability', 'Autonomy', 'Learning', 'Remote flexibility', 'Strong team',
+];
+
+interface BoosterCard {
+  id: string;
+  icon: React.ElementType;
+  title: string;
+  subtitle: string;
+  color: string;
+  bg: string;
+}
+
+function ProfileBooster({ userId }: { userId: string }) {
+  const [completeness, setCompleteness] = useState<Record<string, boolean> | null>(null);
+  const [openCard, setOpenCard] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+
+  // Form state
+  const [goal, setGoal] = useState('');
+  const [values, setValues] = useState<string[]>([]);
+  const [salMin, setSalMin] = useState('');
+  const [salMax, setSalMax] = useState('');
+  const [currency, setCurrency] = useState('USD');
+  const [location, setLocation] = useState('');
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [empTypes, setEmpTypes] = useState<string[]>([]);
+  const [workAuth, setWorkAuth] = useState('');
+
+  useEffect(() => {
+    api.getCompleteness(userId)
+      .then((res: unknown) => setCompleteness(res as Record<string, boolean>))
+      .catch(() => { });
+  }, [userId]);
+
+  const cards: BoosterCard[] = [
+    { id: 'goal', icon: Target, title: 'Career Goal', subtitle: 'Matches you to roles on your growth path', color: 'text-violet-600', bg: 'bg-violet-50' },
+    { id: 'values', icon: Heart, title: 'Work Values', subtitle: 'Filters companies that share what you care about', color: 'text-rose-600', bg: 'bg-rose-50' },
+    { id: 'salary', icon: DollarSign, title: 'Salary Expectation', subtitle: 'Avoids roles where compensation won\'t match', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { id: 'location', icon: MapPin, title: 'Location Preference', subtitle: 'Deprioritizes roles that require unwanted relocation', color: 'text-blue-600', bg: 'bg-blue-50' },
+    { id: 'employment', icon: Briefcase, title: 'Employment Type', subtitle: "Full-time, contract, freelance — we'll filter for it", color: 'text-amber-600', bg: 'bg-amber-50' },
+  ].filter(c => {
+    if (!completeness) return true;
+    if (c.id === 'goal') return !completeness['goal_set'];
+    if (c.id === 'values') return !completeness['values_identified'];
+    return true; // always show salary/location/employment as they're always improvable
+  });
+
+  function toggleValue(v: string) {
+    setValues(prev => prev.includes(v) ? prev.filter(x => x !== v) : prev.length < 3 ? [...prev, v] : prev);
+  }
+  function toggleEmpType(t: string) {
+    setEmpTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]);
+  }
+
+  async function handleSave(cardId: string) {
+    setSaving(true);
+    try {
+      const payload: Parameters<typeof api.saveCareerPreferences>[1] = {};
+      if (cardId === 'goal' && goal.trim()) payload.career_goal = goal.trim();
+      if (cardId === 'values' && values.length) payload.values = values.map(v => v.toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+      if (cardId === 'salary') {
+        if (salMin) payload.salary_min = parseInt(salMin);
+        if (salMax) payload.salary_max = parseInt(salMax);
+        payload.salary_currency = currency;
+      }
+      if (cardId === 'location') {
+        payload.location = remoteOnly ? 'Remote' : location.trim();
+        payload.remote_only = remoteOnly;
+      }
+      if (cardId === 'employment' && empTypes.length) {
+        payload.employment_types = empTypes.map(t => t.toLowerCase().replace('-', '_'));
+      }
+      if (workAuth) payload.work_authorization = workAuth;
+      await api.saveCareerPreferences(userId, payload);
+      setSaved(prev => new Set([...prev, cardId]));
+      setOpenCard(null);
+    } catch { /* silent */ }
+    finally { setSaving(false); }
+  }
+
+  if (cards.length === 0) return null;
+
+  return (
+    <div className="mt-10">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp size={18} className="text-blue-500" />
+        <h2 className="text-base font-bold text-indigo-950">Boost Your Match Score</h2>
+      </div>
+      <p className="text-sm text-slate-500 mb-5">
+        These signals are missing from your graph. Adding them helps the algorithm rank roles that fit your real situation — not just your skills.
+      </p>
+
+      <div className="space-y-3">
+        {cards.map(card => {
+          const Icon = card.icon;
+          const isDone = saved.has(card.id);
+          const isOpen = openCard === card.id;
+
+          return (
+            <div key={card.id} className={`card-lumino overflow-hidden transition-all ${isDone ? 'opacity-60' : ''}`}>
+              <button
+                onClick={() => setOpenCard(isOpen ? null : card.id)}
+                disabled={isDone}
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-slate-50/50 transition-colors disabled:cursor-default"
+              >
+                <div className={`w-9 h-9 rounded-xl ${card.bg} flex items-center justify-center flex-shrink-0`}>
+                  {isDone ? <CheckCircle2 size={18} className="text-emerald-500" /> : <Icon size={18} className={card.color} />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-indigo-950">{card.title}</p>
+                  <p className="text-xs text-slate-400 truncate">{isDone ? 'Saved to your graph' : card.subtitle}</p>
+                </div>
+                {!isDone && <ArrowRight size={15} className={`text-slate-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
+              </button>
+
+              {isOpen && !isDone && (
+                <div className="px-4 pb-4 border-t border-slate-100 pt-3 space-y-3">
+                  {card.id === 'goal' && (
+                    <textarea value={goal} onChange={e => setGoal(e.target.value)}
+                      placeholder="e.g. Move into a tech lead role at a growth-stage startup within 18 months"
+                      rows={3} className="input resize-none text-sm w-full" />
+                  )}
+                  {card.id === 'values' && (
+                    <div className="flex flex-wrap gap-2">
+                      {VALUE_OPTIONS.map(v => (
+                        <button key={v} onClick={() => toggleValue(v)}
+                          disabled={!values.includes(v) && values.length >= 3}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${
+                            values.includes(v) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                          }`}>{v}</button>
+                      ))}
+                      <p className="w-full text-xs text-slate-400">Pick up to 3</p>
+                    </div>
+                  )}
+                  {card.id === 'salary' && (
+                    <div className="flex gap-2 items-center">
+                      <input type="number" value={salMin} onChange={e => setSalMin(e.target.value)} placeholder="Min" className="input flex-1 text-sm" />
+                      <span className="text-slate-400 text-sm">–</span>
+                      <input type="number" value={salMax} onChange={e => setSalMax(e.target.value)} placeholder="Max" className="input flex-1 text-sm" />
+                      <select value={currency} onChange={e => setCurrency(e.target.value)} className="input w-20 text-sm">
+                        {['USD','EUR','GBP','INR','CAD','AUD'].map(c => <option key={c}>{c}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {card.id === 'location' && (
+                    <div className="space-y-2">
+                      <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. San Francisco, London…"
+                        className="input text-sm w-full" disabled={remoteOnly} />
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={remoteOnly} onChange={e => { setRemoteOnly(e.target.checked); if (e.target.checked) setLocation(''); }}
+                          className="rounded border-slate-300 text-blue-600" />
+                        <span className="text-sm text-slate-600">Remote only</span>
+                      </label>
+                    </div>
+                  )}
+                  {card.id === 'employment' && (
+                    <div className="space-y-3">
+                      <div className="flex flex-wrap gap-2">
+                        {['Full-time','Part-time','Contract','Freelance','Internship'].map(t => (
+                          <button key={t} onClick={() => toggleEmpType(t)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                              empTypes.includes(t) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                            }`}>{t}</button>
+                        ))}
+                      </div>
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-slate-500">Work authorization</p>
+                        {[
+                          { value: 'authorized', label: 'Authorized (no sponsorship needed)' },
+                          { value: 'have_work_permit', label: 'Have a work permit / existing visa' },
+                          { value: 'need_sponsorship', label: 'Need visa sponsorship' },
+                        ].map(opt => (
+                          <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                            <input type="radio" name="work_auth_booster" value={opt.value} checked={workAuth === opt.value}
+                              onChange={() => setWorkAuth(opt.value)} className="text-blue-600" />
+                            <span className="text-sm text-slate-600">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <button onClick={() => handleSave(card.id)} disabled={saving}
+                    className="btn-primary btn-sm w-full flex items-center justify-center gap-1.5 mt-1 disabled:opacity-50">
+                    {saving ? <><Loader size={13} className="animate-spin" /> Saving…</> : <><CheckCircle2 size={13} /> Save to my graph</>}
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Clarification (page) ─────────────────────────────────────────────────────
 
 export default function Clarification() {
@@ -576,6 +783,9 @@ export default function Clarification() {
           </div>
         )}
 
+        {/* Profile booster - always visible, nudges users to add missing signals */}
+        <ProfileBooster userId={session!.userId} />
+
         {/* Bottom navigation */}
         <div className="flex gap-3 mt-8">
           <button
@@ -585,7 +795,7 @@ export default function Clarification() {
             <ChevronLeft size={15} /> View Graph
           </button>
           <button
-            onClick={() => navigate('/user/dashboard')}
+            onClick={() => navigate('/dashboard')}
             className="btn-primary flex-1 flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             Browse Jobs <ChevronRight size={15} />

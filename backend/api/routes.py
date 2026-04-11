@@ -40,6 +40,7 @@ from models.schemas import (
     ApplyMutationsRequest,
     BatchCandidateResponse,
     BatchMatchResponse,
+    CareerPreferencesRequest,
     CheckpointRequest,
     ClarificationsResponse,
     EditSessionMessage,
@@ -1229,6 +1230,151 @@ async def get_user_completeness(
     except Exception as e:
         logger.exception(f"Completeness check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/users/{user_id}/career-preferences",
+    tags=["profile"],
+    summary="Save career preferences from onboarding or profile page",
+)
+async def save_career_preferences(
+    user_id: str,
+    req: CareerPreferencesRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Save career preferences captured during onboarding or from the Verify Profile page.
+
+    Writes/updates the following nodes in the user's graph:
+      - Preference nodes: employment_type (per type), salary_range, location,
+                          remote_work (if remote_only=True), work_authorization
+      - Value nodes: each value in req.values
+      - Goal node: career_goal text (type='career', source='user_provided')
+
+    All fields are optional — partial saves are supported.
+    Existing nodes with the same key are updated (MERGE + SET).
+    """
+    import json as _json
+    saved: list[str] = []
+
+    # ── Employment types → Preference nodes ───────────────────────────────────
+    for emp_type in req.employment_types:
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (cat:PreferenceCategory {name: 'Preferences', user_id: $user_id})
+            MERGE (u)-[:HAS_PREFERENCE_CATEGORY]->(cat)
+            MERGE (p:Preference {type: 'employment_type', user_id: $user_id, value: $value})
+            SET p.source = 'user_provided'
+            MERGE (cat)-[:HAS_PREFERENCE]->(p)
+            """,
+            {"user_id": user_id, "value": emp_type},
+        )
+    if req.employment_types:
+        saved.append("employment_type")
+
+    # ── Salary range → Preference node ────────────────────────────────────────
+    if req.salary_min is not None or req.salary_max is not None:
+        currency = (req.salary_currency or "USD").upper()
+        sal_min  = req.salary_min or 0
+        sal_max  = req.salary_max or 0
+        sal_val  = f"{sal_min}-{sal_max} {currency}"
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (cat:PreferenceCategory {name: 'Preferences', user_id: $user_id})
+            MERGE (u)-[:HAS_PREFERENCE_CATEGORY]->(cat)
+            MERGE (p:Preference {type: 'salary_range', user_id: $user_id})
+            SET p.value          = $value,
+                p.salary_min     = $sal_min,
+                p.salary_max     = $sal_max,
+                p.salary_currency = $currency,
+                p.source         = 'user_provided'
+            MERGE (cat)-[:HAS_PREFERENCE]->(p)
+            """,
+            {"user_id": user_id, "value": sal_val, "sal_min": sal_min,
+             "sal_max": sal_max, "currency": currency},
+        )
+        saved.append("salary_range")
+
+    # ── Location → Preference node ────────────────────────────────────────────
+    if req.location:
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (cat:PreferenceCategory {name: 'Preferences', user_id: $user_id})
+            MERGE (u)-[:HAS_PREFERENCE_CATEGORY]->(cat)
+            MERGE (p:Preference {type: 'location', user_id: $user_id})
+            SET p.value = $value, p.source = 'user_provided'
+            MERGE (cat)-[:HAS_PREFERENCE]->(p)
+            """,
+            {"user_id": user_id, "value": req.location},
+        )
+        saved.append("location")
+
+    # ── Remote only → remote_work Preference ──────────────────────────────────
+    if req.remote_only:
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (cat:PreferenceCategory {name: 'Preferences', user_id: $user_id})
+            MERGE (u)-[:HAS_PREFERENCE_CATEGORY]->(cat)
+            MERGE (p:Preference {type: 'remote_work', user_id: $user_id})
+            SET p.value = 'remote', p.source = 'user_provided'
+            MERGE (cat)-[:HAS_PREFERENCE]->(p)
+            """,
+            {"user_id": user_id},
+        )
+        saved.append("remote_work")
+
+    # ── Work authorization → Preference node ──────────────────────────────────
+    if req.work_authorization:
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (cat:PreferenceCategory {name: 'Preferences', user_id: $user_id})
+            MERGE (u)-[:HAS_PREFERENCE_CATEGORY]->(cat)
+            MERGE (p:Preference {type: 'work_authorization', user_id: $user_id})
+            SET p.value = $value, p.source = 'user_provided'
+            MERGE (cat)-[:HAS_PREFERENCE]->(p)
+            """,
+            {"user_id": user_id, "value": req.work_authorization},
+        )
+        saved.append("work_authorization")
+
+    # ── Values → Value nodes ───────────────────────────────────────────────────
+    for rank, val_name in enumerate(req.values[:5], start=1):  # cap at 5
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (v:Value {name: $name, user_id: $user_id})
+            SET v.priority_rank = $rank,
+                v.source        = 'user_provided',
+                v.evidence      = 'Self-reported during onboarding'
+            MERGE (u)-[:HOLDS_VALUE]->(v)
+            """,
+            {"user_id": user_id, "name": val_name, "rank": rank},
+        )
+    if req.values:
+        saved.append("values")
+
+    # ── Career goal → Goal node ────────────────────────────────────────────────
+    if req.career_goal and req.career_goal.strip():
+        await db.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (g:Goal {type: 'career', user_id: $user_id})
+            SET g.description   = $description,
+                g.clarity_level = 'explicit',
+                g.source        = 'user_provided',
+                g.name          = 'Career Goal'
+            MERGE (u)-[:ASPIRES_TO]->(g)
+            """,
+            {"user_id": user_id, "description": req.career_goal.strip()},
+        )
+        saved.append("career_goal")
+
+    return {"status": "saved", "user_id": user_id, "saved_fields": saved}
 
 
 # ── Admin ──────────────────────────────────────────────────────────────────────

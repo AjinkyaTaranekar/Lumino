@@ -57,7 +57,7 @@ export default function Login() {
           </div>
 
           <p className="text-center text-slate-500 text-sm mb-8">
-            Graph-based transparent job matching
+            Illuminating your next Career!
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -121,7 +121,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Powered by knowledge graph matching
+            Made by Bosch Initiatives
           </p>
         </motion.div>
       </div>

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Network,
   ShieldAlert,
-  TrendingUp,
   Upload,
   User as UserIcon,
 } from 'lucide-react';
@@ -35,7 +34,6 @@ export function SideNavBar() {
   const navItems: NavItem[] = user?.role === 'USER'
     ? [
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
-      { label: 'Trajectory Map', to: '/trajectory', icon: TrendingUp },
       { label: 'My Profile', to: '/user/profile', icon: UserIcon },
       { label: 'Job Preferences', to: '/user/interests', icon: Heart },
       { label: 'Upload Resume', to: '/resume', icon: Upload },

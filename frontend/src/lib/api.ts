@@ -173,6 +173,19 @@ export const api = {
   getJobApplicants: (jobId: string) =>
     get<JobApplicantsResponse>(`/jobs/${jobId}/applications`),
 
+  // Career preferences (onboarding + profile enhancement)
+  saveCareerPreferences: (userId: string, prefs: {
+    employment_types?: string[];
+    salary_min?: number | null;
+    salary_max?: number | null;
+    salary_currency?: string;
+    location?: string;
+    remote_only?: boolean;
+    work_authorization?: string;
+    career_goal?: string;
+    values?: string[];
+  }) => post<{ status: string; saved_fields: string[] }>(`/users/${userId}/career-preferences`, prefs),
+
   // Job tag management
   retagJob: (jobId: string) =>
     post<{ job_id: string; tags: string[]; count: number }>(`/jobs/${jobId}/retag`, {}),

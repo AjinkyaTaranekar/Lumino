@@ -2,13 +2,18 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart3,
+  Briefcase,
   CheckCircle2,
+  DollarSign,
   FileText,
+  Heart,
   Loader,
+  MapPin,
   MessageSquare,
   Network,
   ShieldCheck,
   Sparkles,
+  Target,
   Upload as UploadIcon,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -22,11 +27,11 @@ import type { ClarificationQuestion, IngestUserResponse } from '../../lib/types'
 
 // ─── Step types ───────────────────────────────────────────────────────────────
 
-type Step = 'welcome' | 'upload' | 'results' | 'verify' | 'done'
+type Step = 'welcome' | 'upload' | 'results' | 'verify' | 'preferences' | 'done'
 
-const STEP_LABELS = ['Upload', 'Analysis', 'Verify', 'Done']
+const STEP_LABELS = ['Upload', 'Analysis', 'Verify', 'Preferences', 'Done']
 const STEP_INDEX: Record<Step, number> = {
-  welcome: -1, upload: 0, results: 1, verify: 2, done: 3,
+  welcome: -1, upload: 0, results: 1, verify: 2, preferences: 3, done: 4,
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -585,6 +590,244 @@ function VerifyStep({ userId, onDone }: VerifyStepProps) {
   )
 }
 
+// ─── Career Preferences step ─────────────────────────────────────────────────
+
+const EMPLOYMENT_TYPES = ['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship']
+const WORK_AUTH_OPTIONS = [
+  { value: 'authorized', label: 'Authorized to work (no sponsorship needed)' },
+  { value: 'have_work_permit', label: 'Have a work permit / existing visa' },
+  { value: 'need_sponsorship', label: 'Need visa sponsorship' },
+]
+const VALUE_OPTIONS = [
+  'Work-life balance', 'Career growth', 'Meaningful impact', 'Compensation',
+  'Innovation', 'Stability', 'Autonomy', 'Learning', 'Remote flexibility',
+  'Strong team', 'Diversity & inclusion', 'Fast-paced environment',
+]
+
+interface CareerPreferencesStepProps {
+  userId: string
+  onDone: () => void
+}
+
+function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
+  const [empTypes, setEmpTypes] = React.useState<string[]>([])
+  const [salMin, setSalMin] = React.useState('')
+  const [salMax, setSalMax] = React.useState('')
+  const [currency, setCurrency] = React.useState('USD')
+  const [location, setLocation] = React.useState('')
+  const [remoteOnly, setRemoteOnly] = React.useState(false)
+  const [workAuth, setWorkAuth] = React.useState('')
+  const [careerGoal, setCareerGoal] = React.useState('')
+  const [values, setValues] = React.useState<string[]>([])
+  const [saving, setSaving] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
+  function toggleEmpType(t: string) {
+    setEmpTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
+  }
+  function toggleValue(v: string) {
+    setValues(prev =>
+      prev.includes(v) ? prev.filter(x => x !== v) : prev.length < 3 ? [...prev, v] : prev
+    )
+  }
+
+  async function handleSave() {
+    setSaving(true)
+    setError(null)
+    try {
+      await api.saveCareerPreferences(userId, {
+        employment_types: empTypes.map(t => t.toLowerCase().replace('-', '_')),
+        salary_min: salMin ? parseInt(salMin) : null,
+        salary_max: salMax ? parseInt(salMax) : null,
+        salary_currency: currency,
+        location: location.trim() || undefined,
+        remote_only: remoteOnly,
+        work_authorization: workAuth || undefined,
+        career_goal: careerGoal.trim() || undefined,
+        values: values.map(v => v.toLowerCase().replace(/[^a-z0-9]+/g, '-')),
+      })
+      onDone()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save preferences')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <motion.div
+      key="preferences"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -16 }}
+      className="space-y-6"
+    >
+      <div className="text-center mb-2">
+        <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-violet-100 flex items-center justify-center">
+          <Target size={22} className="text-violet-600" />
+        </div>
+        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">What are you looking for?</h2>
+        <p className="text-sm text-slate-500 mt-1.5">This helps us rank jobs by what actually matters to you — not just skill match.</p>
+      </div>
+
+      {/* Employment type */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-2 flex items-center gap-1.5">
+          <Briefcase size={14} className="text-slate-400" /> Employment type
+        </label>
+        <div className="flex flex-wrap gap-2">
+          {EMPLOYMENT_TYPES.map(t => (
+            <button
+              key={t}
+              onClick={() => toggleEmpType(t)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                empTypes.includes(t)
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Salary expectation */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-2 flex items-center gap-1.5">
+          <DollarSign size={14} className="text-slate-400" /> Salary expectation (annual)
+        </label>
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            value={salMin}
+            onChange={e => setSalMin(e.target.value)}
+            placeholder="Min"
+            className="input flex-1 text-sm"
+          />
+          <span className="text-slate-400 text-sm">–</span>
+          <input
+            type="number"
+            value={salMax}
+            onChange={e => setSalMax(e.target.value)}
+            placeholder="Max"
+            className="input flex-1 text-sm"
+          />
+          <select
+            value={currency}
+            onChange={e => setCurrency(e.target.value)}
+            className="input w-24 text-sm"
+          >
+            {['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD'].map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Location */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-2 flex items-center gap-1.5">
+          <MapPin size={14} className="text-slate-400" /> Location preference
+        </label>
+        <input
+          type="text"
+          value={location}
+          onChange={e => setLocation(e.target.value)}
+          placeholder="e.g. San Francisco, London, or leave blank for remote"
+          className="input text-sm"
+          disabled={remoteOnly}
+        />
+        <label className="flex items-center gap-2 mt-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={remoteOnly}
+            onChange={e => { setRemoteOnly(e.target.checked); if (e.target.checked) setLocation('') }}
+            className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-slate-600">Remote only</span>
+        </label>
+      </div>
+
+      {/* Work authorization */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-2">Work authorization</label>
+        <div className="space-y-2">
+          {WORK_AUTH_OPTIONS.map(opt => (
+            <label key={opt.value} className="flex items-center gap-3 cursor-pointer group">
+              <input
+                type="radio"
+                name="work_auth"
+                value={opt.value}
+                checked={workAuth === opt.value}
+                onChange={() => setWorkAuth(opt.value)}
+                className="text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-slate-600 group-hover:text-indigo-950 transition-colors">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Values */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-1 flex items-center gap-1.5">
+          <Heart size={14} className="text-slate-400" /> What matters most to you? <span className="text-slate-400 font-normal ml-1">(pick up to 3)</span>
+        </label>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {VALUE_OPTIONS.map(v => (
+            <button
+              key={v}
+              onClick={() => toggleValue(v)}
+              disabled={!values.includes(v) && values.length >= 3}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${
+                values.includes(v)
+                  ? 'bg-violet-600 text-white border-violet-600'
+                  : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Career goal */}
+      <div>
+        <label className="block text-sm font-semibold text-indigo-950 mb-2 flex items-center gap-1.5">
+          <Target size={14} className="text-slate-400" /> Your next career goal
+        </label>
+        <textarea
+          value={careerGoal}
+          onChange={e => setCareerGoal(e.target.value)}
+          placeholder="e.g. Move into a tech lead role at a growth-stage startup within 18 months"
+          rows={3}
+          className="input resize-none text-sm"
+        />
+        <p className="text-xs text-slate-400 mt-1">Used to match you with roles on your growth path, not just lateral moves.</p>
+      </div>
+
+      {error && <div className="alert-error text-sm"><AlertTriangle size={14} /><span>{error}</span></div>}
+
+      <div className="flex gap-3 pt-2">
+        <button
+          onClick={onDone}
+          className="btn-secondary flex-shrink-0 text-sm px-4"
+        >
+          Skip
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="btn-primary btn-lg flex-1 flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {saving ? <><Loader size={15} className="animate-spin" /> Saving…</> : <>Save & Continue <ArrowRight size={15} /></>}
+        </button>
+      </div>
+    </motion.div>
+  )
+}
+
 // ─── Done step ────────────────────────────────────────────────────────────────
 
 function DoneStep({ name, onFinish }: { name: string; onFinish: () => void }) {
@@ -654,11 +897,15 @@ export default function Onboarding() {
     if (ingestResult && ingestResult.interpretation_flags > 0) {
       setStep('verify')
     } else {
-      setStep('done')
+      setStep('preferences')
     }
   }
 
   function handleVerifyDone() {
+    setStep('preferences')
+  }
+
+  function handlePreferencesDone() {
     setStep('done')
   }
 
@@ -706,6 +953,9 @@ export default function Onboarding() {
               )}
               {step === 'verify' && (
                 <VerifyStep userId={session!.userId} onDone={handleVerifyDone} />
+              )}
+              {step === 'preferences' && (
+                <CareerPreferencesStep userId={session!.userId} onDone={handlePreferencesDone} />
               )}
               {step === 'done' && (
                 <DoneStep name={firstName} onFinish={handleFinish} />
