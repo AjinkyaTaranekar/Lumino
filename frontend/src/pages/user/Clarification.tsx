@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
+import { clearUserMatchCache } from '../../lib/matchCache';
 import type { ClarificationQuestion, ClarificationsResponse } from '../../lib/types';
 
 // ─── Impact meta ───────────────────────────────────────────────────────────────
@@ -164,6 +165,7 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
         answer || 'Confirmed via natural language',
         interpretation?.interpreted_value
       );
+      clearUserMatchCache(session!.userId);
       setPhase('done');
       onResolved({ ...q, status: 'corrected' });
     } catch (e) {
@@ -177,6 +179,7 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
     setSaving(true);
     try {
       await api.resolveFlag(session!.userId, q.flag_id, true, 'Confirmed original interpretation', null);
+      clearUserMatchCache(session!.userId);
       setPhase('done');
       onResolved({ ...q, status: 'confirmed' });
     } catch (e) {
@@ -496,6 +499,7 @@ function ProfileBooster({ userId }: { userId: string }) {
       }
       if (workAuth) payload.work_authorization = workAuth;
       await api.saveCareerPreferences(userId, payload);
+      clearUserMatchCache(userId);
       setSaved(prev => new Set([...prev, cardId]));
       setOpenCard(null);
     } catch { /* silent */ }

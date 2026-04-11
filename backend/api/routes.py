@@ -93,6 +93,11 @@ def get_sqlite_db() -> SQLiteClient:
     return get_sqlite()
 
 
+async def _bump_user_cache_version(user_id: str, sqlite: SQLiteClient) -> None:
+    """Invalidate cached match results for this user by bumping their version."""
+    await sqlite.bump_user_version(user_id)
+
+
 def _score_summary(score: float) -> str:
     if score >= 0.75:
         return "Strong evidence in this dimension."
@@ -304,6 +309,7 @@ async def ingest_user(
     try:
         service = IngestionService(db, sqlite)
         result = await service.ingest_user(request.user_id, request.profile_text)
+        await _bump_user_cache_version(request.user_id, sqlite)
         return {"status": "success", **result}
     except Exception as e:
         logger.exception(f"User ingestion failed: {e}")
@@ -358,6 +364,7 @@ async def upload_user_pdf(
             raise HTTPException(status_code=422, detail="Could not extract text from PDF")
         service = IngestionService(db, sqlite)
         result = await service.ingest_user(user_id, profile_text)
+        await _bump_user_cache_version(user_id, sqlite)
         return {"status": "success", **result}
     except HTTPException:
         raise
@@ -409,19 +416,35 @@ async def get_all_matches_for_user(
     """
     Compute match scores for ALL jobs in the database for the given user.
 
+    Results are cached in SQLite (TTL 2 h) keyed by user graph version + job count.
+    Cache is invalidated automatically whenever the user modifies their profile
+    (resume upload, career preferences, clarification resolve, graph edits).
+
     Returns results ranked by total_score (descending).
-
-    Score breakdown:
-      - skill_score      (50%): weighted intersection of user skills ∩ job requirements
-      - domain_score     (25%): set intersection of domains
-      - culture_score    (15%): work-style preference alignment
-      - preference_score (10%): remote policy match
-
-    Every score component is traceable via graph paths at /matches/{job_id}/paths.
     """
+    # Build a cheap cache key from user graph version + current job count
+    user_version = await sqlite.get_user_version(user_id)
+    job_count_rows = await db.run_query("MATCH (j:Job) RETURN count(j) AS cnt", {})
+    job_count = job_count_rows[0]["cnt"] if job_count_rows else 0
+    cache_key = f"v{user_version}_j{job_count}"
+
+    cached = await sqlite.get_match_cache(user_id, cache_key)
+    if cached is not None:
+        logger.info(f"Match cache hit for user={user_id} key={cache_key}")
+        results = [MatchResult(**r) for r in cached]
+        return BatchMatchResponse(user_id=user_id, results=results, total_jobs_ranked=len(results))
+
+    # Cache miss — run the full matching engine
     analytics = AnalyticsService(sqlite, db)
     engine = MatchingEngine(db, analytics_service=analytics)
-    return await engine.rank_all_jobs_for_user(user_id)
+    response = await engine.rank_all_jobs_for_user(user_id)
+
+    await sqlite.set_match_cache(
+        user_id, cache_key,
+        [r.model_dump() for r in response.results],
+    )
+    logger.info(f"Match cache stored for user={user_id} key={cache_key} ({len(response.results)} results)")
+    return response
 
 
 @router.get(
@@ -1103,7 +1126,9 @@ async def apply_user_mutations(
     output_dir = os.getenv("OUTPUT_DIR", "./outputs")
     svc = GraphEditService(db, sqlite, output_dir)
     try:
-        return await svc.apply_mutations(request.session_id, request.mutations)
+        result = await svc.apply_mutations(request.session_id, request.mutations)
+        await _bump_user_cache_version(user_id, sqlite)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -1313,13 +1338,15 @@ async def resolve_clarification(
     """
     try:
         svc = ClarificationService(db, sqlite)
-        return await svc.resolve_flag(
+        result = await svc.resolve_flag(
             user_id=user_id,
             flag_id=flag_id,
             is_correct=request.is_correct,
             user_answer=request.user_answer,
             correction=request.correction,
         )
+        await _bump_user_cache_version(user_id, sqlite)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -1463,6 +1490,7 @@ async def save_career_preferences(
     user_id: str,
     req: CareerPreferencesRequest,
     db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
 ):
     """
     Save career preferences captured during onboarding or from the Verify Profile page.
@@ -1596,6 +1624,8 @@ async def save_career_preferences(
         )
         saved.append("career_goal")
 
+    if saved:
+        await _bump_user_cache_version(user_id, sqlite)
     return {"status": "saved", "user_id": user_id, "saved_fields": saved}
 
 

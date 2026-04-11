@@ -15,6 +15,7 @@ import React, { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
+import { clearUserMatchCache } from '../../lib/matchCache';
 import type { IngestUserResponse } from '../../lib/types';
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -72,6 +73,7 @@ export default function ResumeManager() {
         data = await api.ingestUser(session.userId, text.trim());
       }
       setResult(data);
+      clearUserMatchCache(session.userId);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
     } finally {

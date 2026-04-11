@@ -1,7 +1,9 @@
 """SQLite client - persistence for edit sessions, message history, and graph snapshots."""
 
+import json
 import logging
 import os
+from datetime import datetime, timedelta
 
 import aiosqlite
 
@@ -123,6 +125,20 @@ class SQLiteClient:
 
                 CREATE INDEX IF NOT EXISTS idx_practice_sessions_user
                     ON practice_sessions(user_id);
+
+                CREATE TABLE IF NOT EXISTS user_cache_versions (
+                    user_id    TEXT PRIMARY KEY,
+                    version    INTEGER NOT NULL DEFAULT 1,
+                    updated_at TEXT    NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS match_cache (
+                    user_id      TEXT NOT NULL,
+                    cache_key    TEXT NOT NULL,
+                    results_json TEXT NOT NULL,
+                    cached_at    TEXT NOT NULL,
+                    PRIMARY KEY (user_id, cache_key)
+                );
                 """
             )
             await db.commit()
@@ -149,6 +165,66 @@ class SQLiteClient:
             async with db.execute(query, params) as cursor:
                 row = await cursor.fetchone()
                 return dict(row) if row is not None else None
+
+    # ── Match cache helpers ────────────────────────────────────────────────────
+
+    async def bump_user_version(self, user_id: str) -> int:
+        """Increment the user's cache version. Returns the new version number."""
+        now = datetime.utcnow().isoformat()
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            await db.execute(
+                """
+                INSERT INTO user_cache_versions (user_id, version, updated_at)
+                VALUES (?, 1, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    version    = version + 1,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, now),
+            )
+            await db.commit()
+            async with db.execute(
+                "SELECT version FROM user_cache_versions WHERE user_id = ?",
+                (user_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row)["version"] if row else 1
+
+    async def get_user_version(self, user_id: str) -> int:
+        """Return the user's current cache version (0 if not yet tracked)."""
+        row = await self.fetchone(
+            "SELECT version FROM user_cache_versions WHERE user_id = ?",
+            (user_id,),
+        )
+        return row["version"] if row else 0
+
+    async def get_match_cache(self, user_id: str, cache_key: str, ttl_seconds: int = 7200) -> list | None:
+        """Return cached match results if the entry exists and is within TTL."""
+        row = await self.fetchone(
+            "SELECT results_json, cached_at FROM match_cache WHERE user_id = ? AND cache_key = ?",
+            (user_id, cache_key),
+        )
+        if row is None:
+            return None
+        age = datetime.utcnow() - datetime.fromisoformat(row["cached_at"])
+        if age > timedelta(seconds=ttl_seconds):
+            return None
+        return json.loads(row["results_json"])
+
+    async def set_match_cache(self, user_id: str, cache_key: str, results: list) -> None:
+        """Upsert match results into cache."""
+        now = datetime.utcnow().isoformat()
+        await self.execute(
+            """
+            INSERT INTO match_cache (user_id, cache_key, results_json, cached_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, cache_key) DO UPDATE SET
+                results_json = excluded.results_json,
+                cached_at    = excluded.cached_at
+            """,
+            (user_id, cache_key, json.dumps(results), now),
+        )
 
 
 def get_sqlite() -> SQLiteClient:

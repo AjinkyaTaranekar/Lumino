@@ -7,6 +7,7 @@ import SkillGapPanel from '../../components/SkillGapPanel';
 import VersionHistory from '../../components/VersionHistory';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
+import { clearUserMatchCache } from '../../lib/matchCache';
 import type { GraphMutation } from '../../lib/types';
 
 // ─── Chat message shape ───────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ export default function EditGraph() {
     if (!sessionId) return;
     try {
       const res = await api.applyMutations('user', userId!, sessionId, mutations) as ApplyResult;
+      if (userId) clearUserMatchCache(userId);
       setGraphKey(k => k + 1);
       const summary = [
         (res.nodes_added ?? 0) > 0 ? `+${res.nodes_added} nodes` : null,

@@ -9,6 +9,7 @@ import SkillBadge from '../components/SkillBadge';
 import { useAuth } from '../context/AuthContext';
 import { trackEvent } from '../lib/analytics';
 import { api } from '../lib/api';
+import { getCachedMatches, setCachedMatches } from '../lib/matchCache';
 import type { JobInteraction, MatchInsightsResponse, MatchResult } from '../lib/types';
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
@@ -340,6 +341,27 @@ function UserDashboard() {
   useEffect(() => {
     if (!session?.userId) return;
     const currentUserId = session.userId;
+
+    // Check the in-memory frontend cache first (5-min TTL).
+    // The backend also caches keyed by graph version, so skipping the API call
+    // here is safe — cache is cleared explicitly after any profile mutation.
+    const cachedResults = getCachedMatches(currentUserId);
+    if (cachedResults) {
+      setMatches(cachedResults);
+      if (cachedResults.length > 0) {
+        setInsightsLoading(true);
+        setInsightsError(null);
+        api.getMatchInsights(currentUserId, cachedResults[0].job_id, 'seeker')
+          .then(setTopInsights)
+          .catch((err: unknown) => {
+            setInsightsError(err instanceof Error ? err.message : String(err));
+            setTopInsights(null);
+          })
+          .finally(() => setInsightsLoading(false));
+      }
+      return;
+    }
+
     setLoading(true);
     Promise.all([
       api.getMatches(currentUserId),
@@ -347,6 +369,7 @@ function UserDashboard() {
     ])
       .then(([matchData, interactionData]) => {
         setMatches(matchData.results);
+        setCachedMatches(currentUserId, matchData.results);
         setInteractionMap(new Map(interactionData.interactions.map(i => [i.job_id, i])));
 
         if (matchData.results.length > 0) {
