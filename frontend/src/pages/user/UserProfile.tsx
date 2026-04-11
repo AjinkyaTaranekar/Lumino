@@ -146,7 +146,7 @@ export default function UserProfile() {
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-indigo-600 text-sm font-semibold hover:bg-indigo-50 transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-indigo-600"
                 onClick={() => navigate('/user/clarifications')}
               >
-                Verify Profile
+                Improve Accuracy
                 <ChevronRight className="w-4 h-4" />
               </button>
               <button
@@ -154,7 +154,7 @@ export default function UserProfile() {
                 onClick={() => navigate('/user/edit-graph')}
               >
                 <MessageSquare className="w-4 h-4" />
-                Deep Dive Interview
+                Optimize Profile Graph
               </button>
             </div>
           </div>
@@ -463,7 +463,7 @@ export default function UserProfile() {
               className="btn-primary btn-lg flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               onClick={() => navigate('/user/clarifications')}
             >
-              Verify Profile
+              Improve Accuracy
               <ChevronRight className="w-4 h-4" />
             </button>
             <button
@@ -471,7 +471,7 @@ export default function UserProfile() {
               onClick={() => navigate('/user/edit-graph')}
             >
               <MessageSquare className="w-4 h-4" />
-              Deep Dive Interview
+              Optimize Profile Graph
             </button>
           </div>
 

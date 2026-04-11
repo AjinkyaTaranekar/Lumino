@@ -49,10 +49,10 @@ function StepIndicator({ step }: { step: Step }) {
             <div className="flex flex-col items-center" role="listitem">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${done
-                    ? 'bg-emerald-500 text-white'
-                    : active
-                      ? 'bg-blue-500 text-white shadow-lg shadow-blue-200'
-                      : 'bg-slate-100 text-slate-400'
+                  ? 'bg-emerald-500 text-white'
+                  : active
+                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-200'
+                    : 'bg-slate-100 text-slate-400'
                   }`}
                 aria-current={active ? 'step' : undefined}
               >
@@ -88,17 +88,17 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
       </div>
 
       <h1 className="text-3xl font-extrabold text-indigo-950 tracking-tight mb-3">
-        Hi {name}, we want to know you better
+        Welcome {name}, let's build your winning profile
       </h1>
       <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto mb-8">
-        To match you with the right opportunities, we'll build your personal knowledge graph - a precise digital twin of your skills, experience, and goals.
+        In the next few steps, Lumino turns your resume into an explainable career graph so you can see why each role fits and what to improve next.
       </p>
 
       <div className="grid grid-cols-3 gap-4 mb-10 text-left">
         {[
-          { icon: FileText, title: 'Upload Resume', desc: 'We extract your skills, domains, and experiences' },
-          { icon: Sparkles, title: 'AI Analysis', desc: 'We build your personal knowledge graph' },
-          { icon: ShieldCheck, title: 'Quick Verify', desc: 'Confirm a few AI interpretations in minutes' },
+          { icon: FileText, title: 'Upload Resume', desc: 'We extract skills, impact, and domain signals' },
+          { icon: Sparkles, title: 'AI Analysis', desc: 'We create an explainable career graph' },
+          { icon: ShieldCheck, title: 'Quick Verify', desc: 'You confirm high-impact interpretations' },
         ].map(({ icon: Icon, title, desc }) => (
           <div key={title} className="card-lumino p-4 text-center">
             <div className="w-10 h-10 mx-auto mb-3 rounded-2xl bg-blue-50 flex items-center justify-center">
@@ -114,7 +114,7 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
         onClick={onNext}
         className="btn-primary btn-lg px-10 flex items-center gap-2 mx-auto focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
       >
-        Get Started <ArrowRight size={16} />
+        Start Profile Setup <ArrowRight size={16} />
       </button>
       <p className="text-xs text-slate-400 mt-3">Takes about 3 minutes</p>
     </motion.div>
@@ -176,7 +176,7 @@ function UploadStep({ userId, onDone }: UploadStepProps) {
     >
       <div className="text-center mb-8">
         <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">Upload your resume</h2>
-        <p className="text-sm text-slate-500 mt-2">We'll turn it into your digital twin - skills, experience, everything.</p>
+        <p className="text-sm text-slate-500 mt-2">We will extract evidence-backed skills, domain depth, and experience outcomes.</p>
       </div>
 
       {/* Tab switcher */}
@@ -207,8 +207,8 @@ function UploadStep({ userId, onDone }: UploadStepProps) {
           role="button"
           aria-label={file ? `Selected: ${file.name}` : 'Drop PDF or click to browse'}
           className={`rounded-2xl p-10 text-center cursor-pointer border-2 border-dashed transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${dragging ? 'border-blue-400 bg-blue-50'
-              : file ? 'border-emerald-400 bg-emerald-50'
-                : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
+            : file ? 'border-emerald-400 bg-emerald-50'
+              : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
             }`}
         >
           <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setError(null) }} />
@@ -225,7 +225,7 @@ function UploadStep({ userId, onDone }: UploadStepProps) {
               <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 flex items-center justify-center">
                 <UploadIcon size={24} className="text-slate-400" />
               </div>
-              <p className="font-bold text-slate-700">Drop your PDF here or click to browse</p>
+              <p className="font-bold text-slate-700">Drop your resume PDF here or click to browse</p>
               <p className="text-sm text-slate-400 mt-1">PDF resume up to 10 MB</p>
             </>
           )}
@@ -237,7 +237,7 @@ function UploadStep({ userId, onDone }: UploadStepProps) {
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Paste your resume or LinkedIn profile text here…"
+          placeholder="Paste your resume, project highlights, or LinkedIn profile text here..."
           rows={10}
           className="input resize-none leading-relaxed focus-visible:ring-2 focus-visible:ring-blue-500"
         />
@@ -291,7 +291,7 @@ function ResultsStep({ result, onNext, hasFlags }: ResultsStepProps) {
         <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-emerald-100 flex items-center justify-center">
           <CheckCircle2 size={28} className="text-emerald-600" />
         </div>
-        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">Profile analysed</h2>
+        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">Profile intelligence ready</h2>
         <p className="text-sm text-slate-500 mt-2">Here's what we extracted from your resume.</p>
       </div>
 
@@ -666,7 +666,7 @@ function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
         <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-violet-100 flex items-center justify-center">
           <Target size={22} className="text-violet-600" />
         </div>
-        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">What are you looking for?</h2>
+        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight">What should we optimize for?</h2>
         <p className="text-sm text-slate-500 mt-1.5">This helps us rank jobs by what actually matters to you — not just skill match.</p>
       </div>
 
@@ -680,11 +680,10 @@ function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
             <button
               key={t}
               onClick={() => toggleEmpType(t)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                empTypes.includes(t)
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${empTypes.includes(t)
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
-              }`}
+                }`}
             >
               {t}
             </button>
@@ -780,11 +779,10 @@ function CareerPreferencesStep({ userId, onDone }: CareerPreferencesStepProps) {
               key={v}
               onClick={() => toggleValue(v)}
               disabled={!values.includes(v) && values.length >= 3}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${
-                values.includes(v)
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${values.includes(v)
                   ? 'bg-violet-600 text-white border-violet-600'
                   : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
-              }`}
+                }`}
             >
               {v}
             </button>
@@ -851,7 +849,7 @@ function DoneStep({ name, onFinish }: { name: string; onFinish: () => void }) {
         You're all set, {name}!
       </h2>
       <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto mb-8">
-        Your digital twin is ready. We'll now match you against every job in our network using graph-to-graph analysis - not keywords.
+        Your profile graph is now active. Lumino will rank roles using evidence-based graph matching, not resume keyword stuffing.
       </p>
 
       <div className="grid grid-cols-3 gap-3 mb-10">

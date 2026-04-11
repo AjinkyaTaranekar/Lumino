@@ -35,7 +35,7 @@ export default function JobModel() {
               <Network className="w-3.5 h-3.5 text-primary-500" aria-hidden="true" />
             </div>
             <h1 className="text-base font-semibold text-indigo-950">
-              Job Knowledge Graph
+              Role Intelligence Graph
               <span className="ml-2 font-mono text-xs text-slate-400 font-normal">
                 {jobId}
               </span>
@@ -49,7 +49,7 @@ export default function JobModel() {
               className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300"
             >
               <Users className="w-3.5 h-3.5" aria-hidden="true" />
-              Find Candidates
+              Rank Candidates
             </button>
 
             <button

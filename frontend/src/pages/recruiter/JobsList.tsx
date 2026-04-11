@@ -107,9 +107,9 @@ export default function JobsList() {
         {/* ── Header ── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-indigo-950">My Job Openings</h1>
+            <h1 className="text-2xl font-bold text-indigo-950">Role Pipeline</h1>
             <p className="text-sm text-slate-400 mt-1">
-              Manage your posted roles and find matching candidates
+              Manage open roles, refresh role intelligence, and shortlist the best-fit talent faster.
             </p>
           </div>
 
@@ -178,8 +178,7 @@ export default function JobsList() {
             </div>
             <p className="text-indigo-950 font-semibold mb-1">No jobs posted yet</p>
             <p className="text-sm text-slate-400 mb-6 max-w-xs mx-auto">
-              Create your first job posting and Lumino will build a knowledge graph to
-              match the best candidates.
+              Create your first role and Lumino will generate explainable candidate rankings.
             </p>
             <button
               onClick={() => navigate('/recruiter/post')}
@@ -278,7 +277,7 @@ export default function JobsList() {
                         className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300"
                       >
                         <Users className="w-3.5 h-3.5" aria-hidden="true" />
-                        Candidates
+                        Ranked Candidates
                       </button>
 
                       <button
@@ -350,7 +349,7 @@ export default function JobsList() {
                       </div>
                     ) : (
                       <p className="text-[11px] text-slate-300 pt-2 border-t border-slate-100 italic">
-                        No tags yet — click Retag to extract
+                        No semantic tags yet — use Retag to generate role signals
                       </p>
                     )}
                   </div>

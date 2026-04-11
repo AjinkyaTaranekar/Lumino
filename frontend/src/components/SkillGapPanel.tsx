@@ -42,7 +42,7 @@ export default function SkillGapPanel({ userId, jobId, onSkillClick }: SkillGapP
 
       {missing.length > 0 && (
         <div>
-          <p className="text-xs font-semibold mb-1.5 text-amber-600">Missing skills - click to discuss</p>
+          <p className="text-xs font-semibold mb-1.5 text-amber-600">Priority gaps - click to build an action plan</p>
           <div className="flex flex-wrap gap-1" role="list" aria-label="Missing skills">
             {missing.map(s => (
               <button
@@ -50,7 +50,7 @@ export default function SkillGapPanel({ userId, jobId, onSkillClick }: SkillGapP
                 type="button"
                 onClick={() => onSkillClick(s)}
                 className="badge-orange hover:bg-amber-100 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-amber-500"
-                title="Click to discuss in chat"
+                title="Open coaching prompt"
                 aria-label={`Discuss missing skill: ${s}`}
               >
                 {s}

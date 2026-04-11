@@ -99,9 +99,9 @@ export default function Guidelines() {
               <BookOpen className="w-6 h-6 text-blue-500" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-indigo-950">Resume Upload Guidelines</h1>
+              <h1 className="text-2xl font-bold text-indigo-950">Resume Quality Guide</h1>
               <p className="text-sm text-slate-500 mt-0.5">
-                Format your resume to get the most accurate knowledge graph
+                Format your resume to improve extraction quality, ranking confidence, and interview relevance.
               </p>
             </div>
           </div>
@@ -116,8 +116,7 @@ export default function Guidelines() {
               <strong className="text-blue-600">experiences</strong>,{' '}
               <strong className="text-blue-600">projects</strong>, and{' '}
               <strong className="text-blue-600">work style preferences</strong>{' '}
-              from your resume using an LLM. The clearer these sections are, the richer
-              your knowledge graph - and the better the job matches.
+              from your resume using an LLM. The clearer these sections are, the more trustworthy your profile graph and match explanations become.
             </p>
           </div>
 
@@ -252,9 +251,9 @@ export default function Guidelines() {
           {/* Bottom CTA */}
           <div className="mt-8 card-lumino p-5 flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="font-medium text-indigo-950 text-sm">Ready to upload your resume?</p>
+              <p className="font-medium text-indigo-950 text-sm">Ready to build a stronger profile graph?</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                Follow the guide above for the richest knowledge graph.
+                Use this checklist to maximize match quality before you upload.
               </p>
             </div>
             <Link

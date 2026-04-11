@@ -364,6 +364,35 @@ export interface MatchExplanation {
   interview_focus?: string[];
 }
 
+export interface MatchInsightSignal {
+  label: string;
+  score: number;
+  weight: number;
+  summary: string;
+}
+
+export interface MatchActionItem {
+  title: string;
+  detail: string;
+  priority: 'high' | 'medium' | 'low';
+}
+
+export interface MatchInsightsResponse {
+  user_id: string;
+  job_id: string;
+  perspective: 'seeker' | 'recruiter';
+  job_title: string;
+  company?: string | null;
+  overall_score: number;
+  confidence: 'high' | 'medium' | 'low';
+  score_breakdown: MatchInsightSignal[];
+  strongest_evidence: string[];
+  top_gaps: string[];
+  recruiter_takeaways: string[];
+  next_steps: MatchActionItem[];
+  caveats: string[];
+}
+
 // ─── Deep Job Profile ─────────────────────────────────────────────────────────
 
 export interface JobEducationRequirement {

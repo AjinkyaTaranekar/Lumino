@@ -8,9 +8,9 @@
  *  - Explanation of how preferences are built and used
  */
 
+import { Info } from 'lucide-react'
 import InterestProfilePanel from '../../components/InterestProfilePanel'
 import { useAuth } from '../../context/AuthContext'
-import { Info } from 'lucide-react'
 
 export default function Interests() {
   const { session } = useAuth()
@@ -22,10 +22,9 @@ export default function Interests() {
     <div className="max-w-2xl mx-auto py-8 px-4 space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-xl font-bold text-indigo-950">Job Preferences</h1>
+        <h1 className="text-xl font-bold text-indigo-950">Preference Intelligence</h1>
         <p className="text-sm text-slate-500 mt-1">
-          Your interest profile is built from how you interact with job listings.
-          You can always adjust it manually.
+          Every interaction teaches Lumino what roles you actually want. You can override any signal at any time.
         </p>
       </div>
 
@@ -43,7 +42,7 @@ export default function Interests() {
           </ul>
           <p className="mt-2 text-indigo-500">
             These signals are time-decayed — recent interactions count more than old ones.
-            Your preferences directly influence job ranking alongside your graph match score.
+            Preference signals guide ranking, while graph fit remains the primary decision factor.
           </p>
         </div>
       </div>
@@ -62,7 +61,7 @@ export default function Interests() {
         </p>
         <p className="text-slate-400">
           Graph match is the primary signal — it measures fit based on your actual experience.
-          Interest score adjusts for what you <em>want</em>, not just what you qualify for.
+          Interest score adjusts for what you <em>want</em>, so recommendations stay practical and motivating.
         </p>
       </div>
     </div>

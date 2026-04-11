@@ -35,17 +35,17 @@ export function SideNavBar() {
     ? [
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
       { label: 'My Profile', to: '/user/profile', icon: UserIcon },
-      { label: 'Job Preferences', to: '/user/interests', icon: Heart },
+      { label: 'Preference Intelligence', to: '/user/interests', icon: Heart },
       { label: 'Upload Resume', to: '/resume', icon: Upload },
-      { label: 'Verify Profile', to: '/user/clarifications', icon: ShieldAlert },
-      { label: 'Digital Twin', to: '/user/model', icon: Network },
+      { label: 'Profile Accuracy', to: '/user/clarifications', icon: ShieldAlert },
+      { label: 'Career Graph', to: '/user/model', icon: Network },
       { label: 'Resume Guide', to: '/user/guidelines', icon: BookOpen },
     ]
     : user?.role === 'RECRUITER'
       ? [
         { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
         { label: 'Jobs', to: '/jobs', icon: Briefcase },
-        { label: 'Post a Job', to: '/jobs/create', icon: Database },
+        { label: 'Publish Role', to: '/jobs/create', icon: Database },
       ]
       : [
         { label: 'Admin Console', to: '/admin', icon: Database },

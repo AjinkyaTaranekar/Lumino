@@ -943,6 +943,38 @@ class JobProfileResponse(BaseModel):
     soft_requirements: List[dict] = Field(default_factory=list)
 
 
+class MatchInsightSignal(BaseModel):
+    """One weighted dimension used to explain the final match score."""
+    label: str
+    score: float = Field(ge=0.0, le=1.0)
+    weight: float = Field(ge=0.0, le=1.0)
+    summary: str
+
+
+class MatchActionItem(BaseModel):
+    """Actionable recommendation generated from observed match gaps/signals."""
+    title: str
+    detail: str
+    priority: Literal["high", "medium", "low"] = "medium"
+
+
+class MatchInsightsResponse(BaseModel):
+    """Production-grade explainability payload for seeker/recruiter workflows."""
+    user_id: str
+    job_id: str
+    perspective: Literal["seeker", "recruiter"] = "seeker"
+    job_title: str
+    company: Optional[str] = None
+    overall_score: float = Field(ge=0.0, le=1.0)
+    confidence: Literal["high", "medium", "low"] = "medium"
+    score_breakdown: List[MatchInsightSignal] = Field(default_factory=list)
+    strongest_evidence: List[str] = Field(default_factory=list)
+    top_gaps: List[str] = Field(default_factory=list)
+    recruiter_takeaways: List[str] = Field(default_factory=list)
+    next_steps: List[MatchActionItem] = Field(default_factory=list)
+    caveats: List[str] = Field(default_factory=list)
+
+
 class BatchMatchResponse(BaseModel):
     user_id: str
     results: List[MatchResult]

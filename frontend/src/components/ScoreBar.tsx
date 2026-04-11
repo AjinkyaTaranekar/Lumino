@@ -15,15 +15,24 @@ function scoreColor(score: number): ScoreColorResult {
   return { bar: '#ef4444', text: 'text-red-500' }
 }
 
+function scoreDescriptor(score: number): string {
+  if (score >= 0.75) return 'Strong'
+  if (score >= 0.5) return 'Moderate'
+  if (score >= 0.3) return 'Emerging'
+  return 'Weak'
+}
+
 export default function ScoreBar({ label, score, large = false }: ScoreBarProps) {
   const pct = Math.round(score * 100)
   const { bar, text } = scoreColor(score)
+  const descriptor = scoreDescriptor(score)
 
   return (
     <div className="w-full">
       <div className="flex justify-between items-center mb-1.5">
-        <span className={`${large ? 'text-sm font-medium' : 'text-xs'} text-slate-400`}>
+        <span className={`${large ? 'text-sm font-medium' : 'text-xs'} text-slate-400 flex items-center gap-1`}>
           {label}
+          <span className="text-[10px] text-slate-300">({descriptor})</span>
         </span>
         <span className={`font-bold tabular-nums ${large ? 'text-sm' : 'text-xs'} ${text}`}>
           {pct}%

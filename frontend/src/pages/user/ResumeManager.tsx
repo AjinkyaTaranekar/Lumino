@@ -111,11 +111,10 @@ export default function ResumeManager() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-3xl font-extrabold text-indigo-950 tracking-tight">
-              Upload Your Resume
+              Build Your Career Graph
             </h1>
             <p className="text-slate-500 mt-2 text-sm leading-relaxed">
-              We'll extract your skills, domains, and experience to build your personal knowledge
-              graph - turning your resume into a precise digital twin.
+              We extract skills, evidence, and career context from your resume to generate explainable matches and practical next steps.
             </p>
           </div>
           <Link
@@ -143,8 +142,8 @@ export default function ResumeManager() {
               id={`tab-${t}`}
               onClick={() => setTab(t)}
               className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all duration-200 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-blue-500 ${tab === t
-                  ? 'bg-white text-indigo-950 shadow-prism'
-                  : 'text-slate-500 hover:text-indigo-950'
+                ? 'bg-white text-indigo-950 shadow-prism'
+                : 'text-slate-500 hover:text-indigo-950'
                 }`}
             >
               {t === 'pdf' ? 'Upload PDF' : 'Paste Text'}
@@ -173,10 +172,10 @@ export default function ResumeManager() {
                   : 'Drop your PDF here or press Enter to browse files'
               }
               className={`rounded-2xl p-12 text-center cursor-pointer transition-all duration-200 border-2 border-dashed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 outline-none ${dragging
-                  ? 'border-blue-400 bg-blue-50 scale-[1.01]'
-                  : file
-                    ? 'border-emerald-400 bg-emerald-50'
-                    : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
+                ? 'border-blue-400 bg-blue-50 scale-[1.01]'
+                : file
+                  ? 'border-emerald-400 bg-emerald-50'
+                  : 'border-slate-300 bg-white hover:border-blue-400 hover:bg-blue-50/40'
                 }`}
             >
               <input
@@ -204,9 +203,9 @@ export default function ResumeManager() {
                     <UploadIcon size={28} className="text-slate-400" aria-hidden="true" />
                   </div>
                   <p className="font-bold text-slate-700">
-                    Drop your PDF here or click to browse
+                    Drop your resume PDF here or click to browse
                   </p>
-                  <p className="text-sm text-slate-400 mt-1">Supports PDF resume files up to 10 MB</p>
+                  <p className="text-sm text-slate-400 mt-1">Supports text-based PDF files up to 10 MB</p>
                 </>
               )}
             </div>
@@ -223,7 +222,7 @@ export default function ResumeManager() {
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your resume or LinkedIn profile text here…"
+              placeholder="Paste your resume, portfolio summary, or LinkedIn profile text here..."
               rows={14}
               aria-label="Resume or profile text input"
               className="input resize-none leading-relaxed focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500"
@@ -249,10 +248,10 @@ export default function ResumeManager() {
           {loading ? (
             <>
               <span className="spinner-sm" aria-hidden="true" />
-              Analysing…
+              Building your profile graph...
             </>
           ) : (
-            'Analyse Profile'
+            'Extract Profile Intelligence'
           )}
         </button>
 
@@ -267,7 +266,7 @@ export default function ResumeManager() {
               </div>
               <div>
                 <p className="font-bold text-indigo-950 text-sm">Profile successfully processed</p>
-                <p className="text-xs text-slate-500">Your knowledge graph has been updated</p>
+                <p className="text-xs text-slate-500">Your graph and explainability signals are now updated</p>
               </div>
             </div>
 
@@ -303,7 +302,7 @@ export default function ResumeManager() {
                       {result.interpretation_flags} AI interpretation{result.interpretation_flags !== 1 ? 's' : ''} need review
                     </p>
                     <p className="text-xs text-amber-700 mt-1 leading-relaxed">
-                      The AI made inferences from your resume. Review them to make your graph an exact digital twin.
+                      The AI inferred a few details from your resume. Review them to maximize ranking confidence and profile accuracy.
                     </p>
                   </div>
                 </div>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import { LogOut, Menu, X } from 'lucide-react';
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Menu, X } from 'lucide-react';
 import LuminoIcon from './LuminoIcon';
 
 interface NavItem {
@@ -16,17 +16,16 @@ export function TopNavBar() {
 
   const navItems: NavItem[] = user?.role === 'USER'
     ? [
-        { label: 'Dashboard',        to: '/dashboard'  },
-        { label: 'Trajectory Map',   to: '/trajectory' },
-        { label: 'My Applications',  to: '/applications' },
-        { label: 'Practice',         to: '/practice'   },
-      ]
+      { label: 'Dashboard', to: '/dashboard' },
+      { label: 'Application Pipeline', to: '/applications' },
+      { label: 'Interview Coach', to: '/practice' },
+    ]
     : user?.role === 'RECRUITER'
-    ? [
-        { label: 'Dashboard',   to: '/dashboard'  },
-        { label: 'Jobs',        to: '/jobs'        },
+      ? [
+        { label: 'Dashboard', to: '/dashboard' },
+        { label: 'Jobs', to: '/jobs' },
       ]
-    : [
+      : [
         { label: 'Admin Console', to: '/admin' },
       ];
 
@@ -60,10 +59,9 @@ export function TopNavBar() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) =>
-                  `text-sm font-semibold tracking-tight transition-colors duration-200 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 rounded ${
-                    isActive
-                      ? 'text-blue-700 border-b-2 border-blue-700'
-                      : 'text-slate-500 hover:text-indigo-950'
+                  `text-sm font-semibold tracking-tight transition-colors duration-200 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500 rounded ${isActive
+                    ? 'text-blue-700 border-b-2 border-blue-700'
+                    : 'text-slate-500 hover:text-indigo-950'
                   }`
                 }
               >
@@ -142,10 +140,9 @@ export function TopNavBar() {
               to={item.to}
               onClick={() => setMobileOpen(false)}
               className={({ isActive }) =>
-                `block px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700'
-                    : 'text-slate-600 hover:bg-slate-50'
+                `block px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${isActive
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-slate-600 hover:bg-slate-50'
                 }`
               }
             >

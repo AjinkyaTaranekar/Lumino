@@ -1,8 +1,8 @@
 import { AlertCircle, LogIn } from 'lucide-react';
-import LuminoIcon from '../components/LuminoIcon';
 import { motion } from 'motion/react';
 import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
+import LuminoIcon from '../components/LuminoIcon';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -57,7 +57,7 @@ export default function Login() {
           </div>
 
           <p className="text-center text-slate-500 text-sm mb-8">
-            Illuminating your next Career!
+            Find roles you can actually win, with transparent AI matching.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-5" noValidate>
@@ -71,7 +71,7 @@ export default function Login() {
                 value={userId}
                 onChange={e => { setUserId(e.target.value); setError(''); }}
                 className="w-full h-12 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                placeholder="e.g. Owais"
+                placeholder="Your user ID"
                 autoComplete="username"
                 required
                 aria-required="true"
@@ -121,7 +121,7 @@ export default function Login() {
           </form>
 
           <p className="text-center text-xs text-slate-400 mt-6">
-            Made by Bosch Initiatives
+            Built for professionals, recruiters, and career growth teams
           </p>
         </motion.div>
       </div>

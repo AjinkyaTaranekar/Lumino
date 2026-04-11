@@ -11,11 +11,12 @@ import {
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import GraphViewer from '../../components/GraphViewer'
+import MatchInsightsPanel from '../../components/MatchInsightsPanel'
 import ScoreBar from '../../components/ScoreBar'
 import SkillBadge from '../../components/SkillBadge'
 import { useAuth } from '../../context/AuthContext'
 import { api } from '../../lib/api'
-import type { MatchExplanation, MatchResult } from '../../lib/types'
+import type { MatchExplanation, MatchInsightsResponse, MatchResult } from '../../lib/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,9 @@ export default function MatchExplorer() {
   const [explanation, setExplanation] = useState<string | MatchExplanation | null>(null)
   const [explaining, setExplaining] = useState(false)
   const [explainErr, setExplainErr] = useState<string | null>(null)
+  const [insights, setInsights] = useState<MatchInsightsResponse | null>(null)
+  const [insightsLoading, setInsightsLoading] = useState(false)
+  const [insightsErr, setInsightsErr] = useState<string | null>(null)
   const [applied, setApplied] = useState(false)
   const [applying, setApplying] = useState(false)
 
@@ -228,13 +232,20 @@ export default function MatchExplorer() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      setInsightsLoading(true)
+      setInsightsErr(null)
       try {
-        const [d, p] = await Promise.all([
+        const [d, p, i] = await Promise.all([
           api.getMatchDetail(userId, jobId!),
           api.getMatchPaths(userId, jobId!, 20),
+          api.getMatchInsights(userId, jobId!, isProxy ? 'recruiter' : 'seeker').catch((e: unknown) => {
+            setInsightsErr(e instanceof Error ? e.message : String(e))
+            return null
+          }),
         ])
         setDetail(d as MatchDetail)
         setPaths((p as { paths?: GraphPath[] }).paths || [])
+        setInsights(i)
         setExplaining(true)
         try {
           const exp = await api.explainMatch(userId, jobId!, isProxy ? 'recruiter' : 'seeker')
@@ -248,6 +259,7 @@ export default function MatchExplorer() {
         setError(err instanceof Error ? err.message : String(err))
       } finally {
         setLoading(false)
+        setInsightsLoading(false)
       }
     }
     load()
@@ -289,9 +301,8 @@ export default function MatchExplorer() {
             onClick={handleApply}
             disabled={applying || applied}
             aria-label={applied ? 'Application submitted' : 'Apply to this job'}
-            className={`btn-sm flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${
-              applied ? 'btn-ghost text-emerald-600' : 'btn-primary'
-            }`}
+            className={`btn-sm flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${applied ? 'btn-ghost text-emerald-600' : 'btn-primary'
+              }`}
           >
             {applied ? (
               <><CheckCircle size={13} /> Applied!</>
@@ -343,21 +354,21 @@ export default function MatchExplorer() {
               {(detail.culture_bonus > 0 || detail.preference_bonus > 0 ||
                 (detail.education_fit_score != null && detail.education_fit_score > 0) ||
                 (detail.preferred_qual_bonus != null && detail.preferred_qual_bonus > 0)) && (
-                <div className="flex gap-2 flex-wrap mb-5">
-                  {detail.culture_bonus > 0 && (
-                    <span className="badge-green">Culture +{Math.round(detail.culture_bonus * 100)}%</span>
-                  )}
-                  {detail.preference_bonus > 0 && (
-                    <span className="badge-blue">Prefs +{Math.round(detail.preference_bonus * 100)}%</span>
-                  )}
-                  {detail.education_fit_score != null && detail.education_fit_score > 0 && (
-                    <span className="badge badge-green">Edu fit {Math.round(detail.education_fit_score * 100)}%</span>
-                  )}
-                  {detail.preferred_qual_bonus != null && detail.preferred_qual_bonus > 0 && (
-                    <span className="badge badge-gray">+{Math.round(detail.preferred_qual_bonus * 100)}% quals</span>
-                  )}
-                </div>
-              )}
+                  <div className="flex gap-2 flex-wrap mb-5">
+                    {detail.culture_bonus > 0 && (
+                      <span className="badge-green">Culture +{Math.round(detail.culture_bonus * 100)}%</span>
+                    )}
+                    {detail.preference_bonus > 0 && (
+                      <span className="badge-blue">Prefs +{Math.round(detail.preference_bonus * 100)}%</span>
+                    )}
+                    {detail.education_fit_score != null && detail.education_fit_score > 0 && (
+                      <span className="badge badge-green">Edu fit {Math.round(detail.education_fit_score * 100)}%</span>
+                    )}
+                    {detail.preferred_qual_bonus != null && detail.preferred_qual_bonus > 0 && (
+                      <span className="badge badge-gray">+{Math.round(detail.preferred_qual_bonus * 100)}% quals</span>
+                    )}
+                  </div>
+                )}
 
               {/* Education fit detail */}
               {detail.met_education_reqs && detail.met_education_reqs.length > 0 && (
@@ -447,10 +458,15 @@ export default function MatchExplorer() {
               )}
 
               {/* AI Analysis card */}
+              <div className="mb-5">
+                <MatchInsightsPanel insights={insights} loading={insightsLoading} error={insightsErr} />
+              </div>
+
+              {/* AI Analysis card */}
               <div className="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold text-blue-600 flex items-center gap-1.5">
-                    <Sparkles size={12} /> AI Analysis
+                    <Sparkles size={12} /> Narrative Analysis
                   </p>
                   {!explanation && !explaining && (
                     <button
@@ -464,7 +480,7 @@ export default function MatchExplorer() {
                 </div>
                 {explaining && (
                   <div className="flex items-center gap-2 text-xs text-slate-400" role="status" aria-live="polite">
-                    <div className="spinner-sm" /> Analysing evidence…
+                    <div className="spinner-sm" /> Building hiring narrative...
                   </div>
                 )}
                 {explanation && <ExplanationPanel explanation={explanation} />}

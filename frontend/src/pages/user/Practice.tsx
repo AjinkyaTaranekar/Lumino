@@ -3,9 +3,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import JobPickerModal from '../../components/practice/JobPickerModal';
+import PhaseTimeline from '../../components/practice/PhaseTimeline';
 import PracticeChat from '../../components/practice/PracticeChat';
 import PracticeScorecardOverlay from '../../components/practice/PracticeScorecard';
-import PhaseTimeline from '../../components/practice/PhaseTimeline';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../lib/api';
 import type { PracticeMessage, PracticeScorecard } from '../../lib/types';
@@ -243,7 +243,7 @@ export default function Practice() {
 
   return (
     <>
-      <title>Practice Interview{jobInfo ? ` — ${jobInfo.jobTitle}` : ''} - Lumino</title>
+      <title>Interview Coach{jobInfo ? ` — ${jobInfo.jobTitle}` : ''} - Lumino</title>
 
       {/* Job picker modal (no jobId in URL) */}
       {showJobPicker && (
@@ -291,7 +291,7 @@ export default function Practice() {
                 <p className="text-xs font-bold text-indigo-950">
                   {jobInfo?.jobTitle ?? 'Practice Session'}
                 </p>
-                <p className="text-[10px] text-slate-400">{jobInfo?.company ?? 'Loading…'}</p>
+                <p className="text-[10px] text-slate-400">{jobInfo?.company ?? 'Loading...'} • Guided interview simulation</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ export default function Practice() {
                 className="btn-secondary btn-sm"
                 aria-label="End session and return to applications"
               >
-                End Session
+                Return to Pipeline
               </button>
             </div>
           </div>
@@ -357,16 +357,16 @@ export default function Practice() {
 
           {/* Graph title + legend */}
           <div className="absolute top-6 left-6 z-10">
-            <h2 className="text-sm font-bold text-indigo-950">Your Knowledge Graph</h2>
+            <h2 className="text-sm font-bold text-indigo-950">Interview Readiness Graph</h2>
             <p className="text-xs text-slate-400 mt-0.5">
               {graphData
-                ? 'Skills matched against this role'
-                : 'Loading skill graph…'}
+                ? 'What you can prove now vs. where to strengthen before interviews'
+                : 'Loading readiness graph...'}
             </p>
             {graphData && (
               <div className="flex items-center gap-3 mt-2">
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-blue-600">
-                  <CheckCircle2 size={10} aria-hidden="true" /> You have
+                  <CheckCircle2 size={10} aria-hidden="true" /> Proven
                 </span>
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-500">
                   <span className="w-2.5 h-2.5 rounded-full border-2 border-amber-400 inline-block" aria-hidden="true" /> Gap

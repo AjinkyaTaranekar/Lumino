@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { Clock, RotateCcw, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { api } from '../lib/api'
-import { RotateCcw, X, Clock } from 'lucide-react'
 import type { GraphVersion } from '../lib/types'
 
 interface VersionHistoryProps {
@@ -11,10 +11,10 @@ interface VersionHistoryProps {
 }
 
 export default function VersionHistory({ entityType, entityId, onRollback, onClose }: VersionHistoryProps) {
-  const [versions,  setVersions]  = useState<GraphVersion[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [error,     setError]     = useState<string | null>(null)
-  const [rolling,   setRolling]   = useState<string | null>(null)
+  const [versions, setVersions] = useState<GraphVersion[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [rolling, setRolling] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -56,9 +56,9 @@ export default function VersionHistory({ entityType, entityId, onRollback, onClo
 
       <div className="max-h-64 overflow-y-auto divide-y divide-slate-100" role="list" aria-label="Graph versions">
         {loading && <p className="px-3.5 py-3 text-xs text-slate-400">Loading…</p>}
-        {error   && <p className="px-3.5 py-3 text-xs text-red-500" role="alert">{error}</p>}
+        {error && <p className="px-3.5 py-3 text-xs text-red-500" role="alert">{error}</p>}
         {!loading && !error && versions.length === 0 && (
-          <p className="px-3.5 py-3 text-xs text-slate-400">No checkpoints yet.</p>
+          <p className="px-3.5 py-3 text-xs text-slate-400">No saved versions yet.</p>
         )}
         {versions.map(v => (
           <div

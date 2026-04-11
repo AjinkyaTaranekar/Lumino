@@ -163,6 +163,20 @@ body {
     @apply bg-white p-6 rounded-2xl border border-slate-100 shadow-prism;
   }
 
+  /* ── Explainability / guidance blocks ── */
+  .insight-callout {
+    @apply rounded-2xl border border-primary-100 bg-primary-50 p-4;
+  }
+  .empty-state {
+    @apply card-lumino p-10 text-center border-dashed;
+  }
+  .empty-state-title {
+    @apply text-slate-700 font-semibold;
+  }
+  .empty-state-copy {
+    @apply text-sm text-slate-400 mt-1;
+  }
+
   /* ── Screen reader only ── */
   .sr-only {
     position: absolute;

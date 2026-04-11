@@ -104,7 +104,7 @@ export default function JobProfile() {
         {loading && !profile && (
           <div role="status" className="flex items-center justify-center py-20 gap-3 text-slate-400">
             <span className="spinner-sm" aria-hidden="true" />
-            <span className="text-sm">Loading job profile…</span>
+            <span className="text-sm">Loading role intelligence profile...</span>
           </div>
         )}
 

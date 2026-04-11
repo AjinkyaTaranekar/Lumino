@@ -10,27 +10,27 @@
  * and whether it was manually overridden.
  */
 
+import { Sliders, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { X, Sliders } from 'lucide-react'
-import type { InterestTag, InterestProfileResponse } from '../lib/types'
 import { api } from '../lib/api'
+import type { InterestProfileResponse, InterestTag } from '../lib/types'
 
 // ─── Tag category display config ─────────────────────────────────────────────
 
 const CATEGORY_LABELS: Record<string, string> = {
-  work_style:   'Work Style',
+  work_style: 'Work Style',
   compensation: 'Compensation',
-  culture:      'Culture',
-  tech:         'Tech',
-  impact:       'Impact',
+  culture: 'Culture',
+  tech: 'Tech',
+  impact: 'Impact',
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  work_style:   '#6366f1',
+  work_style: '#6366f1',
   compensation: '#10b981',
-  culture:      '#f59e0b',
-  tech:         '#3b82f6',
-  impact:       '#ec4899',
+  culture: '#f59e0b',
+  tech: '#3b82f6',
+  impact: '#ec4899',
 }
 
 // ─── SVG Radar Chart ─────────────────────────────────────────────────────────
@@ -260,9 +260,9 @@ export default function InterestProfilePanel({ userId }: InterestProfilePanelPro
   if (!profile || profile.tags.length === 0) {
     return (
       <div className="text-center py-6">
-        <p className="text-sm text-slate-400">No preference data yet.</p>
+        <p className="text-sm text-slate-400">No preference signals yet.</p>
         <p className="text-xs text-slate-300 mt-1">
-          Like, bookmark, or explore jobs to build your interest profile.
+          Like, bookmark, or explore roles to build your preference intelligence.
         </p>
       </div>
     )
@@ -312,9 +312,8 @@ export default function InterestProfilePanel({ userId }: InterestProfilePanelPro
               <button
                 key={cat}
                 onClick={() => setActiveCategory(isActive ? null : cat)}
-                className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-colors ${
-                  isActive ? 'bg-indigo-50' : 'hover:bg-slate-50'
-                }`}
+                className={`w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-colors ${isActive ? 'bg-indigo-50' : 'hover:bg-slate-50'
+                  }`}
               >
                 <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                 <span className="text-xs text-slate-600 flex-1">{CATEGORY_LABELS[cat]}</span>

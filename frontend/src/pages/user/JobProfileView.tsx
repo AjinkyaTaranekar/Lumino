@@ -1,4 +1,4 @@
-import { ArrowLeft, Briefcase, Building2, CheckCircle, Clock, RefreshCw, XCircle } from 'lucide-react';
+import { ArrowLeft, Briefcase, Building2, Clock, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import RichJobProfile from '../../components/RichJobProfile';
@@ -115,7 +115,7 @@ export default function JobProfileView() {
         {loading && !profile && (
           <div role="status" className="flex items-center justify-center py-20 gap-3 text-slate-400">
             <span className="spinner-sm" aria-hidden="true" />
-            <span className="text-sm">Loading job details…</span>
+            <span className="text-sm">Loading role intelligence...</span>
           </div>
         )}
 

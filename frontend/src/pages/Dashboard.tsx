@@ -3,20 +3,21 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import JobTagBadge from '../components/JobTagBadge';
+import MatchInsightsPanel from '../components/MatchInsightsPanel';
 import ScoreBar from '../components/ScoreBar';
 import SkillBadge from '../components/SkillBadge';
 import { useAuth } from '../context/AuthContext';
 import { trackEvent } from '../lib/analytics';
 import { api } from '../lib/api';
-import type { JobInteraction, MatchResult } from '../lib/types';
+import type { JobInteraction, MatchInsightsResponse, MatchResult } from '../lib/types';
 
 // ─── Tier config ──────────────────────────────────────────────────────────────
 
 const TIERS = [
   {
     id: 'strong',
-    label: 'Absolute Match',
-    sub: 'You\'re built for these roles',
+    label: 'High-Confidence Matches',
+    sub: 'Strong fit signals. Prioritize these first.',
     icon: Zap,
     min: 0.72,
     gradient: 'from-indigo-950 to-blue-900',
@@ -25,8 +26,8 @@ const TIERS = [
   },
   {
     id: 'mid',
-    label: 'Solid Contenders',
-    sub: 'Worth a closer look',
+    label: 'Viable Opportunities',
+    sub: 'Good fit with manageable tradeoffs.',
     icon: Target,
     min: 0.44,
     gradient: 'from-amber-600 to-orange-500',
@@ -35,8 +36,8 @@ const TIERS = [
   },
   {
     id: 'low',
-    label: 'Long Shots',
-    sub: 'Stretch goals — gap analysis inside',
+    label: 'Stretch Opportunities',
+    sub: 'Ambitious targets. Use insights to close key gaps.',
     icon: TrendingDown,
     min: 0,
     gradient: 'from-slate-600 to-slate-500',
@@ -330,19 +331,38 @@ function UserDashboard() {
   const { user, session } = useAuth();
   const [matches, setMatches] = useState<MatchResult[] | null>(null);
   const [interactionMap, setInteractionMap] = useState<Map<string, JobInteraction>>(new Map());
+  const [topInsights, setTopInsights] = useState<MatchInsightsResponse | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session?.userId) return;
+    const currentUserId = session.userId;
     setLoading(true);
     Promise.all([
-      api.getMatches(session.userId),
-      api.getJobInteractions(session.userId).catch(() => ({ interactions: [] })),
+      api.getMatches(currentUserId),
+      api.getJobInteractions(currentUserId).catch(() => ({ interactions: [] })),
     ])
       .then(([matchData, interactionData]) => {
         setMatches(matchData.results);
         setInteractionMap(new Map(interactionData.interactions.map(i => [i.job_id, i])));
+
+        if (matchData.results.length > 0) {
+          setInsightsLoading(true);
+          setInsightsError(null);
+          api.getMatchInsights(currentUserId, matchData.results[0].job_id, 'seeker')
+            .then(setTopInsights)
+            .catch((err: unknown) => {
+              setInsightsError(err instanceof Error ? err.message : String(err));
+              setTopInsights(null);
+            })
+            .finally(() => setInsightsLoading(false));
+        } else {
+          setTopInsights(null);
+          setInsightsError(null);
+        }
       })
       .catch(err => setError((err as Error).message))
       .finally(() => setLoading(false));
@@ -373,10 +393,10 @@ function UserDashboard() {
           </h1>
           <p className="text-slate-500 mt-1 text-sm">
             {loading
-              ? 'Computing your personalised match rankings…'
+              ? 'Computing your personalized ranking intelligence...'
               : matches
-                ? `${totalCount} jobs ranked · ${strongCount} absolute match${strongCount !== 1 ? 'es' : ''}`
-                : 'Your job recommendations will appear here.'}
+                ? `${totalCount} roles ranked with transparent score breakdowns. ${strongCount} are ready-to-apply fits.`
+                : 'Your ranked opportunities and improvement roadmap will appear here.'}
           </p>
         </header>
 
@@ -392,7 +412,7 @@ function UserDashboard() {
               bg: 'bg-emerald-50',
             },
             {
-              label: 'Absolute Matches',
+              label: 'High-Confidence',
               value: loading ? '…' : String(strongCount),
               sub: '≥72% fit',
               icon: Zap,
@@ -408,7 +428,7 @@ function UserDashboard() {
               bg: 'bg-indigo-50',
             },
             {
-              label: 'Digital Twin',
+              label: 'Career Graph',
               value: 'Active',
               sub: 'knowledge graph',
               icon: Network,
@@ -441,6 +461,11 @@ function UserDashboard() {
           </div>
         )}
 
+        {/* ── Top insight panel ── */}
+        {(topInsights || insightsLoading || insightsError) && (
+          <MatchInsightsPanel insights={topInsights} loading={insightsLoading} error={insightsError} />
+        )}
+
         {/* ── Loading skeletons ── */}
         {loading && (
           <div className="space-y-8">
@@ -471,8 +496,8 @@ function UserDashboard() {
               {totalCount === 0 && (
                 <div className="card-lumino p-16 text-center">
                   <Briefcase size={40} className="mx-auto mb-3 text-slate-200" aria-hidden="true" />
-                  <p className="text-slate-500 font-medium">No matches found yet</p>
-                  <p className="text-sm text-slate-400 mt-1">Upload your resume to build your knowledge graph first.</p>
+                  <p className="text-slate-500 font-medium">No ranked opportunities yet</p>
+                  <p className="text-sm text-slate-400 mt-1">Upload or refresh your profile so Lumino can generate explainable job matches.</p>
                   <Link to="/resume" className="btn-primary btn-sm inline-flex mt-4">Upload Resume</Link>
                 </div>
               )}
@@ -480,31 +505,31 @@ function UserDashboard() {
           )}
         </AnimatePresence>
 
-        {/* ── Digital Twin CTA ── */}
+        {/* ── Career Graph CTA ── */}
         <section
           className="card-lumino p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5"
-          aria-label="Digital Twin"
+          aria-label="Career Graph"
         >
           <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center flex-shrink-0">
             <Network size={24} className="text-indigo-500" aria-hidden="true" />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-bold text-indigo-950">Knowledge Graph Profile</h3>
+            <h3 className="text-base font-bold text-indigo-950">Career Graph Profile</h3>
             <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">
               Your skills, experience, and goals modelled as a semantic graph. Explore and refine to improve match accuracy.
             </p>
           </div>
           <Link to="/user/model" className="btn-primary flex-shrink-0">
-            View Digital Twin →
+            Open Career Graph →
           </Link>
         </section>
 
         {/* ── Practice CTA ── */}
         <div className="bg-indigo-950 rounded-2xl p-8 text-white relative overflow-hidden">
           <div className="relative z-10">
-            <h2 className="text-2xl font-bold mb-2">Ready for your next interview?</h2>
+            <h2 className="text-2xl font-bold mb-2">Turn top matches into real offers</h2>
             <p className="text-indigo-300 mb-6 text-sm max-w-xs">
-              The AI interviewer is ready. Practice against the exact jobs you matched.
+              Practice role-specific interview rounds with feedback linked to your current match gaps.
             </p>
             <Link
               to="/practice"
@@ -538,8 +563,8 @@ function RecruiterDashboard() {
   return (
     <div className="p-6 sm:p-8 max-w-6xl">
       <header className="mb-10">
-        <h1 className="text-4xl font-extrabold text-indigo-950 tracking-tight">Recruiter Portal</h1>
-        <p className="mt-3 text-lg text-slate-500">Welcome back, {user?.name}.</p>
+        <h1 className="text-4xl font-extrabold text-indigo-950 tracking-tight">Hiring Intelligence Workspace</h1>
+        <p className="mt-3 text-lg text-slate-500">Welcome back, {user?.name}. Prioritize candidates with transparent fit signals.</p>
       </header>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
@@ -558,12 +583,12 @@ function RecruiterDashboard() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-indigo-950">Manage Job Openings</h2>
-            <p className="text-sm text-slate-400 mt-0.5">View your postings, browse candidates, and manage your pipeline.</p>
+            <p className="text-sm text-slate-400 mt-0.5">Post roles, inspect explainable rankings, and move faster on the right talent.</p>
           </div>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <button onClick={() => navigate('/jobs/create')} className="btn-secondary flex items-center gap-1.5">
-            <Plus size={14} aria-hidden="true" /> Post a Job
+            <Plus size={14} aria-hidden="true" /> Publish Role
           </button>
           <button onClick={() => navigate('/jobs')} className="btn-primary flex items-center gap-1.5">
             <Briefcase size={14} aria-hidden="true" /> My Jobs
@@ -581,7 +606,7 @@ function AdminDashboardWidget() {
     <div className="p-6 sm:p-8 max-w-6xl">
       <header className="mb-10">
         <h1 className="text-4xl font-extrabold text-indigo-950 tracking-tight">System Administration</h1>
-        <p className="mt-3 text-lg text-slate-500">Global system health and user management.</p>
+        <p className="mt-3 text-lg text-slate-500">Platform observability, trust, and lifecycle controls.</p>
       </header>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[

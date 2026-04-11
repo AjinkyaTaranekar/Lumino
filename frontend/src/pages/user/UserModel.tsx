@@ -34,7 +34,7 @@ export default function UserModel() {
 
   return (
     <>
-      <title>Digital Twin - Lumino</title>
+      <title>Career Graph - Lumino</title>
 
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
 
@@ -54,7 +54,7 @@ export default function UserModel() {
           {/* Center: title + stats */}
           <div className="flex items-center gap-3 min-w-0">
             <h1 className="text-sm font-semibold text-indigo-950 truncate">
-              Digital Twin -{' '}
+              Career Knowledge Graph -{' '}
               <span className="text-blue-500">{userId}</span>
             </h1>
             {stats && (
@@ -91,7 +91,7 @@ export default function UserModel() {
               aria-label="Edit knowledge graph"
             >
               <Edit3 className="w-3.5 h-3.5" />
-              Edit Graph
+              Improve Graph
             </button>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function UserModel() {
             generateFn={() => api.generateUserViz(userId!)}
             iframeSrc={iframeSrc}
             height="100%"
-            title="Digital Twin"
+            title="Career Knowledge Graph"
           />
         </div>
 

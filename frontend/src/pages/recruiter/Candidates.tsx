@@ -113,8 +113,8 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
             <h3 className="font-semibold text-sm text-indigo-950 truncate">{result.user_id}</h3>
             <span
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${isTopRank
-                  ? 'bg-primary-50 text-primary-600 border-primary-100'
-                  : 'bg-slate-50 text-slate-400 border-slate-200'
+                ? 'bg-primary-50 text-primary-600 border-primary-100'
+                : 'bg-slate-50 text-slate-400 border-slate-200'
                 }`}
             >
               {rankLabel(rank)}
@@ -139,8 +139,8 @@ function CandidateCard({ result, rank, jobId }: CandidateCardProps) {
       <div className="space-y-2 mb-4">
         <ScoreBar label="Overall Match" score={result.total_score} large />
         <div className="grid grid-cols-2 gap-3 mt-2">
-          <ScoreBar label="Skills (65%)" score={result.skill_score} />
-          <ScoreBar label="Domain (35%)" score={result.domain_score} />
+          <ScoreBar label="Core Skills Fit" score={result.skill_score} />
+          <ScoreBar label="Domain Relevance" score={result.domain_score} />
           {result.optional_skill_score != null && result.optional_skill_score > 0 && (
             <ScoreBar label="Optional Skills" score={result.optional_skill_score} />
           )}
@@ -265,8 +265,8 @@ function AppliedCandidateCard({ result, rank, jobId }: AppliedCandidateCardProps
         <div className="space-y-2 mb-4">
           <ScoreBar label="Overall Match" score={result.total_score!} large />
           <div className="grid grid-cols-2 gap-3 mt-2">
-            {result.skill_score != null && <ScoreBar label="Skills (65%)" score={result.skill_score} />}
-            {result.domain_score != null && <ScoreBar label="Domain (35%)" score={result.domain_score} />}
+            {result.skill_score != null && <ScoreBar label="Core Skills Fit" score={result.skill_score} />}
+            {result.domain_score != null && <ScoreBar label="Domain Relevance" score={result.domain_score} />}
           </div>
         </div>
       )}
@@ -382,7 +382,7 @@ export default function Candidates() {
           <div className="flex items-start gap-3">
             <button
               onClick={() => navigate('/recruiter/candidates')}
-              aria-label="Back to Talent Pool"
+              aria-label="Back to Candidate Discovery"
               className="btn-ghost btn-sm flex items-center gap-1.5 mt-0.5 focus-visible:ring-2 focus-visible:ring-primary-300"
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -390,15 +390,15 @@ export default function Candidates() {
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-2xl font-bold text-indigo-950">
-                  Candidates
+                  Candidate Intelligence
                 </h1>
                 <span className="badge badge-blue font-mono text-xs">{jobId}</span>
               </div>
               <p className="text-sm text-slate-400 mt-1">
                 {activeTab === 'all'
                   ? candidates
-                    ? `${candidates.length} candidate${candidates.length !== 1 ? 's' : ''} ranked by match score`
-                    : 'Click to find matching candidates'
+                    ? `${candidates.length} candidate${candidates.length !== 1 ? 's' : ''} ranked with explainable fit signals`
+                    : 'Run ranking to generate candidate fit intelligence'
                   : appliedCandidates
                     ? `${appliedCandidates.length} applicant${appliedCandidates.length !== 1 ? 's' : ''}`
                     : 'Loading applicants…'}
@@ -411,7 +411,7 @@ export default function Candidates() {
               onClick={() => navigate(`/recruiter/model/${jobId}`)}
               className="btn-secondary btn-sm focus-visible:ring-2 focus-visible:ring-primary-300"
             >
-              View Job Model
+              View Job Graph
             </button>
             {activeTab === 'all' && (
               <button
@@ -421,21 +421,27 @@ export default function Candidates() {
                 aria-busy={loading}
               >
                 <Sparkles className="w-4 h-4" aria-hidden="true" />
-                Find Matching Candidates
+                Rank Candidates
               </button>
             )}
           </div>
+        </div>
+
+        <div className="card-lumino p-4 mb-6">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">How Ranking Works</p>
+          <p className="text-sm text-slate-600">
+            Rankings combine graph-based capability fit, domain relevance, and contextual bonuses. Open Match Details for full evidence paths and caveats.
+          </p>
         </div>
 
         {/* ── Tab toggle ── */}
         <div className="flex gap-1 p-1 bg-slate-100 rounded-xl mb-6 w-fit">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === 'all'
-                ? 'bg-white text-indigo-950 shadow-sm'
-                : 'text-slate-500 hover:text-indigo-950'
-            }`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${activeTab === 'all'
+              ? 'bg-white text-indigo-950 shadow-sm'
+              : 'text-slate-500 hover:text-indigo-950'
+              }`}
           >
             All Candidates
           </button>
@@ -444,11 +450,10 @@ export default function Candidates() {
               setActiveTab('applied');
               if (!appliedCandidates) handleFindApplicants();
             }}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${
-              activeTab === 'applied'
-                ? 'bg-white text-indigo-950 shadow-sm'
-                : 'text-slate-500 hover:text-indigo-950'
-            }`}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${activeTab === 'applied'
+              ? 'bg-white text-indigo-950 shadow-sm'
+              : 'text-slate-500 hover:text-indigo-950'
+              }`}
           >
             Applied
             {appliedCandidates != null && (
@@ -477,7 +482,7 @@ export default function Candidates() {
                     </div>
                     <p className="text-slate-600 font-medium mb-1">No candidates found</p>
                     <p className="text-sm text-slate-400">
-                      No candidate profiles in the system yet.
+                      No eligible candidate profiles found for this role yet.
                     </p>
                   </div>
                 ) : (
@@ -494,13 +499,13 @@ export default function Candidates() {
                   <Network className="w-8 h-8 text-primary-500" aria-hidden="true" />
                 </div>
                 <p className="text-indigo-950 font-semibold mb-2">
-                  Ready to match candidates
+                  Ready to rank candidates
                 </p>
                 <p className="text-sm text-slate-500 mb-1">
-                  Click "Find Matching Candidates" to rank all profiles against this job.
+                  Click "Rank Candidates" to evaluate every profile against this role.
                 </p>
                 <p className="text-xs text-slate-400">
-                  Each candidate is scored using skills (65%) and domain (35%) graph analysis.
+                  Scores are explainable and include capability evidence, domain overlap, and bonus signals.
                 </p>
               </div>
             )}
@@ -525,7 +530,7 @@ export default function Candidates() {
                     </div>
                     <p className="text-slate-600 font-medium mb-1">No applicants yet</p>
                     <p className="text-sm text-slate-400">
-                      Candidates who apply to this job will appear here.
+                      Applicants will appear here with fit diagnostics as soon as they apply.
                     </p>
                   </div>
                 ) : (

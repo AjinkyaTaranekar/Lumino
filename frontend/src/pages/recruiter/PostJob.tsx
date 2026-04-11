@@ -171,16 +171,15 @@ export default function PostJob() {
 
   return (
     <>
-      <title>Post a Job - Lumino</title>
+      <title>Publish Role - Lumino</title>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
 
         {/* Page heading */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-indigo-950 mb-1">Post a Job</h1>
+          <h1 className="text-2xl font-bold text-indigo-950 mb-1">Publish a Role</h1>
           <p className="text-sm text-slate-400">
-            Lumino will extract skills, domain requirements, and work-style preferences
-            to build a knowledge graph for your job posting.
+            Lumino extracts role requirements, context, and preference signals to produce explainable candidate rankings.
           </p>
         </div>
 
@@ -236,13 +235,13 @@ export default function PostJob() {
                 onClick={() => navigate(`/recruiter/model/${result.resolvedJobId}`)}
                 className="btn-secondary flex-1 focus-visible:ring-2 focus-visible:ring-primary-300"
               >
-                View Job Model
+                View Role Graph
               </button>
               <button
                 onClick={() => navigate(`/recruiter/candidates/${result.resolvedJobId}`)}
                 className="btn-primary flex-1 focus-visible:ring-2 focus-visible:ring-primary-300"
               >
-                Find Candidates →
+                Rank Candidates →
               </button>
             </div>
 
@@ -282,7 +281,7 @@ export default function PostJob() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-indigo-950">Step 1 of 3 - Job Details</p>
-                      <p className="text-xs text-slate-400">Set a unique identifier and metadata for this role</p>
+                      <p className="text-xs text-slate-400">Define role identity and hiring context</p>
                     </div>
                   </div>
 
@@ -513,8 +512,8 @@ export default function PostJob() {
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-slate-400 font-medium">Content ready</span>
                       <span className={`text-xs font-medium ${(tab === 'pdf' && file) || (tab === 'text' && text.trim())
-                          ? 'text-emerald-600'
-                          : 'text-red-400'
+                        ? 'text-emerald-600'
+                        : 'text-red-400'
                         }`}>
                         {(tab === 'pdf' && file) || (tab === 'text' && text.trim())
                           ? 'Yes'

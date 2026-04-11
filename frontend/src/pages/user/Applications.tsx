@@ -166,10 +166,10 @@ export default function Applications() {
         {/* ── Page Header ── */}
         <div>
           <h1 className="text-3xl font-extrabold text-indigo-950 tracking-tight">
-            My Applications
+            Application Pipeline
           </h1>
           <p className="text-slate-500 mt-1.5 text-sm">
-            Jobs you have applied to, with your match scores and application history.
+            Track submitted roles, fit diagnostics, and what to improve before your next interview loop.
           </p>
         </div>
 
@@ -207,10 +207,10 @@ export default function Applications() {
                 </div>
                 <p className="text-slate-600 font-medium mb-1">No applications yet</p>
                 <p className="text-sm text-slate-400 mb-4">
-                  Browse your job matches and click "Apply Now" on any job to get started.
+                  Start with your top-ranked matches, then apply when the explanation panel shows a strong fit.
                 </p>
                 <Link to="/dashboard" className="btn-primary btn-sm inline-flex">
-                  Browse Matches
+                  Explore Ranked Roles
                 </Link>
               </div>
             ) : (
@@ -236,7 +236,7 @@ export default function Applications() {
             id="next-steps-heading"
             className="text-lg font-extrabold text-indigo-950 tracking-tight mb-4"
           >
-            Actionable Next Steps
+            Growth Actions That Improve Match Quality
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {NEXT_STEPS.map((step) => (

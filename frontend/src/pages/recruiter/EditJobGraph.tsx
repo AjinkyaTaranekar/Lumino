@@ -163,7 +163,7 @@ export default function EditJobGraph() {
           </button>
 
           <h1 className="text-base font-semibold text-indigo-950">
-            Edit Job Graph
+            Optimize Role Graph
             <span className="ml-2 font-mono text-xs text-slate-400 font-normal">
               {jobId}
             </span>
@@ -176,7 +176,7 @@ export default function EditJobGraph() {
               className="btn-success btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-green-300"
             >
               <Save className="w-3.5 h-3.5" aria-hidden="true" />
-              Save Checkpoint
+              Save Safe Point
             </button>
 
             <div className="relative">

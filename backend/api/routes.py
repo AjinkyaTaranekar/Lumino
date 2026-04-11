@@ -55,6 +55,9 @@ from models.schemas import (
     JobApplicantsResponse,
     JobProfileResponse,
     MatchResult,
+    MatchInsightsResponse,
+    MatchInsightSignal,
+    MatchActionItem,
     RecordEventRequest,
     RejectMutationsRequest,
     ReembedResponse,
@@ -88,6 +91,194 @@ def get_neo4j() -> Neo4jClient:
 
 def get_sqlite_db() -> SQLiteClient:
     return get_sqlite()
+
+
+def _score_summary(score: float) -> str:
+    if score >= 0.75:
+        return "Strong evidence in this dimension."
+    if score >= 0.5:
+        return "Solid baseline with room to sharpen."
+    if score >= 0.3:
+        return "Partial signal; requires targeted improvement."
+    return "Weak signal currently limiting match confidence."
+
+
+def _insight_confidence(result: MatchResult, context: dict) -> Literal["high", "medium", "low"]:
+    required_count = len(result.matched_skills) + len(result.missing_skills)
+    coverage = (len(result.matched_skills) / required_count) if required_count > 0 else 1.0
+
+    signal_map = {
+        "strong": 1.0,
+        "moderate": 0.75,
+        "weak": 0.5,
+        "misleading": 0.25,
+    }
+    signal_strength = signal_map.get((result.profile_signal or "").lower(), 0.6)
+    evidence_density = min(len(context.get("matched_skills_rich", [])) / 5.0, 1.0)
+    risk_penalty = min(len(result.behavioral_risk_flags or []), 3) * 0.12
+
+    confidence_score = (0.5 * coverage) + (0.3 * signal_strength) + (0.2 * evidence_density) - risk_penalty
+    if confidence_score >= 0.72:
+        return "high"
+    if confidence_score >= 0.48:
+        return "medium"
+    return "low"
+
+
+def _build_match_insights(
+    user_id: str,
+    job_id: str,
+    perspective: Literal["seeker", "recruiter"],
+    result: MatchResult,
+    rich_context: dict,
+) -> MatchInsightsResponse:
+    dimensions = [
+        ("Core Skills", result.skill_score, 0.55),
+        ("Optional Skills", result.optional_skill_score, 0.10),
+        ("Domain Fit", result.domain_score, 0.25),
+    ]
+    if result.soft_skill_score > 0:
+        dimensions.append(("Soft Skills", result.soft_skill_score, 0.20))
+    if result.culture_fit_score > 0:
+        dimensions.append(("Culture Fit", result.culture_fit_score, 0.15))
+    if result.interest_score > 0:
+        dimensions.append(("Preference Signal", result.interest_score, 0.10))
+
+    total_weight = sum(w for _, _, w in dimensions) or 1.0
+    score_breakdown = [
+        MatchInsightSignal(
+            label=label,
+            score=round(max(0.0, min(score, 1.0)), 4),
+            weight=round(weight / total_weight, 4),
+            summary=_score_summary(score),
+        )
+        for label, score, weight in dimensions
+    ]
+
+    strongest_evidence: list[str] = []
+    for item in rich_context.get("matched_skills_rich", [])[:4]:
+        skill = item.get("skill")
+        strength = (item.get("evidence_strength") or "mentioned_once").replace("_", " ")
+        contexts = [c for c in (item.get("usage_contexts") or []) if c]
+        outcomes = [o for o in (item.get("outcomes") or []) if o]
+        if not skill:
+            continue
+        if contexts:
+            strongest_evidence.append(f"{skill}: {contexts[0]} ({strength})")
+        elif outcomes:
+            strongest_evidence.append(f"{skill}: outcome noted - {outcomes[0]}")
+        else:
+            strongest_evidence.append(f"{skill}: demonstrated with {strength} evidence")
+
+    top_gaps: list[str] = []
+    for gap in rich_context.get("missing_must_have", [])[:3]:
+        min_years = gap.get("min_years")
+        if min_years is not None:
+            top_gaps.append(f"{gap.get('skill')}: role expects about {min_years}+ years of evidence")
+        else:
+            top_gaps.append(f"{gap.get('skill')}: required capability not yet evidenced")
+    if len(top_gaps) < 4:
+        for skill in result.missing_skills:
+            if len(top_gaps) >= 4:
+                break
+            if all(skill not in existing for existing in top_gaps):
+                top_gaps.append(f"{skill}: currently missing from your proven skill graph")
+
+    next_steps: list[MatchActionItem] = []
+    for gap in rich_context.get("missing_must_have", [])[:2]:
+        skill = gap.get("skill") or "critical skill"
+        next_steps.append(
+            MatchActionItem(
+                title=f"Close gap: {skill}",
+                detail=(
+                    f"Build one project outcome and one interview story that clearly demonstrates {skill}, "
+                    "then refresh your profile graph."
+                ),
+                priority="high",
+            )
+        )
+
+    if result.missing_skills:
+        next_steps.append(
+            MatchActionItem(
+                title="Prioritise adjacent upskilling",
+                detail=(
+                    f"Focus on {result.missing_skills[0]} first, then expand to the next missing skill to "
+                    "improve short-term interview readiness."
+                ),
+                priority="medium",
+            )
+        )
+
+    if result.behavioral_risk_flags:
+        next_steps.append(
+            MatchActionItem(
+                title="Address behavioral risk signals",
+                detail="Use concrete STAR examples that show ownership, clarity, and execution quality.",
+                priority="medium",
+            )
+        )
+
+    if not next_steps:
+        next_steps.append(
+            MatchActionItem(
+                title="Maintain momentum",
+                detail="Continue refining outcomes and role-specific examples to preserve a high-quality match position.",
+                priority="low",
+            )
+        )
+
+    recruiter_takeaways: list[str] = []
+    assessment = rich_context.get("assessment") or {}
+    if perspective == "recruiter":
+        recruiter_takeaways.append(
+            f"Overall fit is {round(result.total_score * 100)}% with strongest signal in skills and domain overlap."
+        )
+        if result.user_seniority and result.job_seniority:
+            recruiter_takeaways.append(
+                f"Seniority lens: candidate appears {result.user_seniority}, role expects {result.job_seniority}."
+            )
+        if assessment.get("genuine_strengths"):
+            strengths = ", ".join((assessment.get("genuine_strengths") or [])[:3])
+            recruiter_takeaways.append(f"Verified strengths: {strengths}.")
+    else:
+        recruiter_takeaways.append(
+            f"This role currently aligns at {round(result.total_score * 100)}%; closing 1-2 core gaps can materially improve your rank."
+        )
+        if result.matched_skills:
+            recruiter_takeaways.append(
+                f"Your strongest fit signals are: {', '.join(result.matched_skills[:3])}."
+            )
+        if result.missing_skills:
+            recruiter_takeaways.append(
+                f"Highest-impact improvement area: {result.missing_skills[0]}."
+            )
+
+    caveats: list[str] = []
+    if result.inferred_skills:
+        caveats.append(
+            f"{len(result.inferred_skills)} inferred skills rely on semantic similarity and should be verified in interviews."
+        )
+    if not rich_context.get("job_team_culture"):
+        caveats.append("Team culture data is limited for this role, so culture fit confidence is reduced.")
+    if result.profile_signal in {"weak", "misleading"}:
+        caveats.append("Candidate profile quality signal is below strong; validate ownership and outcomes carefully.")
+
+    return MatchInsightsResponse(
+        user_id=user_id,
+        job_id=job_id,
+        perspective=perspective,
+        job_title=result.job_title,
+        company=result.company,
+        overall_score=round(result.total_score, 4),
+        confidence=_insight_confidence(result, rich_context),
+        score_breakdown=score_breakdown,
+        strongest_evidence=strongest_evidence,
+        top_gaps=top_gaps,
+        recruiter_takeaways=recruiter_takeaways,
+        next_steps=next_steps,
+        caveats=caveats,
+    )
 
 
 # ── Ingestion ──────────────────────────────────────────────────────────────────
@@ -257,6 +448,37 @@ async def get_single_match(
             status_code=404, detail=f"User '{user_id}' or job '{job_id}' not found"
         )
     return result
+
+
+@router.get(
+    "/users/{user_id}/matches/{job_id}/insights",
+    response_model=MatchInsightsResponse,
+    tags=["matching"],
+    summary="Get production-grade explainability insights for one match",
+)
+async def get_match_insights(
+    user_id: str,
+    job_id: str,
+    perspective: Literal["seeker", "recruiter"] = "seeker",
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Return a structured explainability payload for UI decision support.
+
+    Includes weighted score decomposition, strongest evidence, top gaps,
+    actionable next steps, caveats, and confidence level.
+    """
+    analytics = AnalyticsService(sqlite, db)
+    engine = MatchingEngine(db, analytics_service=analytics)
+    result = await engine._score_user_job_pair(user_id, job_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail=f"User '{user_id}' or job '{job_id}' not found"
+        )
+
+    rich_context = await engine.gather_match_context(user_id, job_id)
+    return _build_match_insights(user_id, job_id, perspective, result, rich_context)
 
 
 @router.get(

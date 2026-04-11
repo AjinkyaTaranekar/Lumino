@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { Send, Sparkles } from 'lucide-react'
-import MutationDiffCard from './MutationDiffCard'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import type { EditSessionMessage, GraphMutation } from '../lib/types'
+import MutationDiffCard from './MutationDiffCard'
 
 export interface ChatPanelHandle {
   preSeed: (text: string) => void
@@ -17,8 +17,8 @@ interface ChatPanelProps {
 
 const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
   function ChatPanel({ messages, loading, onSend, onApply, onReject }, ref) {
-    const [input, setInput]   = useState('')
-    const bottomRef           = useRef<HTMLDivElement>(null)
+    const [input, setInput] = useState('')
+    const bottomRef = useRef<HTMLDivElement>(null)
 
     useImperativeHandle(ref, () => ({
       preSeed(text: string) {
@@ -77,11 +77,10 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
             const isUser = msg.role === 'user'
             return (
               <div key={i} className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
-                  isUser
-                    ? 'bg-blue-500 text-white rounded-br-sm'
-                    : 'bg-slate-50 text-indigo-950 border border-slate-100 rounded-bl-sm'
-                }`}>
+                <div className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${isUser
+                  ? 'bg-blue-500 text-white rounded-br-sm'
+                  : 'bg-slate-50 text-indigo-950 border border-slate-100 rounded-bl-sm'
+                  }`}>
                   {msg.content}
                 </div>
 
@@ -122,7 +121,7 @@ const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message…"
+            placeholder="Describe the update you want in your graph..."
             rows={2}
             disabled={loading}
             aria-label="Message input"

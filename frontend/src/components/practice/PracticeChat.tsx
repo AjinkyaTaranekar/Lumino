@@ -171,7 +171,7 @@ export default function PracticeChat({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your answer… (Enter to send, Shift+Enter for new line)"
+            placeholder="Type your answer (Enter to send, Shift+Enter for a new line)"
             rows={3}
             disabled={isLoading}
             aria-label="Your answer"
@@ -196,7 +196,7 @@ export default function PracticeChat({
       {sessionComplete && (
         <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 text-center">
           <p className="text-xs text-slate-400 font-medium">
-            Interview complete — your scorecard is generating on the right
+            Interview complete - your scorecard is available on the right panel
           </p>
         </div>
       )}

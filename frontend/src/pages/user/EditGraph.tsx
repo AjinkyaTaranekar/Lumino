@@ -199,7 +199,7 @@ export default function EditGraph() {
 
   return (
     <>
-      <title>Deep Dive Interview - Lumino</title>
+      <title>Profile Graph Optimizer - Lumino</title>
 
       <div className="flex flex-col h-[calc(100vh-4rem)] bg-slate-50">
 
@@ -210,7 +210,7 @@ export default function EditGraph() {
           <button
             onClick={() => navigate('/user/model')}
             className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-indigo-950 transition-colors flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded"
-            aria-label="Back to digital twin"
+            aria-label="Back to career graph"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Graph
@@ -218,7 +218,7 @@ export default function EditGraph() {
 
           {/* Center */}
           <h1 className="text-sm font-semibold text-indigo-950 truncate min-w-0">
-            Deep Dive Interview -{' '}
+            Profile Graph Optimizer -{' '}
             <span className="text-blue-500">{userId}</span>
           </h1>
 
@@ -231,7 +231,7 @@ export default function EditGraph() {
               aria-label="Save checkpoint"
             >
               <Save className="w-3.5 h-3.5" />
-              {checkpointSaving ? 'Saving…' : 'Save Checkpoint'}
+              {checkpointSaving ? 'Saving...' : 'Save Safe Point'}
             </button>
 
             <div className="relative">
@@ -275,7 +275,7 @@ export default function EditGraph() {
                 generateFn={() => api.generateUserViz(userId!)}
                 iframeSrc={iframeSrc}
                 height="100%"
-                title="Digital Twin"
+                title="Career Knowledge Graph"
               />
             </div>
 

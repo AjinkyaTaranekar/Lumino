@@ -5,13 +5,12 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
-  Clock,
   DollarSign,
   Heart,
   Layers,
   Target,
   Users,
-  Zap,
+  Zap
 } from 'lucide-react';
 import { useState } from 'react';
 import type {
@@ -63,10 +62,10 @@ function Section({
 function Chip({ label, variant = 'default' }: { label: string; variant?: 'default' | 'green' | 'amber' | 'red' | 'indigo' }) {
   const cls = {
     default: 'bg-slate-100 text-slate-600',
-    green:   'bg-emerald-50 text-emerald-700 border border-emerald-100',
-    amber:   'bg-amber-50 text-amber-700 border border-amber-100',
-    red:     'bg-red-50 text-red-600 border border-red-100',
-    indigo:  'bg-indigo-50 text-indigo-600 border border-indigo-100',
+    green: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+    amber: 'bg-amber-50 text-amber-700 border border-amber-100',
+    red: 'bg-red-50 text-red-600 border border-red-100',
+    indigo: 'bg-indigo-50 text-indigo-600 border border-indigo-100',
   }[variant];
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${cls}`}>
@@ -78,8 +77,8 @@ function Chip({ label, variant = 'default' }: { label: string; variant?: 'defaul
 function importanceChip(importance: string) {
   switch (importance) {
     case 'strongly_preferred': return <Chip label="Strongly preferred" variant="amber" />;
-    case 'preferred':          return <Chip label="Preferred" variant="indigo" />;
-    default:                   return <Chip label="Nice to have" variant="default" />;
+    case 'preferred': return <Chip label="Preferred" variant="indigo" />;
+    default: return <Chip label="Nice to have" variant="default" />;
   }
 }
 
@@ -298,11 +297,10 @@ function SoftReqSection({ reqs }: { reqs: JobSoftRequirement[] }) {
         <div
           key={i}
           title={r.description ?? undefined}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border ${
-            r.is_dealbreaker
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border ${r.is_dealbreaker
               ? 'bg-red-50 border-red-100 text-red-700'
               : 'bg-slate-50 border-slate-100 text-slate-700'
-          }`}
+            }`}
         >
           {r.is_dealbreaker && <Zap className="w-3 h-3 flex-shrink-0" aria-hidden="true" />}
           <span className="font-medium">{r.trait}</span>
@@ -316,13 +314,13 @@ function SoftReqSection({ reqs }: { reqs: JobSoftRequirement[] }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function RichJobProfile({ profile }: { profile: RichJobProfile }) {
-  const hasCompany       = !!profile.company_profile?.mission || !!profile.company_profile?.product_description;
-  const hasTeam          = !!profile.hiring_team?.name || !!profile.hiring_team?.description;
-  const hasRole          = (profile.role_expectations?.key_responsibilities?.length ?? 0) > 0;
-  const hasCompensation  = !!profile.compensation;
-  const hasEducation     = (profile.education_requirements?.length ?? 0) > 0;
-  const hasPrefQuals     = (profile.preferred_qualifications?.length ?? 0) > 0;
-  const hasSoftReqs      = (profile.soft_requirements?.length ?? 0) > 0;
+  const hasCompany = !!profile.company_profile?.mission || !!profile.company_profile?.product_description;
+  const hasTeam = !!profile.hiring_team?.name || !!profile.hiring_team?.description;
+  const hasRole = (profile.role_expectations?.key_responsibilities?.length ?? 0) > 0;
+  const hasCompensation = !!profile.compensation;
+  const hasEducation = (profile.education_requirements?.length ?? 0) > 0;
+  const hasPrefQuals = (profile.preferred_qualifications?.length ?? 0) > 0;
+  const hasSoftReqs = (profile.soft_requirements?.length ?? 0) > 0;
 
   return (
     <div className="space-y-3">
@@ -371,8 +369,8 @@ export default function RichJobProfile({ profile }: { profile: RichJobProfile })
       {!hasCompany && !hasTeam && !hasRole && !hasCompensation && !hasEducation && !hasPrefQuals && !hasSoftReqs && (
         <div className="text-center py-12">
           <Layers className="w-10 h-10 text-slate-200 mx-auto mb-3" aria-hidden="true" />
-          <p className="text-sm text-slate-400">No deep profile data extracted yet.</p>
-          <p className="text-xs text-slate-300 mt-1">Re-ingest this job with a richer posting text to populate profile sections.</p>
+          <p className="text-sm text-slate-400">No extended role intelligence is available yet.</p>
+          <p className="text-xs text-slate-300 mt-1">Re-ingest this job with richer role context to populate these sections.</p>
         </div>
       )}
     </div>

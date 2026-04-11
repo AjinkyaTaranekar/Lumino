@@ -19,6 +19,13 @@ const STEPS = [
   'Rendering visualisation',
 ]
 
+const LEGEND_ITEMS = [
+  { label: 'Strong match', color: '#16a34a' },
+  { label: 'Related signal', color: '#0d9488' },
+  { label: 'Inferred link', color: '#d97706' },
+  { label: 'Gap', color: '#dc2626' },
+]
+
 // ─── Animated graph skeleton ──────────────────────────────────────────────────
 function GraphSkeleton() {
   return (
@@ -126,7 +133,7 @@ export default function GraphViewer({
           </span>
         ) : status === 'ready' ? (
           <span className="text-[10px] text-slate-400 hidden sm:block flex-shrink-0">
-            Scroll to zoom · Drag to pan
+            Zoom, pan, and inspect links for evidence
           </span>
         ) : null}
 
@@ -178,8 +185,8 @@ export default function GraphViewer({
                   return (
                     <div key={step} className="flex items-center gap-2">
                       <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${done ? 'bg-blue-500' :
-                          current ? 'ring-2 ring-blue-400 ring-offset-1 bg-blue-50' :
-                            'bg-slate-100'
+                        current ? 'ring-2 ring-blue-400 ring-offset-1 bg-blue-50' :
+                          'bg-slate-100'
                         }`}>
                         {done && (
                           <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 10 10">
@@ -228,6 +235,20 @@ export default function GraphViewer({
             title={title}
             onLoad={() => setStatus('ready')}
           />
+        )}
+
+        {status === 'ready' && (
+          <div className="absolute left-3 bottom-3 z-20 rounded-xl border border-slate-200 bg-white/95 backdrop-blur px-3 py-2 shadow-sm">
+            <p className="text-[10px] font-semibold text-slate-500 mb-1">Legend</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              {LEGEND_ITEMS.map((item) => (
+                <span key={item.label} className="inline-flex items-center gap-1 text-[10px] text-slate-600">
+                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
         )}
       </div>
     </div>

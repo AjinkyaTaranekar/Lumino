@@ -225,8 +225,8 @@ export default function AdminDashboard() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-indigo-950">Admin Console</h1>
-            <p className="text-sm text-slate-500 mt-1">Manage users and jobs in the system</p>
+            <h1 className="text-2xl font-bold text-indigo-950">Platform Control Center</h1>
+            <p className="text-sm text-slate-500 mt-1">Govern user and role data with audit-safe operational controls</p>
           </div>
           <button
             onClick={() => tab === 'users' ? loadUsers() : loadJobs()}
@@ -272,8 +272,8 @@ export default function AdminDashboard() {
               key={t}
               onClick={() => { setTab(t); setSearch(''); }}
               className={`flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${tab === t
-                  ? 'bg-white shadow-sm text-indigo-950'
-                  : 'text-slate-400 hover:text-slate-600'
+                ? 'bg-white shadow-sm text-indigo-950'
+                : 'text-slate-400 hover:text-slate-600'
                 }`}
               aria-pressed={tab === t}
             >
@@ -333,7 +333,7 @@ export default function AdminDashboard() {
               <div className="text-center py-16 card-lumino p-8">
                 <Users size={40} className="mx-auto mb-3 text-slate-200" />
                 <p className="text-sm text-slate-400">
-                  {search ? 'No users match your search.' : 'No users in the system.'}
+                  {search ? 'No users match your search.' : 'No users are currently registered.'}
                 </p>
               </div>
             ) : (
@@ -351,7 +351,7 @@ export default function AdminDashboard() {
               <div className="text-center py-16 card-lumino p-8">
                 <Briefcase size={40} className="mx-auto mb-3 text-slate-200" />
                 <p className="text-sm text-slate-400">
-                  {search ? 'No jobs match your search.' : 'No jobs in the system.'}
+                  {search ? 'No jobs match your search.' : 'No roles are currently indexed.'}
                 </p>
               </div>
             ) : (

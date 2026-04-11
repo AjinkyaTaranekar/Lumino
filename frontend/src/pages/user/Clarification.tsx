@@ -330,7 +330,7 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
             <textarea
               value={answer}
               onChange={e => setAnswer(e.target.value)}
-              placeholder="Be specific - what exactly? How many? What was your role?"
+              placeholder="Be specific: what did you own, what changed, and what measurable result did you deliver?"
               rows={4}
               autoFocus
               className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-indigo-950 placeholder:text-slate-400 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -380,8 +380,8 @@ function QuestionCard({ q, onResolved }: QuestionCardProps) {
               <div className="flex items-center gap-1.5 mt-2">
                 <span className="text-xs text-slate-400">Confidence:</span>
                 <span className={`text-xs font-semibold capitalize ${interpretation.confidence === 'high' ? 'text-emerald-600'
-                    : interpretation.confidence === 'medium' ? 'text-amber-600'
-                      : 'text-red-500'
+                  : interpretation.confidence === 'medium' ? 'text-amber-600'
+                    : 'text-red-500'
                   }`}>
                   {interpretation.confidence}
                 </span>
@@ -549,9 +549,8 @@ function ProfileBooster({ userId }: { userId: string }) {
                       {VALUE_OPTIONS.map(v => (
                         <button key={v} onClick={() => toggleValue(v)}
                           disabled={!values.includes(v) && values.length >= 3}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${
-                            values.includes(v) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
-                          }`}>{v}</button>
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all disabled:opacity-40 ${values.includes(v) ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300'
+                            }`}>{v}</button>
                       ))}
                       <p className="w-full text-xs text-slate-400">Pick up to 3</p>
                     </div>
@@ -562,7 +561,7 @@ function ProfileBooster({ userId }: { userId: string }) {
                       <span className="text-slate-400 text-sm">–</span>
                       <input type="number" value={salMax} onChange={e => setSalMax(e.target.value)} placeholder="Max" className="input flex-1 text-sm" />
                       <select value={currency} onChange={e => setCurrency(e.target.value)} className="input w-20 text-sm">
-                        {['USD','EUR','GBP','INR','CAD','AUD'].map(c => <option key={c}>{c}</option>)}
+                        {['USD', 'EUR', 'GBP', 'INR', 'CAD', 'AUD'].map(c => <option key={c}>{c}</option>)}
                       </select>
                     </div>
                   )}
@@ -580,11 +579,10 @@ function ProfileBooster({ userId }: { userId: string }) {
                   {card.id === 'employment' && (
                     <div className="space-y-3">
                       <div className="flex flex-wrap gap-2">
-                        {['Full-time','Part-time','Contract','Freelance','Internship'].map(t => (
+                        {['Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship'].map(t => (
                           <button key={t} onClick={() => toggleEmpType(t)}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                              empTypes.includes(t) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
-                            }`}>{t}</button>
+                            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${empTypes.includes(t) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:border-blue-300'
+                              }`}>{t}</button>
                         ))}
                       </div>
                       <div className="space-y-1.5">
@@ -680,7 +678,7 @@ export default function Clarification() {
 
   return (
     <>
-      <title>Verify Profile - Lumino</title>
+      <title>Profile Accuracy - Lumino</title>
 
       <div className="max-w-2xl mx-auto px-6 py-10">
 
@@ -691,11 +689,11 @@ export default function Clarification() {
               size={22}
               className={data?.graph_verified ? 'text-emerald-500' : 'text-amber-500'}
             />
-            <h1 className="text-2xl font-bold text-indigo-950">Verify Your Profile</h1>
+            <h1 className="text-2xl font-bold text-indigo-950">Profile Accuracy Center</h1>
           </div>
           <p className="text-sm text-slate-500">
-            The AI made {data?.total_flags ?? 0} interpretations from your resume.
-            Review each one to ensure your knowledge graph is accurate.
+            Lumino found {data?.total_flags ?? 0} interpretation points from your resume.
+            Confirming them improves ranking quality and interview relevance.
           </p>
         </div>
 
@@ -706,7 +704,7 @@ export default function Clarification() {
             <div>
               <p className="font-semibold text-sm text-emerald-700">Graph verified</p>
               <p className="text-xs mt-0.5 text-emerald-600">
-                All critical interpretations confirmed. You are your graph.
+                All critical interpretations are confirmed. Your match scoring is now fully trusted.
               </p>
             </div>
           </div>
@@ -716,7 +714,7 @@ export default function Clarification() {
         {!data?.graph_verified && criticalPending > 0 && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-2xl mb-5 bg-amber-50 border border-amber-100 text-amber-700 text-sm">
             <AlertTriangle size={15} className="flex-shrink-0" />
-            {criticalPending} critical {criticalPending === 1 ? 'question' : 'questions'} affect your match scores.
+            {criticalPending} high-impact {criticalPending === 1 ? 'item still affects' : 'items still affect'} your ranking accuracy.
           </div>
         )}
 
@@ -735,8 +733,8 @@ export default function Clarification() {
             return (
               <div key={impact} className="card-lumino p-3 text-center">
                 <p className={`text-xl font-bold ${impact === 'critical' ? 'text-red-500'
-                    : impact === 'important' ? 'text-amber-600'
-                      : 'text-slate-400'
+                  : impact === 'important' ? 'text-amber-600'
+                    : 'text-slate-400'
                   }`}>
                   {count}
                 </p>
@@ -754,8 +752,8 @@ export default function Clarification() {
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${filter === f
-                    ? 'bg-white shadow-sm text-indigo-950'
-                    : 'text-slate-400 hover:text-slate-600'
+                  ? 'bg-white shadow-sm text-indigo-950'
+                  : 'text-slate-400 hover:text-slate-600'
                   }`}
                 aria-pressed={filter === f}
               >
@@ -772,8 +770,8 @@ export default function Clarification() {
         {visible.length === 0 ? (
           <div className="text-center py-12 card-lumino p-8">
             <CheckCircle2 size={32} className="mx-auto mb-3 text-emerald-400" />
-            <p className="font-medium text-indigo-950">All caught up!</p>
-            <p className="text-sm text-slate-400 mt-1">No pending questions.</p>
+            <p className="font-medium text-indigo-950">Verification complete</p>
+            <p className="text-sm text-slate-400 mt-1">No pending interpretation checks remain.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">

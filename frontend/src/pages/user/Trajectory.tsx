@@ -100,7 +100,7 @@ export default function Trajectory() {
               Career Trajectory Map
             </h1>
             <p className="text-slate-500 mt-1.5 text-sm">
-              Visualise your past milestones, current position, and AI-projected future path.
+              Visualize your past milestones, current position, and recommended next-role progression based on your graph signals.
             </p>
           </div>
           <motion.button
@@ -215,6 +215,9 @@ export default function Trajectory() {
             <p className="text-xs text-slate-300 leading-relaxed">
               Completing System Design coursework could accelerate your path to Tech Lead by{' '}
               <span className="text-blue-400 font-semibold">8–12 months</span>. This is your highest-leverage skill gap.
+            </p>
+            <p className="text-[11px] text-slate-400 mt-2">
+              Projection note: this timeline is directional guidance, not a guaranteed outcome.
             </p>
           </div>
 

@@ -13,6 +13,7 @@ import type {
   InterviewTurn,
   Job,
   JobApplicantsResponse,
+  MatchInsightsResponse,
   PracticeHistoryResponse,
   PracticeScorecard,
   ResolveFlagResponse,
@@ -117,6 +118,8 @@ export const api = {
   getMatches: (userId: string) => get<BatchMatchResponse>(`/users/${userId}/matches`),
   getCandidates: (jobId: string) => get<BatchCandidateResponse>(`/jobs/${jobId}/matches`),
   getMatchDetail: (userId: string, jobId: string) => get<import('./types').MatchResult>(`/users/${userId}/matches/${jobId}`),
+  getMatchInsights: (userId: string, jobId: string, perspective: 'seeker' | 'recruiter' = 'seeker') =>
+    get<MatchInsightsResponse>(`/users/${userId}/matches/${jobId}/insights?perspective=${perspective}`),
   getMatchPaths: (userId: string, jobId: string, limit?: number) =>
     get<{ paths: Array<{ path: string }> }>(`/users/${userId}/matches/${jobId}/paths${limit ? `?limit=${limit}` : ''}`),
   explainMatch: (userId: string, jobId: string, perspective?: string) =>

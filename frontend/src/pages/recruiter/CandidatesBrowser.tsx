@@ -61,16 +61,16 @@ export default function CandidatesBrowser() {
 
   return (
     <>
-      <title>Talent Pool - Lumino</title>
+      <title>Candidate Discovery - Lumino</title>
 
       <div className="px-6 py-8 max-w-7xl mx-auto">
 
         {/* ── Header ───────────────────────────────────────────────────── */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
           <div>
-            <h1 className="text-2xl font-bold text-indigo-950">Talent Pool</h1>
+            <h1 className="text-2xl font-bold text-indigo-950">Candidate Discovery</h1>
             <p className="text-sm text-slate-500 mt-1">
-              Select a job to rank matching candidate profiles
+              Select a role to generate explainable candidate rankings.
             </p>
           </div>
 
@@ -99,7 +99,7 @@ export default function CandidatesBrowser() {
               className="btn-primary btn-sm flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300"
             >
               <Plus className="w-3.5 h-3.5" />
-              Post a Job
+              Publish Role
             </button>
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function CandidatesBrowser() {
             type="search"
             role="searchbox"
             aria-label="Search jobs by title or ID"
-            placeholder="Search by job title or ID…"
+            placeholder="Search by role title, company, or job ID..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             className="input pl-10 focus-visible:ring-2 focus-visible:ring-primary-300"
@@ -148,13 +148,13 @@ export default function CandidatesBrowser() {
             </div>
             <p className="text-slate-700 font-semibold mb-1">No jobs posted yet</p>
             <p className="text-sm text-slate-400 mb-6">
-              Post a job first, then come back here to find matching candidates.
+              Publish your first role, then return to generate ranked candidate shortlists.
             </p>
             <button
               onClick={() => navigate('/recruiter/post')}
               className="btn-primary focus-visible:ring-2 focus-visible:ring-primary-300"
             >
-              Post a Job
+              Publish Role
             </button>
           </div>
         )}
@@ -176,7 +176,7 @@ export default function CandidatesBrowser() {
         {filtered !== null && filtered.length > 0 && (
           <>
             <p className="text-xs text-slate-400 mb-4">
-              {filtered.length} job{filtered.length !== 1 ? 's' : ''} - click one to rank candidates
+              {filtered.length} role{filtered.length !== 1 ? 's' : ''} ready - select one to rank candidates
             </p>
 
             <div
@@ -246,7 +246,7 @@ export default function CandidatesBrowser() {
               <p className="text-xs text-indigo-200 leading-relaxed">
                 Lumino uses graph-to-graph matching to rank candidates - analysing skills,
                 domain knowledge, and cultural trajectory rather than keyword overlap.
-                Click any job to see ranked matches.
+                Open any role to inspect ranked matches with transparent evidence.
               </p>
             </div>
           </div>
