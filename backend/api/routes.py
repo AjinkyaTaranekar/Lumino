@@ -1631,11 +1631,84 @@ async def save_career_preferences(
 
 # ── Admin ──────────────────────────────────────────────────────────────────────
 
-@router.delete("/users/{user_id}", tags=["admin"], summary="Delete a user and all their data")
-async def delete_user(user_id: str, db: Neo4jClient = Depends(get_neo4j)):
-    """Cascade-delete the User node and every node owned by this user (skills,
+@router.get(
+    "/users/{user_id}/export",
+    tags=["privacy"],
+    summary="Export all user data (GDPR Article 20 — right to data portability)",
+)
+async def export_user_data(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Returns a complete structured export of all data held about this user.
+    Covers: graph nodes (skills, projects, domains, experiences, education,
+    certifications, achievements, publications, preferences, patterns),
+    clarification flags, and answers stored in SQLite.
+    Embeddings are excluded (internal vectors, not personal data).
+    """
+    from datetime import datetime, timezone
+
+    # ── Graph data from Neo4j ──────────────────────────────────────────────────
+    rows = await db.run_read(
+        """
+        MATCH (n)
+        WHERE (n:User AND n.id = $uid) OR n.user_id = $uid
+        RETURN labels(n) AS node_labels, properties(n) AS props
+        ORDER BY labels(n)[0]
+        """,
+        {"uid": user_id},
+    )
+
+    graph_data: dict[str, list] = {}
+    for row in rows:
+        node_labels = row["node_labels"] if "node_labels" in row else []
+        label = node_labels[0] if node_labels else "Unknown"
+        props = dict(row["props"]) if "props" in row else {}
+        # Strip internal embedding vectors — not human-readable personal data
+        props.pop("embedding", None)
+        graph_data.setdefault(label, []).append(props)
+
+    # ── Clarification flags from SQLite ────────────────────────────────────────
+    flags: list[dict] = []
+    if sqlite:
+        flag_rows = await sqlite.fetchall(
+            "SELECT flag_id, field, raw_text, interpreted_as, confidence, "
+            "ambiguity_reason, clarification_question, resolution_impact, "
+            "suggested_options, status, user_answer, correction_applied, "
+            "created_at, resolved_at FROM extraction_flags WHERE user_id = ?",
+            (user_id,),
+        )
+        flags = [dict(r) for r in flag_rows]
+
+    return {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "user_id": user_id,
+        "gdpr_basis": "GDPR Article 20 — Right to Data Portability",
+        "data_controller": "Lumino JobRecommender",
+        "data_categories": {
+            "graph_nodes": "Professional profile extracted from your resume: skills, projects, domains, "
+                           "work experiences, education, certifications, achievements, publications, preferences.",
+            "clarification_flags": "AI interpretation flags and your answers used to verify the profile graph.",
+        },
+        "graph_data": graph_data,
+        "clarification_flags": flags,
+    }
+
+
+@router.delete("/users/{user_id}", tags=["privacy"], summary="Delete a user and all their data (GDPR Article 17)")
+async def delete_user(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    GDPR Article 17 — Right to Erasure.
+    Cascade-deletes the User node and every node owned by this user (skills,
     domains, projects, experiences, preferences, patterns) plus all MATCHES edges.
-    Also removes any cached visualization HTML files."""
+    Also removes clarification flags from SQLite and cached visualization files.
+    """
     await db.run_write(
         """
         MATCH (n)
@@ -1644,6 +1717,13 @@ async def delete_user(user_id: str, db: Neo4jClient = Depends(get_neo4j)):
         """,
         {"user_id": user_id},
     )
+
+    # Remove clarification flags and preference data from SQLite
+    if sqlite:
+        await sqlite.execute(
+            "DELETE FROM extraction_flags WHERE user_id = ?", (user_id,)
+        )
+
     import glob
     for f in (
         glob.glob(f"./outputs/graph_{user_id}.html")

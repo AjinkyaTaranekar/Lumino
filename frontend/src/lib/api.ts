@@ -198,7 +198,8 @@ export const api = {
   // Job profile
   getJobProfile: (jobId: string) => get<RichJobProfile>(`/jobs/${jobId}/profile`),
 
-  // Admin - delete
+  // Privacy (GDPR)
+  exportUserData: (userId: string) => get<unknown>(`/users/${userId}/export`),
   deleteUser: (userId: string) => del<unknown>(`/users/${userId}`),
   deleteJob: (jobId: string) => del<unknown>(`/jobs/${jobId}`),
 

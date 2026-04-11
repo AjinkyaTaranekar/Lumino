@@ -215,17 +215,33 @@ class LLMExtractionService:
             "  - What level is this person REALLY at (not what their title says)?\n"
             "  - Flag inflated skills (15+ technologies with no depth = red flag).\n"
             "  - overall_signal 'misleading' if claims are materially unsupported by evidence.\n\n"
-            "═══ INTERPRETATION FLAGS - MANDATORY ═══\n"
-            "For EVERY field where you made an inference (rather than reading it directly):\n"
-            "  - Years of experience calculated/inferred (not stated explicitly)\n"
-            "  - Skill level inferred from job titles or context\n"
-            "  - Contribution type ambiguous ('we built', 'our team')\n"
-            "  - Domain depth guessed from industry\n"
-            "  - Any claim inconsistent with other evidence\n"
-            "  - Graduation year inferred from start year or context\n"
-            "  - Language proficiency inferred (not stated)\n"
-            "The clarification_question must quote the actual resume text and ask a specific, "
-            "answerable question. Use suggested_options for multiple-choice fields.\n\n"
+            "═══ INTERPRETATION FLAGS - MANDATORY MINIMUM 5, TARGET 8-12 ═══\n"
+            "You MUST generate AT LEAST 5 interpretation flags. For a typical profile, generate 8-12. "
+            "These are shown to the user as verification questions to confirm your interpretation.\n\n"
+            "MANDATORY CATEGORIES — cover ALL that apply:\n"
+            "  A) SKILL LEVEL (at least 1 per top 3 evidenced skills): For each major skill where you\n"
+            "     inferred the level from job titles/project context rather than explicit statement, flag it.\n"
+            "     Even high-confidence inferences should be flagged — the user confirms, not guesses.\n"
+            "  B) YEARS OF EXPERIENCE (at least 1): Flag every inferred duration calculated from date\n"
+            "     ranges or overlapping roles. If you calculated '3 years' from dates, flag it.\n"
+            "  C) CONTRIBUTION TYPE (1 per project using 'we/our/team/collaborated'): Flag any project\n"
+            "     where the candidate's individual vs. team contribution is unclear. Were they the sole\n"
+            "     engineer? Team lead? Senior contributor? Individual contributor?\n"
+            "  D) CAREER IDENTITY (1 required): State your interpretation of who this person IS\n"
+            "     professionally — their primary technical identity (e.g. 'backend engineer who gravitates\n"
+            "     toward distributed systems'). Ask if this matches their self-perception.\n"
+            "     Use field='Assessment:profile:career_identity', resolution_impact='important'.\n"
+            "  E) DOMAIN DEPTH (at least 1): Flag any domain where depth was inferred from the employer's\n"
+            "     industry rather than from explicit technical work described in the resume.\n"
+            "  F) WORK PREFERENCE (at least 1): Flag any assumption about preferred company size, remote/\n"
+            "     onsite preference, or team environment inferred from career history.\n"
+            "  G) SENIORITY / LEVEL MISMATCH: If the job title and described responsibilities suggest\n"
+            "     different seniority levels, flag it and ask what level they identify with.\n\n"
+            "NEVER generate fewer than 5 flags. If the profile is clear and explicit, STILL generate\n"
+            "flags for career identity, top skill level confirmation, and work preference — users\n"
+            "must confirm your mental model of them, not just correct factual errors.\n\n"
+            "The clarification_question MUST quote the actual resume text. Be specific and answerable.\n"
+            "Use suggested_options for any question with discrete choices.\n\n"
             "═══ CANONICAL NAMING — MANDATORY ═══\n"
             "Always use the full, unambiguous canonical name for every entity. Never abbreviate.\n"
             "  Skills/Tools: 'JavaScript' not 'JS', 'TypeScript' not 'TS', 'PostgreSQL' not 'Postgres',\n"
@@ -296,11 +312,30 @@ class LLMExtractionService:
         logger.info(
             f"Extracted: {len(extracted.skills)} skills, "
             f"{len(extracted.projects)} projects, "
-            f"{len(extracted.domains)} domains"
+            f"{len(extracted.domains)} domains, "
+            f"{len(extracted.interpretation_flags)} flags (initial)"
         )
 
-        # Second pass: enrich sparse project-skill links and fill missing context
-        extracted = await self._enrich_extraction(profile_text, extracted)
+        # Detect resume sections for the keyword pass
+        sections = self._detect_sections(profile_text)
+        logger.info(f"Detected resume sections: {list(sections.keys())}")
+
+        # Run enrichment + section keyword pass in parallel (independent passes)
+        enriched, keyword_additions = await asyncio.gather(
+            self._enrich_extraction(profile_text, extracted),
+            self._section_keyword_pass(profile_text, sections, extracted),
+        )
+        extracted = self._merge_section_keywords(enriched, keyword_additions)
+
+        # Profile-level mental model flags (career identity, preferences, trajectory)
+        extracted = await self._generate_profile_flags(profile_text, extracted)
+
+        logger.info(
+            f"Extraction complete: {len(extracted.skills)} skills, "
+            f"{len(extracted.projects)} projects, "
+            f"{len(extracted.domains)} domains, "
+            f"{len(extracted.interpretation_flags)} total flags"
+        )
         return extracted
 
     async def _enrich_extraction(
@@ -489,6 +524,416 @@ class LLMExtractionService:
             len(enriched_map),
             sum(len(v) for v in enriched_map.values()),
         )
+        return extraction
+
+    # ── Section detection ──────────────────────────────────────────────────────
+
+    @staticmethod
+    def _detect_sections(text: str) -> dict[str, str]:
+        """
+        Split resume text into labeled sections by detecting common section headers.
+        Returns dict mapping section_label → section_text.
+        Headers are detected when a line is short (<70 chars) and matches a known pattern.
+        """
+        import re
+
+        # (regex_pattern, section_label) — matched case-insensitively against stripped lines
+        HEADERS = [
+            (r"^(professional\s+)?summary$|^objective$|^profile$|^about(\s+me)?$", "summary"),
+            (r"^(work\s+)?experience$|^employment(\s+history)?$|^professional\s+background$|^work\s+history$", "experience"),
+            (r"^projects?$|^personal\s+projects?$|^side\s+projects?$|^portfolio$|^open.?source\s+projects?$", "projects"),
+            (r"^(technical\s+)?skills?$|^core\s+competencies$|^technologies$|^tech\s+stack$|^tools?\s+&\s+technologies$", "skills"),
+            (r"^education$|^academics?$|^academic\s+background$|^educational\s+background$", "education"),
+            (r"^certifications?$|^certificates?$|^licenses?\s*(and|&)\s*certifications?$|^credentials?$", "certifications"),
+            (r"^awards?$|^achievements?$|^honors?$|^recognition$|^scholarships?$|^fellowships?$", "achievements"),
+            (r"^publications?$|^research$|^papers?$|^patents?$|^talks?$", "publications"),
+            (r"^languages?$|^spoken\s+languages?$", "languages"),
+            (r"^volunteer(\s+work)?$|^community\s+involvement$|^open.?source\s+contributions?$", "volunteer"),
+            (r"^(relevant\s+)?course\s*work$|^moocs?$|^training$|^online\s+courses?$", "coursework"),
+        ]
+
+        lines = text.split("\n")
+        sections: dict[str, list[str]] = {}
+        current = "_header"
+
+        for line in lines:
+            stripped = line.strip()
+            matched_section = None
+            # Only try to match headers on short, non-empty lines
+            if stripped and len(stripped) < 70:
+                # Normalise: strip trailing colon/dash/underscore and common decorators
+                normalised = re.sub(r"[-:_=*#\s]+$", "", stripped).strip()
+                # Also strip leading decorators (e.g. "── SKILLS ──")
+                normalised = re.sub(r"^[-:_=*#\s]+", "", normalised).strip()
+                for pattern, label in HEADERS:
+                    if re.search(pattern, normalised, re.IGNORECASE):
+                        matched_section = label
+                        break
+
+            if matched_section:
+                current = matched_section
+                sections.setdefault(current, [])
+                # Include the header line so section text is self-contained
+                sections[current].append(line)
+            else:
+                sections.setdefault(current, [])
+                sections[current].append(line)
+
+        return {k: "\n".join(v).strip() for k, v in sections.items() if "\n".join(v).strip()}
+
+    # ── Section keyword pass ───────────────────────────────────────────────────
+
+    async def _section_keyword_pass(
+        self,
+        profile_text: str,
+        sections: dict[str, str],
+        extraction: "UserProfileExtraction",
+    ) -> dict:
+        """
+        Single targeted LLM call that scans each resume section for skill/domain keywords
+        NOT already captured in the main extraction. Runs in parallel with _enrich_extraction.
+
+        Returns dict with:
+          missed_skills: list of new skill objects to add
+          missed_domains: list of new domain objects to add
+        """
+        existing_skill_names = {s.name.lower() for s in extraction.skills if s.name}
+        existing_domain_names = {d.name.lower() for d in extraction.domains if d.name}
+
+        # Priority order for sections we want to scan
+        section_order = ["skills", "experience", "projects", "summary", "certifications",
+                         "achievements", "education", "volunteer", "coursework"]
+        section_texts = []
+        for label in section_order:
+            if label in sections and sections[label].strip():
+                section_texts.append(f"=== {label.upper()} ===\n{sections[label][:1500]}")
+        # Include any unrecognised sections
+        for label, text in sections.items():
+            if label not in section_order and label != "_header" and text.strip():
+                section_texts.append(f"=== {label.upper()} ===\n{text[:800]}")
+        # Fallback: full text if no sections detected
+        if not section_texts:
+            section_texts = [f"=== FULL PROFILE ===\n{profile_text[:5000]}"]
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "missed_skills": {
+                    "type": "array",
+                    "description": "Technology/skill names in the resume NOT already in the existing skill list",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Canonical skill name"},
+                            "family": {
+                                "type": "string",
+                                "enum": [
+                                    "Programming Languages", "Web Frameworks", "Databases",
+                                    "Cloud & DevOps", "ML & AI", "Data Engineering",
+                                    "Mobile Development", "Testing & QA",
+                                    "Analytics & Visualization", "Other",
+                                ],
+                            },
+                            "evidence_strength": {
+                                "type": "string",
+                                "enum": ["claimed_only", "mentioned_once", "project_backed", "multiple_productions"],
+                            },
+                            "level": {"type": ["string", "null"]},
+                            "years": {"type": ["number", "null"]},
+                            "context": {"type": ["string", "null"]},
+                        },
+                        "required": ["name", "family", "evidence_strength"],
+                    },
+                },
+                "missed_domains": {
+                    "type": "array",
+                    "description": "Industry/domain names in the resume NOT already in the existing domain list",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "family": {
+                                "type": "string",
+                                "enum": ["FinTech", "Healthcare", "E-commerce", "SaaS",
+                                         "Enterprise", "Gaming", "Education", "Other"],
+                            },
+                            "depth": {"type": "string", "enum": ["shallow", "moderate", "deep"]},
+                            "description": {"type": ["string", "null"]},
+                        },
+                        "required": ["name", "family", "depth"],
+                    },
+                },
+            },
+            "required": ["missed_skills", "missed_domains"],
+        }
+
+        system_msg = (
+            "You are a precise keyword extraction assistant scanning a resume section by section. "
+            "Your ONLY job: find every technology, skill, framework, tool, library, platform, "
+            "cloud service, database, or domain/industry keyword present in the text that is "
+            "NOT already in the provided existing extracted list.\n\n"
+            "RULES:\n"
+            "1. Only list items NOT already in the existing extracted list\n"
+            "2. Use canonical names: 'TypeScript' not 'TS', 'PostgreSQL' not 'Postgres', "
+            "'Kubernetes' not 'K8s', 'Machine Learning' not 'ML'\n"
+            "3. Only include items with clear textual evidence — never hallucinate\n"
+            "4. A skill: any programming language, framework, library, tool, platform, "
+            "cloud service, database, methodology (Agile/Scrum/TDD), or professional technology\n"
+            "5. A domain: an industry or application area the candidate has worked in\n"
+            "6. Be EXHAUSTIVE — scan every bullet point, every parenthetical, every section\n"
+            "7. Return ONLY valid JSON matching this schema:\n\n"
+            + json.dumps(schema, indent=2)
+        )
+
+        existing_skills_str = ", ".join(sorted(existing_skill_names)[:60]) or "none"
+        existing_domains_str = ", ".join(sorted(existing_domain_names)[:20]) or "none"
+
+        user_msg = (
+            f"ALREADY EXTRACTED SKILLS (do NOT repeat these):\n{existing_skills_str}\n\n"
+            f"ALREADY EXTRACTED DOMAINS (do NOT repeat these):\n{existing_domains_str}\n\n"
+            "RESUME SECTIONS TO SCAN FOR MISSED KEYWORDS:\n\n"
+            + "\n\n".join(section_texts)
+        )
+
+        try:
+            raw_json = await self._call_with_retry(
+                model=self._model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                temperature=self._temperature,
+            )
+            return json.loads(raw_json)
+        except Exception as exc:
+            logger.warning("Section keyword pass failed (non-fatal): %s", exc)
+            return {"missed_skills": [], "missed_domains": []}
+
+    # ── Merge section keyword additions ────────────────────────────────────────
+
+    @staticmethod
+    def _merge_section_keywords(
+        extraction: "UserProfileExtraction",
+        additions: dict,
+    ) -> "UserProfileExtraction":
+        """Merge missed keywords from the section pass into the extraction."""
+        from models.schemas import ExtractedSkill, ExtractedDomain
+
+        existing_skill_names = {s.name.lower() for s in extraction.skills if s.name}
+        existing_domain_names = {d.name.lower() for d in extraction.domains if d.name}
+
+        new_skills = 0
+        for item in additions.get("missed_skills", []):
+            name = (item.get("name") or "").strip()
+            if not name or name.lower() in existing_skill_names:
+                continue
+            try:
+                skill = ExtractedSkill(
+                    name=name,
+                    family=item.get("family", "Other"),
+                    level=item.get("level") or None,
+                    evidence_strength=item.get("evidence_strength", "mentioned_once"),
+                    years=item.get("years"),
+                    context=item.get("context"),
+                )
+                extraction.skills.append(skill)
+                existing_skill_names.add(name.lower())
+                new_skills += 1
+            except Exception as e:
+                logger.debug("Skipping invalid skill from section pass: %s (%s)", name, e)
+
+        new_domains = 0
+        for item in additions.get("missed_domains", []):
+            name = (item.get("name") or "").strip()
+            if not name or name.lower() in existing_domain_names:
+                continue
+            try:
+                domain = ExtractedDomain(
+                    name=name,
+                    family=item.get("family", "Other"),
+                    depth=item.get("depth", "shallow"),
+                    description=item.get("description"),
+                )
+                extraction.domains.append(domain)
+                existing_domain_names.add(name.lower())
+                new_domains += 1
+            except Exception as e:
+                logger.debug("Skipping invalid domain from section pass: %s (%s)", name, e)
+
+        if new_skills or new_domains:
+            logger.info(
+                "Section keyword pass merged: +%d skills, +%d domains",
+                new_skills, new_domains,
+            )
+        return extraction
+
+    # ── Profile interpretation flags ──────────────────────────────────────────
+
+    async def _generate_profile_flags(
+        self,
+        profile_text: str,
+        extraction: "UserProfileExtraction",
+    ) -> "UserProfileExtraction":
+        """
+        Generate profile-level mental model confirmation questions.
+        These ask the user to confirm the LLM's holistic interpretation of WHO they are:
+        career identity, trajectory, work preferences, depth vs. breadth, contribution style.
+        Appends 3-6 additional flags to extraction.interpretation_flags.
+        """
+        from models.schemas import InterpretationFlag
+
+        # Compact profile summary for the prompt
+        top_skills = sorted(
+            [s for s in extraction.skills if s.evidence_strength in ("project_backed", "multiple_productions")],
+            key=lambda s: {"multiple_productions": 3, "project_backed": 2,
+                           "mentioned_once": 1, "claimed_only": 0}.get(s.evidence_strength or "", 0),
+            reverse=True,
+        )[:6]
+        skill_summary = ", ".join(
+            f"{s.name}({s.level or '?'}yr={s.years or '?'})" for s in top_skills
+        ) or ", ".join(s.name for s in extraction.skills[:5])
+
+        domain_summary = ", ".join(d.name for d in extraction.domains[:5]) or "none detected"
+        exp_summary = "; ".join(
+            f"{e.title or '?'} at {e.company or '?'}"
+            for e in extraction.experiences[:3]
+        ) if extraction.experiences else "no experience listed"
+        project_names = ", ".join(p.name for p in extraction.projects[:5]) if extraction.projects else "none"
+        assessment_identity = (
+            (extraction.assessment.candidate_identity or "")
+            if extraction.assessment else ""
+        )
+        existing_flag_count = len(extraction.interpretation_flags)
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "flags": {
+                    "type": "array",
+                    "description": "3-6 mental model confirmation questions about career identity, trajectory, preferences",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {
+                                "type": "string",
+                                "description": "Format: 'Assessment:profile:aspect' e.g. 'Assessment:profile:career_identity'",
+                            },
+                            "raw_text": {
+                                "type": "string",
+                                "description": "Quote from the resume that led to this interpretation",
+                            },
+                            "interpreted_as": {
+                                "type": "string",
+                                "description": "Your specific interpretation of what this means about the candidate",
+                            },
+                            "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+                            "ambiguity_reason": {
+                                "type": "string",
+                                "description": "Why this interpretation needs confirmation from the user",
+                            },
+                            "clarification_question": {
+                                "type": "string",
+                                "description": "The exact question to show the user. Must be affirm/deny your interpretation.",
+                            },
+                            "resolution_impact": {"type": "string", "enum": ["critical", "important", "minor"]},
+                            "suggested_options": {
+                                "type": ["array", "null"],
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": [
+                            "field", "raw_text", "interpreted_as", "confidence",
+                            "ambiguity_reason", "clarification_question", "resolution_impact",
+                        ],
+                    },
+                }
+            },
+            "required": ["flags"],
+        }
+
+        system_msg = (
+            "You are a thoughtful career coach reviewing a professional profile. "
+            "Generate 3-6 mental model confirmation questions that verify your holistic "
+            "interpretation of WHO this candidate is professionally.\n\n"
+            "These are NOT about fixing errors — they confirm your reading of:\n"
+            "  1. CAREER IDENTITY: 'Based on your profile, I read you as a backend engineer "
+            "     who specialises in distributed data systems. Is this how you'd describe yourself?'\n"
+            "  2. TRAJECTORY: 'Your career shows a move from frontend → full-stack → backend. "
+            "     Is backend engineering your intended long-term direction?'\n"
+            "  3. ENVIRONMENT PREFERENCE: 'You've worked at 2 early-stage startups and 1 scale-up. "
+            "     Do you prefer fast-moving, ambiguous startup environments?'\n"
+            "  4. PROBLEM-SOLVING IDENTITY: 'Your projects suggest you prefer infrastructure/systems "
+            "     work over product features. Is that an accurate characterisation?'\n"
+            "  5. DEPTH vs. BREADTH: 'You list 15+ technologies. Would you say you have deep expertise "
+            "     in 2-3 core areas, or do you intentionally maintain broad generalist coverage?'\n"
+            "  6. CONTRIBUTION STYLE: 'Your experience describes team contributions throughout. "
+            "     Do you currently prefer IC depth work, or do you aspire to lead a team?'\n\n"
+            "RULES:\n"
+            "- Quote the actual resume text that triggered each interpretation\n"
+            "- Make questions affirm or deny a SPECIFIC interpretation (not open-ended)\n"
+            "- Use suggested_options for questions with discrete answers\n"
+            "- resolution_impact='important' for identity/trajectory, 'minor' for minor preferences\n"
+            "- Do NOT duplicate questions that are already covered in the standard flags above\n"
+            "- Return ONLY valid JSON matching this schema:\n\n"
+            + json.dumps(schema, indent=2)
+        )
+
+        user_msg = (
+            f"CANDIDATE PROFILE SUMMARY:\n"
+            f"Top evidenced skills: {skill_summary}\n"
+            f"All skills count: {len(extraction.skills)}\n"
+            f"Domains: {domain_summary}\n"
+            f"Experience: {exp_summary}\n"
+            f"Projects: {project_names}\n"
+            f"AI identity note: {assessment_identity or 'not available'}\n"
+            f"Existing flags already generated: {existing_flag_count} "
+            f"(do NOT duplicate those — add complementary mental model questions)\n\n"
+            f"PROFILE TEXT (for raw_text quotes — use exact quotes):\n{profile_text[:3500]}\n\n"
+            "Generate 3-6 mental model confirmation questions about this candidate's "
+            "professional identity, trajectory, and work preferences."
+        )
+
+        try:
+            raw_json = await self._call_with_retry(
+                model=self._model_name,
+                messages=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": user_msg},
+                ],
+                response_format={"type": "json_object"},
+                temperature=self._temperature,
+            )
+            result = json.loads(raw_json)
+            new_flags_data = result.get("flags", [])
+        except Exception as exc:
+            logger.warning("Profile flags generation failed (non-fatal): %s", exc)
+            return extraction
+
+        existing_fields = {f.field for f in extraction.interpretation_flags}
+        added = 0
+        for flag_data in new_flags_data:
+            field = (flag_data.get("field") or "").strip()
+            if not field or field in existing_fields:
+                continue
+            try:
+                flag = InterpretationFlag(
+                    field=field,
+                    raw_text=flag_data.get("raw_text", ""),
+                    interpreted_as=flag_data.get("interpreted_as", ""),
+                    confidence=flag_data.get("confidence", "medium"),
+                    ambiguity_reason=flag_data.get("ambiguity_reason", ""),
+                    clarification_question=flag_data.get("clarification_question", ""),
+                    resolution_impact=flag_data.get("resolution_impact", "important"),
+                    suggested_options=flag_data.get("suggested_options"),
+                )
+                extraction.interpretation_flags.append(flag)
+                existing_fields.add(field)
+                added += 1
+            except Exception as e:
+                logger.debug("Skipping invalid profile flag: %s (%s)", field, e)
+
+        logger.info("Profile flags pass: added %d mental model flags", added)
         return extraction
 
     async def generate_match_explanation(

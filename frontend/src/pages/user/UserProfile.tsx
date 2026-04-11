@@ -6,6 +6,7 @@ import {
   CheckCircle,
   ChevronRight,
   Code2,
+  Download,
   FileText,
   Globe,
   GraduationCap,
@@ -16,6 +17,7 @@ import {
   Shield,
   Star,
   Target,
+  Trash2,
   TrendingUp,
   User,
 } from 'lucide-react';
@@ -45,13 +47,52 @@ const PROFICIENCY_COLOR: Record<string, string> = {
 
 export default function UserProfile() {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { session, logout } = useAuth();
   const userId = session?.userId;
 
   const [profile, setProfile] = useState<UserDescribeResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // ── GDPR / privacy actions ─────────────────────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const data = await api.exportUserData(userId!);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `lumino-data-export-${userId}-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent — user will notice no download
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteConfirm !== userId) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteUser(userId!);
+      logout();                                  // clears React auth state + localStorage
+      navigate('/login', { replace: true });
+    } catch {
+      setDeleteError('Deletion failed. Please try again or contact support.');
+      setDeleting(false);
+    }
+  }
 
   const fetchProfile = useCallback(
     async (isRefresh = false) => {
@@ -475,8 +516,121 @@ export default function UserProfile() {
             </button>
           </div>
 
+          {/* ── Data & Privacy (GDPR) ─────────────────────────────────────── */}
+          <div className="card-lumino p-6 border border-slate-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="w-4 h-4 text-slate-500" />
+              <p className="text-sm font-semibold text-indigo-950 uppercase tracking-wide">Data &amp; Privacy</p>
+            </div>
+
+            <p className="text-xs text-slate-500 leading-relaxed mb-5">
+              Under GDPR Articles 17 and 20, you have the right to export a copy of all data we hold
+              about you and to permanently delete your account at any time.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+              {/* What we store */}
+              {[
+                { label: 'Profile graph', detail: 'Skills, projects, experiences, education, domains extracted from your resume.' },
+                { label: 'Verification answers', detail: 'Your responses to AI interpretation confirmation questions.' },
+                { label: 'Career preferences', detail: 'Work style, salary, location, and goal preferences you provided.' },
+                { label: 'Resume text (transient)', detail: 'Sent to an LLM for extraction only — not stored raw after processing.' },
+              ].map(({ label, detail }) => (
+                <div key={label} className="rounded-xl p-3 bg-slate-50 border border-slate-100">
+                  <p className="text-xs font-semibold text-indigo-950 mb-0.5">{label}</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">{detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              {/* Export */}
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              >
+                {exporting
+                  ? <Loader className="w-4 h-4 animate-spin" />
+                  : <Download className="w-4 h-4" />
+                }
+                Export my data (JSON)
+              </button>
+
+              {/* Delete */}
+              <button
+                onClick={() => { setShowDeleteModal(true); setDeleteConfirm(''); setDeleteError(null); }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-200 bg-red-50 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete my account
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
+
+      {/* ── Delete confirmation modal ─────────────────────────────────────── */}
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-modal-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-2xl bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <h2 id="delete-modal-title" className="text-lg font-bold text-indigo-950">
+                Permanently delete account
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-2 leading-relaxed">
+              This will permanently erase your entire profile graph, all skills, projects, experiences,
+              clarification history, and preferences. <strong>This cannot be undone.</strong>
+            </p>
+            <p className="text-sm text-slate-500 mb-4">
+              To confirm, type your user ID: <code className="text-indigo-950 font-semibold">{userId}</code>
+            </p>
+
+            <input
+              type="text"
+              value={deleteConfirm}
+              onChange={e => setDeleteConfirm(e.target.value)}
+              placeholder={`Type "${userId}" to confirm`}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-red-400"
+              autoComplete="off"
+            />
+
+            {deleteError && (
+              <p className="text-xs text-red-500 mb-3">{deleteError}</p>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteConfirm !== userId || deleting}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-red-600 focus-visible:ring-offset-2"
+              >
+                {deleting
+                  ? <><Loader className="w-4 h-4 animate-spin" /> Deleting…</>
+                  : <><Trash2 className="w-4 h-4" /> Delete permanently</>
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -27,11 +27,11 @@ import type { ClarificationQuestion, IngestUserResponse } from '../../lib/types'
 
 // ─── Step types ───────────────────────────────────────────────────────────────
 
-type Step = 'welcome' | 'upload' | 'results' | 'verify' | 'preferences' | 'done'
+type Step = 'welcome' | 'consent' | 'upload' | 'results' | 'verify' | 'preferences' | 'done'
 
-const STEP_LABELS = ['Upload', 'Analysis', 'Verify', 'Preferences', 'Done']
+const STEP_LABELS = ['Consent', 'Upload', 'Analysis', 'Verify', 'Preferences', 'Done']
 const STEP_INDEX: Record<Step, number> = {
-  welcome: -1, upload: 0, results: 1, verify: 2, preferences: 3, done: 4,
+  welcome: -1, consent: 0, upload: 1, results: 2, verify: 3, preferences: 4, done: 5,
 }
 
 // ─── Step indicator ───────────────────────────────────────────────────────────
@@ -72,6 +72,127 @@ function StepIndicator({ step }: { step: Step }) {
   )
 }
 
+// ─── Consent step ─────────────────────────────────────────────────────────────
+
+function ConsentStep({ onAccept }: { onAccept: () => void }) {
+  const [checked, setChecked] = React.useState(false)
+
+  const dataItems = [
+    {
+      title: 'Resume text',
+      detail: 'The raw text of your uploaded resume or paste — sent to an LLM for structured extraction.',
+    },
+    {
+      title: 'Extracted profile graph',
+      detail: 'Skills, projects, work experiences, education, domains, and certifications — stored in a graph database.',
+    },
+    {
+      title: 'Verification answers',
+      detail: 'Your responses to interpretation confirmation questions — stored in an internal database.',
+    },
+    {
+      title: 'Career preferences',
+      detail: 'Work preferences, salary expectations, location, and career goals you enter — stored to personalise matching.',
+    },
+  ]
+
+  return (
+    <motion.div
+      key="consent"
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -16 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="text-center">
+        <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-blue-50 flex items-center justify-center">
+          <ShieldCheck size={22} className="text-blue-500" />
+        </div>
+        <h2 className="text-2xl font-extrabold text-indigo-950 tracking-tight mb-2">
+          Before we start — your data, your control
+        </h2>
+        <p className="text-sm text-slate-500 max-w-sm mx-auto">
+          We believe you should know exactly what we collect, how it's used, and what rights you have.
+        </p>
+      </div>
+
+      {/* What we collect */}
+      <div className="card-lumino p-5 space-y-3">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-1">
+          What we collect &amp; process
+        </p>
+        {dataItems.map(({ title, detail }) => (
+          <div key={title} className="flex items-start gap-3">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-2 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-indigo-950">{title}</p>
+              <p className="text-xs text-slate-500 leading-relaxed">{detail}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* LLM disclosure */}
+      <div className="rounded-2xl p-4 bg-amber-50 border border-amber-200 flex items-start gap-3">
+        <Sparkles size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="text-sm font-semibold text-amber-800">Your resume is sent to an AI model</p>
+          <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+            To extract structured data, we transmit your resume text to a large language model (LLM)
+            via a secure API. The LLM provider processes your text according to their own privacy policy.
+            We do not send your name, email, or account credentials to the LLM.
+          </p>
+        </div>
+      </div>
+
+      {/* Rights */}
+      <div className="card-lumino p-5">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
+          Your rights (GDPR Articles 17 &amp; 20)
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Right to erasure', desc: 'Delete your account and all data at any time from your Profile page.' },
+            { label: 'Right to portability', desc: 'Download a full JSON export of everything stored about you.' },
+          ].map(({ label, desc }) => (
+            <div key={label} className="rounded-xl p-3 bg-slate-50 border border-slate-100">
+              <p className="text-xs font-semibold text-indigo-950 mb-1">{label}</p>
+              <p className="text-[11px] text-slate-500 leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Consent checkbox */}
+      <label className="flex items-start gap-3 cursor-pointer group">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={e => setChecked(e.target.checked)}
+          className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500 flex-shrink-0"
+        />
+        <span className="text-sm text-slate-700 leading-relaxed group-hover:text-indigo-950 transition-colors">
+          I understand what data is collected, that my resume will be sent to an LLM for processing,
+          and I consent to proceed.
+        </span>
+      </label>
+
+      <button
+        onClick={onAccept}
+        disabled={!checked}
+        className="btn-primary btn-lg w-full flex items-center justify-center gap-2 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        I Consent &amp; Continue <ArrowRight size={16} />
+      </button>
+
+      <p className="text-center text-[11px] text-slate-400">
+        You can delete your account and all data at any time from your profile page.
+      </p>
+    </motion.div>
+  )
+}
+
 // ─── Welcome step ─────────────────────────────────────────────────────────────
 
 function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
@@ -98,7 +219,7 @@ function WelcomeStep({ name, onNext }: { name: string; onNext: () => void }) {
         {[
           { icon: FileText, title: 'Upload Resume', desc: 'We extract skills, impact, and domain signals' },
           { icon: Sparkles, title: 'AI Analysis', desc: 'We create your interpreted digital twin' },
-          { icon: ShieldCheck, title: 'Quick Verify', desc: 'You confirm high-impact interpretations' },
+          { icon: ShieldCheck, title: 'Verify & Confirm', desc: 'Confirm the AI\'s interpretation of your professional identity' },
         ].map(({ icon: Icon, title, desc }) => (
           <div key={title} className="card-lumino p-4 text-center">
             <div className="w-10 h-10 mx-auto mb-3 rounded-2xl bg-blue-50 flex items-center justify-center">
@@ -320,10 +441,10 @@ function ResultsStep({ result, onNext, hasFlags }: ResultsStepProps) {
           </div>
           <div>
             <p className="text-sm font-semibold text-amber-800">
-              {result.interpretation_flags} thing{result.interpretation_flags !== 1 ? 's' : ''} to clarify
+              {result.interpretation_flags} verification question{result.interpretation_flags !== 1 ? 's' : ''}
             </p>
             <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-              The AI made a few inferences from your resume. We'll ask you to quickly confirm or correct them - it takes under 2 minutes.
+              We built an interpretation of who you are professionally. Confirm or correct each one so your Digital Twin reflects your exact story.
             </p>
           </div>
         </div>
@@ -937,7 +1058,10 @@ export default function Onboarding() {
 
             <AnimatePresence mode="wait">
               {step === 'welcome' && (
-                <WelcomeStep name={firstName} onNext={() => setStep('upload')} />
+                <WelcomeStep name={firstName} onNext={() => setStep('consent')} />
+              )}
+              {step === 'consent' && (
+                <ConsentStep onAccept={() => setStep('upload')} />
               )}
               {step === 'upload' && (
                 <UploadStep userId={session!.userId} onDone={handleUploadDone} />

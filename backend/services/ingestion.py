@@ -52,6 +52,8 @@ class IngestionService:
             flags_count = await clarification_svc.store_flags(user_id, extraction.interpretation_flags)
             # Return the critical questions immediately so the API caller can show them
             clarifications = await clarification_svc.get_clarifications(user_id)
+            # Return up to 5 high-impact questions as a preview (critical + important)
+            # The full list is fetched separately via /clarifications in the verify step
             clarification_questions = [
                 {
                     "flag_id": q.flag_id,
@@ -62,8 +64,8 @@ class IngestionService:
                     "options": q.suggested_options,
                 }
                 for q in clarifications.questions
-                if q.resolution_impact == "critical"
-            ]
+                if q.resolution_impact in ("critical", "important")
+            ][:5]
 
         result = {
             "user_id": user_id,

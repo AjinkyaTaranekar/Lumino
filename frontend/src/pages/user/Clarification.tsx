@@ -696,8 +696,8 @@ export default function Clarification() {
             <h1 className="text-2xl font-bold text-indigo-950">Profile Accuracy Center</h1>
           </div>
           <p className="text-sm text-slate-500">
-            Lumino found {data?.total_flags ?? 0} interpretation points from your resume.
-            Confirming them improves ranking quality and interview relevance.
+            {data?.total_flags ?? 0} verification questions — field interpretations, contribution types,
+            and mental model confirmations to make your Digital Twin accurate.
           </p>
         </div>
 
