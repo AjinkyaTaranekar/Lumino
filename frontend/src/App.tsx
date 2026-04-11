@@ -35,9 +35,12 @@ const UserModel = lazy(() => import('./pages/user/UserModel'));
 const EditGraph = lazy(() => import('./pages/user/EditGraph'));
 const Clarification = lazy(() => import('./pages/user/Clarification'));
 const UserProfile = lazy(() => import('./pages/user/UserProfile'));
+const JobSearch = lazy(() => import('./pages/user/JobSearch'));
 const MatchExplorer = lazy(() => import('./pages/user/MatchExplorer'));
 const Guidelines = lazy(() => import('./pages/user/Guidelines'));
-const Interests = lazy(() => import('./pages/user/Interests'));
+const Interests = lazy(() => import('./pages/user/Interests'))
+const SkillsIntelligence = lazy(() => import('./pages/user/SkillsIntelligence'));
+const HumanStory = lazy(() => import('./pages/user/HumanStory'));
 
 // Recruiter pages
 const Candidates = lazy(() => import('./pages/recruiter/Candidates'));
@@ -46,6 +49,7 @@ const JobModel = lazy(() => import('./pages/recruiter/JobModel'));
 const EditJobGraph = lazy(() => import('./pages/recruiter/EditJobGraph'));
 const JobsList = lazy(() => import('./pages/recruiter/JobsList'));
 const JobProfile = lazy(() => import('./pages/recruiter/JobProfile'));
+const MirrorInterview = lazy(() => import('./pages/recruiter/MirrorInterview'));
 
 // User job profile
 const JobProfileView = lazy(() => import('./pages/user/JobProfileView'));
@@ -128,6 +132,26 @@ export default function App() {
           }
         />
         <Route
+          path="/user/skills"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <SkillsIntelligence />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user/my-story"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <HumanStory />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/applications"
           element={
             <ProtectedRoute role="USER">
@@ -188,6 +212,16 @@ export default function App() {
           }
         />
         <Route
+          path="/user/search"
+          element={
+            <ProtectedRoute role="USER">
+              <LuminoLayout>
+                <JobSearch />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/user/guidelines"
           element={
             <ProtectedRoute role="USER">
@@ -221,6 +255,16 @@ export default function App() {
             <ProtectedRoute role="RECRUITER">
               <LuminoLayout>
                 <Candidates />
+              </LuminoLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/jobs/:jobId/candidates/:userId/twin"
+          element={
+            <ProtectedRoute role="RECRUITER">
+              <LuminoLayout showSidebar={false}>
+                <MirrorInterview />
               </LuminoLayout>
             </ProtectedRoute>
           }
@@ -293,6 +337,10 @@ export default function App() {
         <Route path="/recruiter/post" element={<Navigate to="/jobs/create" replace />} />
         <Route path="/recruiter/candidates" element={<Navigate to="/talent-pool" replace />} />
         <Route path="/recruiter/candidates/:jobId" element={<RedirectWithParams to="/talent-pool/:jobId" />} />
+        <Route
+          path="/recruiter/candidates/:jobId/:userId/twin"
+          element={<RedirectWithParams to="/jobs/:jobId/candidates/:userId/twin" />}
+        />
         <Route path="/recruiter/model/:jobId" element={<RedirectWithParams to="/jobs/:jobId/model" />} />
         <Route path="/recruiter/edit-job/:jobId" element={<RedirectWithParams to="/jobs/:jobId/edit" />} />
 

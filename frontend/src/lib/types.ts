@@ -589,3 +589,141 @@ export interface PracticeMessage {
   phase?: string;
   phaseChanged?: boolean;
 }
+
+export interface RecruiterTwinEvidence {
+  source: 'practice_session' | 'digital_twin' | 'job_profile';
+  snippet: string;
+  relevance: string;
+}
+
+export interface StartRecruiterTwinResponse {
+  session_id: string;
+  recruiter_id: string;
+  user_id: string;
+  job_id: string;
+  job_title: string;
+  company?: string;
+  candidate_snapshot: string;
+  opening_message: string;
+  confidence: number;
+  evidence: RecruiterTwinEvidence[];
+  follow_up_question: string;
+  nightmare_questions: string[];
+}
+
+export interface RecruiterTwinTurnResponse {
+  twin_response: string;
+  confidence: number;
+  evidence: RecruiterTwinEvidence[];
+  follow_up_question: string;
+  nightmare_questions: string[];
+}
+
+export interface RecruiterTwinHistoryMessage {
+  role: 'recruiter' | 'twin';
+  content: string;
+  confidence?: number | null;
+  evidence: RecruiterTwinEvidence[];
+  follow_up_question?: string | null;
+  nightmare_questions: string[];
+  created_at: string;
+}
+
+export interface RecruiterTwinHistoryResponse {
+  session_id: string;
+  recruiter_id: string;
+  user_id: string;
+  job_id: string;
+  nightmare_mode: boolean;
+  messages: RecruiterTwinHistoryMessage[];
+}
+
+// ─── Semantic Job Search ──────────────────────────────────────────────────────
+
+export interface SemanticSearchResponse {
+  results: MatchResult[];
+  suggested_tags: string[];
+  mode: 'semantic' | 'empty';
+}
+
+// ─── Digital Twin Profile ─────────────────────────────────────────────────────
+
+export interface DigitalTwinAnecdote {
+  name: string;
+  situation?: string | null;
+  task?: string | null;
+  action?: string | null;
+  result?: string | null;
+  lesson_learned?: string | null;
+  emotion_valence?: 'positive' | 'negative' | 'neutral' | null;
+  confidence_signal?: number | null;  // 0–1
+  spontaneous?: boolean | null;
+}
+
+export interface DigitalTwinMotivation {
+  name: string;
+  category?: string | null;
+  strength?: 'low' | 'medium' | 'high' | null;
+  evidence?: string | null;
+}
+
+export interface DigitalTwinValue {
+  name: string;
+  priority_rank?: number | null;
+  evidence?: string | null;
+}
+
+export interface DigitalTwinGoal {
+  name: string;
+  type?: string | null;
+  description?: string | null;
+  timeframe_years?: number | null;
+  clarity_level?: 'vague' | 'defined' | 'concrete' | null;
+}
+
+export interface DigitalTwinCultureIdentity {
+  name: string;
+  team_size_preference?: string | null;
+  leadership_style?: string | null;
+  conflict_style?: string | null;
+  feedback_preference?: string | null;
+  pace_preference?: string | null;
+  energy_sources?: string[] | null;
+  energy_drains?: string[] | null;
+}
+
+export interface DigitalTwinBehavioralInsight {
+  name: string;
+  insight_type?: string | null;
+  trigger?: string | null;
+  response_pattern?: string | null;
+  implication?: string | null;
+}
+
+export interface DigitalTwinProfileResponse {
+  user_id: string;
+  anecdotes: DigitalTwinAnecdote[];
+  motivations: DigitalTwinMotivation[];
+  values: DigitalTwinValue[];
+  goals: DigitalTwinGoal[];
+  culture_identities: DigitalTwinCultureIdentity[];
+  behavioral_insights: DigitalTwinBehavioralInsight[];
+}
+
+// ─── Skill Intelligence ───────────────────────────────────────────────────────
+
+export interface SkillIntelligenceItem {
+  name: string;
+  family: string;
+  years: number;
+  level: string | null;
+  evidence_strength: number;  // 0–1, how well the skill is evidenced
+  demand_count: number;       // # jobs that need this skill
+  demand_pct: number;         // demand_count / total_jobs
+}
+
+export interface SkillIntelligenceResponse {
+  user_id: string;
+  skills: SkillIntelligenceItem[];
+  total_jobs: number;
+}

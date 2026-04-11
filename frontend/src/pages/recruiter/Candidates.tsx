@@ -301,15 +301,25 @@ function AppliedCandidateCard({ result, rank, jobId }: AppliedCandidateCardProps
       )}
 
       {/* ── CTA ── */}
-      <button
-        onClick={() =>
-          navigate(`/user/match/${jobId}`, { state: { viewAs: result.user_id } })
-        }
-        aria-label={`View match details for ${result.user_id}`}
-        className="btn-primary btn-sm w-full flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300 mt-1"
-      >
-        View Match Details <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
-      </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+        <button
+          onClick={() =>
+            navigate(`/user/match/${jobId}`, { state: { viewAs: result.user_id } })
+          }
+          aria-label={`View match details for ${result.user_id}`}
+          className="btn-primary btn-sm w-full flex items-center justify-center gap-1.5 focus-visible:ring-2 focus-visible:ring-primary-300"
+        >
+          View Match Details <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+        </button>
+
+        <button
+          onClick={() => navigate(`/jobs/${jobId}/candidates/${result.user_id}/twin`)}
+          aria-label={`Open mirror interview for ${result.user_id}`}
+          className="btn-secondary btn-sm w-full"
+        >
+          Open Twin Mirror
+        </button>
+      </div>
     </motion.div>
   );
 }

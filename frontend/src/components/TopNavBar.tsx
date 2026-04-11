@@ -17,12 +17,14 @@ export function TopNavBar() {
   const navItems: NavItem[] = user?.role === 'USER'
     ? [
       { label: 'Dashboard', to: '/dashboard' },
+      { label: 'Job Search', to: '/user/search' },
       { label: 'Application Pipeline', to: '/applications' },
       { label: 'Interview Coach', to: '/practice' },
     ]
     : user?.role === 'RECRUITER'
       ? [
         { label: 'Dashboard', to: '/dashboard' },
+        { label: 'Talent Pool', to: '/talent-pool' },
         { label: 'Jobs', to: '/jobs' },
       ]
       : [

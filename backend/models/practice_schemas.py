@@ -81,3 +81,64 @@ class PracticeSessionSummary(BaseModel):
 class UserPracticeSessionsResponse(BaseModel):
     user_id: str
     sessions: list[PracticeSessionSummary]
+
+
+class RecruiterTwinEvidence(BaseModel):
+    source: Literal['practice_session', 'digital_twin', 'job_profile']
+    snippet: str
+    relevance: str
+
+
+class StartRecruiterTwinRequest(BaseModel):
+    recruiter_id: str
+    user_id: str
+    job_id: str
+    nightmare_mode: bool = False
+
+
+class StartRecruiterTwinResponse(BaseModel):
+    session_id: str
+    recruiter_id: str
+    user_id: str
+    job_id: str
+    job_title: str
+    company: Optional[str] = None
+    candidate_snapshot: str
+    opening_message: str
+    confidence: Annotated[float, Field(ge=0, le=1)]
+    evidence: list[RecruiterTwinEvidence]
+    follow_up_question: str
+    nightmare_questions: list[str] = []
+
+
+class RecruiterTwinMessageRequest(BaseModel):
+    recruiter_id: str
+    content: str
+    nightmare_mode: bool = False
+
+
+class RecruiterTwinTurnResponse(BaseModel):
+    twin_response: str
+    confidence: Annotated[float, Field(ge=0, le=1)]
+    evidence: list[RecruiterTwinEvidence]
+    follow_up_question: str
+    nightmare_questions: list[str] = []
+
+
+class RecruiterTwinHistoryMessage(BaseModel):
+    role: Literal['recruiter', 'twin']
+    content: str
+    confidence: Optional[float] = None
+    evidence: list[RecruiterTwinEvidence] = []
+    follow_up_question: Optional[str] = None
+    nightmare_questions: list[str] = []
+    created_at: str
+
+
+class RecruiterTwinHistoryResponse(BaseModel):
+    session_id: str
+    recruiter_id: str
+    user_id: str
+    job_id: str
+    nightmare_mode: bool
+    messages: list[RecruiterTwinHistoryMessage]

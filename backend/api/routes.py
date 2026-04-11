@@ -68,6 +68,17 @@ from models.schemas import (
     StartEditRequest,
     UserApplication,
     UserApplicationsResponse,
+    SkillIntelligenceItem,
+    SkillIntelligenceResponse,
+    DigitalTwinAnecdote,
+    DigitalTwinMotivation,
+    DigitalTwinValue,
+    DigitalTwinGoal,
+    DigitalTwinCultureIdentity,
+    DigitalTwinBehavioralInsight,
+    DigitalTwinProfileResponse,
+    SemanticSearchRequest,
+    SemanticSearchResponse,
 )
 from services.analytics_service import AnalyticsService
 from services.job_tag_extractor import JobTagExtractor
@@ -83,6 +94,47 @@ from services.visualization import VisualizationService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ── Semantic search: LLM-powered query expansion ─────────────────────────────
+async def _expand_query_with_llm(query: str) -> str:
+    """
+    Decompose any natural-language search query into concrete skills, technologies,
+    and domain terms that ANN search can match against job skill/domain embeddings.
+
+    Handles abbreviations ("SDE"), intent phrases ("high paying remote job"),
+    soft concepts ("collaborative team"), and everything in between — without
+    any hardcoded lookup tables.
+    """
+    try:
+        from litellm import acompletion
+        model = os.environ.get("LLM_MODEL", "groq/llama-3.3-70b-versatile")
+        resp = await acompletion(
+            model=model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a job-search query expander. "
+                        "Given any search phrase, output ONLY a comma-separated list of concrete skills, "
+                        "technologies, and domain terms that describe what the user is looking for. "
+                        "Be specific and technical. Include 10–20 terms. "
+                        "No explanations, no numbering, no extra punctuation — just the comma-separated terms."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f'Search query: "{query}"',
+                },
+            ],
+            max_tokens=200,
+            temperature=0.1,
+        )
+        expanded_terms = resp.choices[0].message.content.strip()
+        # Combine original query + LLM expansion for maximum ANN recall
+        return f"{query} {expanded_terms}"
+    except Exception as exc:
+        logger.warning("Query expansion LLM call failed (%s) — using raw query", exc)
+        return query
 
 
 def get_neo4j() -> Neo4jClient:
@@ -471,6 +523,153 @@ async def get_single_match(
             status_code=404, detail=f"User '{user_id}' or job '{job_id}' not found"
         )
     return result
+
+
+@router.post(
+    "/users/{user_id}/search",
+    response_model=SemanticSearchResponse,
+    tags=["matching"],
+    summary="Semantic job search — vector search over job skill requirements, re-ranked by user match",
+)
+async def semantic_job_search(
+    user_id: str,
+    request: SemanticSearchRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    """
+    Two-phase search:
+      1. Embed the user's free-text query and ANN-search job_skill_embeddings +
+         job_domain_embeddings to find semantically relevant jobs.
+      2. Re-rank the candidate jobs by the user's cached match scores so that
+         relevance AND personal fit determine final order.
+
+    Returns ranked MatchResult list plus suggested filter tags derived from results.
+    Falls back gracefully when the embedding model is unavailable.
+    """
+    query = request.query.strip()
+    if not query:
+        return SemanticSearchResponse(results=[], suggested_tags=[], mode="empty")
+
+    # LLM-expand the query into concrete skills/domains before embedding
+    # Handles abbreviations ("SDE"), intents ("high paying ML job"), free-text, etc.
+    expanded_query = await _expand_query_with_llm(query)
+
+    # ── Phase 1: embed query ─────────────────────────────────────────────────
+    from services.vector_embedding import VectorEmbeddingService
+    embed_svc = VectorEmbeddingService(db)
+
+    try:
+        vectors = await embed_svc._embed_texts([expanded_query])
+        q_vec = vectors[0]
+    except Exception as exc:
+        logger.warning("Semantic search embedding failed: %s — falling back to title match", exc)
+        q_vec = None
+
+    # ── Phase 2a: vector ANN over job skill + domain embeddings ──────────────
+    job_relevance: dict[str, float] = {}
+
+    if q_vec is not None:
+        k = min(90, request.limit * 4)
+        skill_rows = await db.run_query(
+            """
+            CALL db.index.vector.queryNodes('job_skill_embeddings', $k, $vec)
+            YIELD node AS jsr, score
+            MATCH (j:Job)-[:REQUIRES_SKILL]->(jsr)
+            RETURN j.id AS job_id, max(score) AS relevance
+            """,
+            {"k": k, "vec": q_vec},
+        )
+        for row in skill_rows:
+            jid = row["job_id"]
+            rel  = float(row["relevance"] or 0)
+            if jid not in job_relevance or rel > job_relevance[jid]:
+                job_relevance[jid] = rel
+
+        domain_rows = await db.run_query(
+            """
+            CALL db.index.vector.queryNodes('job_domain_embeddings', $k, $vec)
+            YIELD node AS jdr, score
+            MATCH (j:Job)-[:REQUIRES_DOMAIN]->(jdr)
+            RETURN j.id AS job_id, max(score) AS relevance
+            """,
+            {"k": k, "vec": q_vec},
+        )
+        for row in domain_rows:
+            jid = row["job_id"]
+            rel  = float(row["relevance"] or 0) * 0.85
+            if jid not in job_relevance or rel > job_relevance[jid]:
+                job_relevance[jid] = rel
+
+    # ── Phase 2b: text match on title/company (original + expanded terms) ────
+    # Collect all individual keywords from the expanded query for broader matching
+    search_terms = list({t for t in expanded_query.lower().split() if len(t) > 2})
+    # Build a WHERE clause that matches any of the key terms against title
+    text_rows = await db.run_query(
+        """
+        MATCH (j:Job)
+        WHERE ANY(term IN $terms WHERE toLower(j.title) CONTAINS term)
+           OR toLower(coalesce(j.company,'')) CONTAINS toLower($original)
+        RETURN j.id AS job_id
+        LIMIT 30
+        """,
+        {"terms": search_terms, "original": query},
+    )
+    for row in text_rows:
+        jid = row["job_id"]
+        if jid not in job_relevance:
+            job_relevance[jid] = 0.65   # text match baseline relevance
+
+    if not job_relevance:
+        return SemanticSearchResponse(results=[], suggested_tags=[], mode="semantic")
+
+    # ── Phase 3: look up user's cached match scores ───────────────────────────
+    user_version = await sqlite.get_user_version(user_id)
+    cnt_rows     = await db.run_query("MATCH (j:Job) RETURN count(j) AS cnt", {})
+    job_count    = int(cnt_rows[0]["cnt"]) if cnt_rows else 0
+    cache_key    = f"v{user_version}_j{job_count}"
+    cached       = await sqlite.get_match_cache(user_id, cache_key) or []
+
+    match_by_id: dict[str, dict] = {r["job_id"]: r for r in cached}
+
+    # ── Phase 4: score = 0.4*relevance + 0.6*match_score ─────────────────────
+    ranked: list[tuple[float, dict]] = []
+    for job_id, relevance in job_relevance.items():
+        if job_id in match_by_id:
+            m = match_by_id[job_id]
+            combined = 0.4 * relevance + 0.6 * float(m.get("total_score", 0))
+            ranked.append((combined, m))
+        else:
+            # Job found by search but no cached score — compute it on the fly
+            try:
+                analytics = AnalyticsService(sqlite, db)
+                engine    = MatchingEngine(db, analytics_service=analytics)
+                res       = await engine._score_user_job_pair(user_id, job_id)
+                if res:
+                    m        = res.model_dump()
+                    combined = 0.4 * relevance + 0.6 * float(m.get("total_score", 0))
+                    ranked.append((combined, m))
+            except Exception:
+                pass   # silently skip uncacheable jobs
+
+    ranked.sort(key=lambda x: -x[0])
+
+    # ── Phase 5: build MatchResult list ──────────────────────────────────────
+    results: list[MatchResult] = []
+    for _, m in ranked[: request.limit]:
+        try:
+            results.append(MatchResult(**m))
+        except Exception:
+            pass
+
+    # ── Phase 6: suggested tags from result set ───────────────────────────────
+    tag_freq: dict[str, int] = {}
+    for r in results:
+        for tag in (r.job_tags or []):
+            tag_freq[tag] = tag_freq.get(tag, 0) + 1
+    suggested_tags = [t for t, _ in sorted(tag_freq.items(), key=lambda x: -x[1])][:12]
+
+    return SemanticSearchResponse(results=results, suggested_tags=suggested_tags, mode="semantic")
 
 
 @router.get(
@@ -1651,7 +1850,7 @@ async def export_user_data(
     from datetime import datetime, timezone
 
     # ── Graph data from Neo4j ──────────────────────────────────────────────────
-    rows = await db.run_read(
+    rows = await db.run_query(
         """
         MATCH (n)
         WHERE (n:User AND n.id = $uid) OR n.user_id = $uid
@@ -2232,6 +2431,250 @@ async def remove_interest(
     analytics = AnalyticsService(sqlite, db)
     await analytics.remove_interest(user_id, tag)
     return {"status": "removed", "user_id": user_id, "tag": tag}
+
+
+# ── Skill Intelligence ─────────────────────────────────────────────────────────
+
+@router.get(
+    "/users/{user_id}/skill-intelligence",
+    response_model=SkillIntelligenceResponse,
+    tags=["analytics"],
+    summary="Get skill evidence quality vs market demand",
+)
+async def get_skill_intelligence(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Returns each skill in the user's graph annotated with:
+      - evidence_strength: how well-evidenced the skill is (0–1)
+      - demand_count: how many jobs in the graph require this skill (via MATCHES edges)
+      - demand_pct: demand_count / total_jobs
+
+    Used to power the Evidence Quality Matrix quadrant chart in the
+    Skills Intelligence page.
+    """
+    # Total job count (denominator for demand_pct)
+    count_rows = await db.run_query("MATCH (j:Job) RETURN count(j) AS cnt", {})
+    total_jobs = int(count_rows[0]["cnt"]) if count_rows else 0
+
+    # User skills + how many jobs they appear in (via MATCHES edges created at match time)
+    rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:HAS_SKILL]->(s:Skill)
+        OPTIONAL MATCH (s)-[:MATCHES]->(jsr:JobSkillRequirement)<-[:REQUIRES_SKILL]-(j:Job)
+        RETURN
+            s.name                              AS name,
+            coalesce(s.family, '')              AS family,
+            coalesce(s.years, 0.0)              AS years,
+            s.level                             AS level,
+            coalesce(s.evidence_strength, 0.5)  AS evidence_strength,
+            count(DISTINCT j)                   AS demand_count
+        ORDER BY demand_count DESC, s.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    skills: list[SkillIntelligenceItem] = []
+    for row in rows:
+        demand_count = int(row["demand_count"] or 0)
+        skills.append(
+            SkillIntelligenceItem(
+                name=row["name"],
+                family=row["family"] or "",
+                years=float(row["years"] or 0),
+                level=row["level"],
+                evidence_strength=float(row["evidence_strength"] or 0.5),
+                demand_count=demand_count,
+                demand_pct=demand_count / total_jobs if total_jobs > 0 else 0.0,
+            )
+        )
+
+    return SkillIntelligenceResponse(user_id=user_id, skills=skills, total_jobs=total_jobs)
+
+
+# ── Digital Twin Profile ────────────────────────────────────────────────────────
+
+@router.get(
+    "/users/{user_id}/digital-twin",
+    response_model=DigitalTwinProfileResponse,
+    tags=["analytics"],
+    summary="Get everything stored in the user's Digital Twin (full transparency)",
+)
+async def get_digital_twin_profile(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Returns all six human-layer node types stored for a user:
+    Anecdote, Motivation, Value, Goal, CultureIdentity, BehavioralInsight.
+
+    Designed for the "What We Know About You" transparency page — every field
+    the AI has inferred about the user as a person is surfaced here verbatim.
+    """
+    anecdote_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:HAS_ANECDOTE]->(a:Anecdote)
+        RETURN
+            a.name              AS name,
+            a.situation         AS situation,
+            a.task              AS task,
+            a.action            AS action,
+            a.result            AS result,
+            a.lesson_learned    AS lesson_learned,
+            a.emotion_valence   AS emotion_valence,
+            a.confidence_signal AS confidence_signal,
+            a.spontaneous       AS spontaneous
+        ORDER BY a.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    motivation_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:MOTIVATED_BY]->(m:Motivation)
+        RETURN
+            m.name     AS name,
+            m.category AS category,
+            m.strength AS strength,
+            m.evidence AS evidence
+        ORDER BY
+            CASE m.strength WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
+            m.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    value_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:HOLDS_VALUE]->(v:Value)
+        RETURN
+            v.name          AS name,
+            v.priority_rank AS priority_rank,
+            v.evidence      AS evidence
+        ORDER BY coalesce(v.priority_rank, 999) ASC, v.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    goal_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:ASPIRES_TO]->(g:Goal)
+        RETURN
+            g.name            AS name,
+            g.type            AS type,
+            g.description     AS description,
+            g.timeframe_years AS timeframe_years,
+            g.clarity_level   AS clarity_level
+        ORDER BY coalesce(g.timeframe_years, 999) ASC, g.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    culture_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity)
+        RETURN
+            c.name                  AS name,
+            c.team_size_preference  AS team_size_preference,
+            c.leadership_style      AS leadership_style,
+            c.conflict_style        AS conflict_style,
+            c.feedback_preference   AS feedback_preference,
+            c.pace_preference       AS pace_preference,
+            c.energy_sources        AS energy_sources,
+            c.energy_drains         AS energy_drains
+        """,
+        {"user_id": user_id},
+    )
+
+    behavior_rows = await db.run_query(
+        """
+        MATCH (u:User {id: $user_id})-[:HAS_BEHAVIORAL_INSIGHT]->(b:BehavioralInsight)
+        RETURN
+            b.name            AS name,
+            b.insight_type    AS insight_type,
+            b.trigger         AS trigger,
+            b.response_pattern AS response_pattern,
+            b.implication     AS implication
+        ORDER BY b.name ASC
+        """,
+        {"user_id": user_id},
+    )
+
+    def _safe_list(val):
+        if val is None:
+            return None
+        if isinstance(val, list):
+            return val
+        return [val]
+
+    return DigitalTwinProfileResponse(
+        user_id=user_id,
+        anecdotes=[
+            DigitalTwinAnecdote(
+                name=r["name"],
+                situation=r.get("situation"),
+                task=r.get("task"),
+                action=r.get("action"),
+                result=r.get("result"),
+                lesson_learned=r.get("lesson_learned"),
+                emotion_valence=r.get("emotion_valence"),
+                confidence_signal=r.get("confidence_signal"),
+                spontaneous=r.get("spontaneous"),
+            )
+            for r in anecdote_rows
+        ],
+        motivations=[
+            DigitalTwinMotivation(
+                name=r["name"],
+                category=r.get("category"),
+                strength=r.get("strength"),
+                evidence=r.get("evidence"),
+            )
+            for r in motivation_rows
+        ],
+        values=[
+            DigitalTwinValue(
+                name=r["name"],
+                priority_rank=r.get("priority_rank"),
+                evidence=r.get("evidence"),
+            )
+            for r in value_rows
+        ],
+        goals=[
+            DigitalTwinGoal(
+                name=r["name"],
+                type=r.get("type"),
+                description=r.get("description"),
+                timeframe_years=r.get("timeframe_years"),
+                clarity_level=r.get("clarity_level"),
+            )
+            for r in goal_rows
+        ],
+        culture_identities=[
+            DigitalTwinCultureIdentity(
+                name=r["name"],
+                team_size_preference=r.get("team_size_preference"),
+                leadership_style=r.get("leadership_style"),
+                conflict_style=r.get("conflict_style"),
+                feedback_preference=r.get("feedback_preference"),
+                pace_preference=r.get("pace_preference"),
+                energy_sources=_safe_list(r.get("energy_sources")),
+                energy_drains=_safe_list(r.get("energy_drains")),
+            )
+            for r in culture_rows
+        ],
+        behavioral_insights=[
+            DigitalTwinBehavioralInsight(
+                name=r["name"],
+                insight_type=r.get("insight_type"),
+                trigger=r.get("trigger"),
+                response_pattern=r.get("response_pattern"),
+                implication=r.get("implication"),
+            )
+            for r in behavior_rows
+        ],
+    )
 
 
 # ── Job Tag Management ─────────────────────────────────────────────────────────

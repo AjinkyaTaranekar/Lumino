@@ -126,6 +126,35 @@ class SQLiteClient:
                 CREATE INDEX IF NOT EXISTS idx_practice_sessions_user
                     ON practice_sessions(user_id);
 
+                CREATE TABLE IF NOT EXISTS recruiter_twin_sessions (
+                    session_id      TEXT PRIMARY KEY,
+                    recruiter_id    TEXT NOT NULL,
+                    user_id         TEXT NOT NULL,
+                    job_id          TEXT NOT NULL,
+                    nightmare_mode  INTEGER NOT NULL DEFAULT 0,
+                    context_json    TEXT,
+                    started_at      TEXT NOT NULL,
+                    last_active     TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_recruiter_twin_sessions_lookup
+                    ON recruiter_twin_sessions(recruiter_id, job_id, user_id);
+
+                CREATE TABLE IF NOT EXISTS recruiter_twin_messages (
+                    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id              TEXT NOT NULL REFERENCES recruiter_twin_sessions(session_id),
+                    role                    TEXT NOT NULL,
+                    content                 TEXT NOT NULL,
+                    confidence              REAL,
+                    evidence_json           TEXT,
+                    follow_up_question      TEXT,
+                    nightmare_questions_json TEXT,
+                    created_at              TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_recruiter_twin_messages_session
+                    ON recruiter_twin_messages(session_id, id);
+
                 CREATE TABLE IF NOT EXISTS user_cache_versions (
                     user_id    TEXT PRIMARY KEY,
                     version    INTEGER NOT NULL DEFAULT 1,

@@ -1340,3 +1340,102 @@ class DigitalTwinCompleteness(BaseModel):
     missing_dimensions: List[str]
     # The single most impactful next action
     next_action: str
+
+
+# ─── Skill Intelligence ───────────────────────────────────────────────────────
+
+# ─── Digital Twin Profile ─────────────────────────────────────────────────────
+
+class DigitalTwinAnecdote(BaseModel):
+    name: str
+    situation: Optional[str] = None
+    task: Optional[str] = None
+    action: Optional[str] = None
+    result: Optional[str] = None
+    lesson_learned: Optional[str] = None
+    emotion_valence: Optional[str] = None   # positive / negative / neutral
+    confidence_signal: Optional[float] = None  # 0–1
+    spontaneous: Optional[bool] = None
+
+
+class DigitalTwinMotivation(BaseModel):
+    name: str
+    category: Optional[str] = None          # financial / growth / impact / autonomy / …
+    strength: Optional[str] = None          # low / medium / high
+    evidence: Optional[str] = None
+
+
+class DigitalTwinValue(BaseModel):
+    name: str
+    priority_rank: Optional[int] = None
+    evidence: Optional[str] = None
+
+
+class DigitalTwinGoal(BaseModel):
+    name: str
+    type: Optional[str] = None             # career / skill / personal / financial / …
+    description: Optional[str] = None
+    timeframe_years: Optional[float] = None
+    clarity_level: Optional[str] = None    # vague / defined / concrete
+
+
+class DigitalTwinCultureIdentity(BaseModel):
+    name: str
+    team_size_preference: Optional[str] = None  # solo / small / medium / large
+    leadership_style: Optional[str] = None
+    conflict_style: Optional[str] = None
+    feedback_preference: Optional[str] = None
+    pace_preference: Optional[str] = None       # steady / fast / flexible
+    energy_sources: Optional[List[str]] = None
+    energy_drains: Optional[List[str]] = None
+
+
+class DigitalTwinBehavioralInsight(BaseModel):
+    name: str
+    insight_type: Optional[str] = None         # communication_pattern / decision_style / …
+    trigger: Optional[str] = None
+    response_pattern: Optional[str] = None
+    implication: Optional[str] = None
+
+
+class DigitalTwinProfileResponse(BaseModel):
+    user_id: str
+    anecdotes: List[DigitalTwinAnecdote]
+    motivations: List[DigitalTwinMotivation]
+    values: List[DigitalTwinValue]
+    goals: List[DigitalTwinGoal]
+    culture_identities: List[DigitalTwinCultureIdentity]
+    behavioral_insights: List[DigitalTwinBehavioralInsight]
+
+
+# ─── Skill Intelligence ───────────────────────────────────────────────────────
+
+# ─── Semantic Job Search ──────────────────────────────────────────────────────
+
+class SemanticSearchRequest(BaseModel):
+    query: str
+    limit: int = 30
+
+
+class SemanticSearchResponse(BaseModel):
+    results: List[MatchResult]
+    suggested_tags: List[str]
+    mode: str   # "semantic" | "empty"
+
+
+# ─── Skill Intelligence ───────────────────────────────────────────────────────
+
+class SkillIntelligenceItem(BaseModel):
+    name: str
+    family: str = ""
+    years: float = 0.0
+    level: Optional[str] = None
+    evidence_strength: float = 0.5
+    demand_count: int = 0          # how many jobs in graph require this skill
+    demand_pct: float = 0.0        # demand_count / total_jobs
+
+
+class SkillIntelligenceResponse(BaseModel):
+    user_id: str
+    skills: List[SkillIntelligenceItem]
+    total_jobs: int

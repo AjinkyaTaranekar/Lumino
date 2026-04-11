@@ -1030,7 +1030,7 @@ export default function Onboarding() {
 
   function handleFinish() {
     markOnboardingComplete(user!.id)
-    navigate('/dashboard', { replace: true })
+    navigate('/user/search', { replace: true })
   }
 
   const firstName = user?.name?.split(' ')[0] ?? 'there'

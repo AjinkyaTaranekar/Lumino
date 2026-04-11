@@ -1,13 +1,17 @@
 import {
+  BarChart2,
   BookOpen,
+  Brain,
   Briefcase,
   Database,
   Heart,
   LayoutDashboard,
   Network,
+  Search,
   ShieldAlert,
   Upload,
   User as UserIcon,
+  Users,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
@@ -17,7 +21,7 @@ import { api } from '../lib/api';
 interface NavItem {
   label: string;
   to: string;
-  icon: React.ComponentType<{ size?: number }>;
+  icon: React.ComponentType<{ size?: number | string }>;
 }
 
 export function SideNavBar() {
@@ -34,8 +38,11 @@ export function SideNavBar() {
   const navItems: NavItem[] = user?.role === 'USER'
     ? [
       { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+      { label: 'Job Search', to: '/user/search', icon: Search },
       { label: 'My Profile', to: '/user/profile', icon: UserIcon },
       { label: 'Preference Intelligence', to: '/user/interests', icon: Heart },
+      { label: 'Skills Intelligence', to: '/user/skills', icon: BarChart2 },
+      { label: 'My Story', to: '/user/my-story', icon: Brain },
       { label: 'Upload Resume', to: '/resume', icon: Upload },
       { label: 'Profile Accuracy', to: '/user/clarifications', icon: ShieldAlert },
       { label: 'Digital Twin', to: '/user/model', icon: Network },
@@ -45,6 +52,7 @@ export function SideNavBar() {
       ? [
         { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
         { label: 'Jobs', to: '/jobs', icon: Briefcase },
+        { label: 'Talent Pool', to: '/talent-pool', icon: Users },
         { label: 'Publish Role', to: '/jobs/create', icon: Database },
       ]
       : [
@@ -71,7 +79,6 @@ export function SideNavBar() {
                     : 'text-slate-600 hover:bg-slate-200/50'
                 }`
               }
-              aria-current={({ isActive }: { isActive: boolean }) => isActive ? 'page' : undefined}
               aria-label={showAlert ? `${item.label} - action required` : item.label}
             >
               <div className="relative flex-shrink-0">

@@ -497,34 +497,46 @@ function UserDashboard() {
           </div>
         )}
 
-        {/* ── Tier rows ── */}
+        {/* ── Search workspace CTA ── */}
         <AnimatePresence>
-          {grouped && !loading && (
-            <div className="space-y-8">
-              {TIERS.map((tier, ti) => {
-                const tierMatches = grouped[tier.id];
-                const offset = TIERS.slice(0, ti).reduce((acc, t) => acc + grouped[t.id].length, 0);
-                return (
-                  <TierRow
-                    key={tier.id}
-                    tier={tier}
-                    matches={tierMatches}
-                    userId={session?.userId ?? ''}
-                    rankOffset={offset}
-                    interactionMap={interactionMap}
-                  />
-                );
-              })}
-
-              {totalCount === 0 && (
-                <div className="card-lumino p-16 text-center">
+          {!loading && (
+            <motion.section
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="card-lumino p-6 sm:p-7 border-indigo-100"
+              aria-label="Job search workspace"
+            >
+              {totalCount === 0 ? (
+                <div className="text-center py-6">
                   <Briefcase size={40} className="mx-auto mb-3 text-slate-200" aria-hidden="true" />
                   <p className="text-slate-500 font-medium">No ranked opportunities yet</p>
                   <p className="text-sm text-slate-400 mt-1">Upload or refresh your profile so Lumino can generate explainable job matches.</p>
                   <Link to="/resume" className="btn-primary btn-sm inline-flex mt-4">Upload Resume</Link>
                 </div>
+              ) : (
+                <div className="flex flex-col lg:flex-row lg:items-center gap-5">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                    <Target size={22} className="text-blue-600" aria-hidden="true" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-lg font-extrabold text-indigo-950 tracking-tight">Your ranked matches have moved to Job Search</h2>
+                    <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                      Use keyword search, sorting, and advanced filters to work through all {totalCount} ranked opportunities in one dedicated workspace.
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <span className="badge badge-blue">{strongCount} high-confidence roles</span>
+                      <span className="badge badge-green">Best match {topScore != null ? `${topScore}%` : 'N/A'}</span>
+                      <span className="badge badge-gray">LinkedIn-style search flow</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link to="/user/search" className="btn-primary">
+                      Open Job Search
+                    </Link>
+                  </div>
+                </div>
               )}
-            </div>
+            </motion.section>
           )}
         </AnimatePresence>
 

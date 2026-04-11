@@ -8,6 +8,10 @@ Endpoints:
   POST /sessions/{session_id}/complete      - generate and return the scorecard
   GET  /sessions/{session_id}/history       - full message history
   GET  /users/{user_id}/sessions            - list all sessions for a user
+
+    POST /recruiter/sessions/start            - start recruiter mirror chat session
+    POST /recruiter/sessions/{session_id}/message - send recruiter message to candidate twin
+    GET  /recruiter/sessions/{session_id}/history - get recruiter mirror chat history
 """
 
 import logging
@@ -22,10 +26,16 @@ from models.practice_schemas import (
     PracticeHistoryResponse,
     PracticeMessageRequest,
     PracticeScorecard,
+    RecruiterTwinHistoryResponse,
+    RecruiterTwinMessageRequest,
+    RecruiterTwinTurnResponse,
+    StartRecruiterTwinRequest,
+    StartRecruiterTwinResponse,
     StartPracticeRequest,
     StartPracticeResponse,
     UserPracticeSessionsResponse,
 )
+from services.recruiter_twin_service import RecruiterTwinService
 from services.practice_session_service import PracticeSessionService
 
 logger = logging.getLogger(__name__)
@@ -146,4 +156,85 @@ async def list_user_practice_sessions(
         return await service.list_user_sessions(user_id)
     except Exception as e:
         logger.exception(f"Failed to list practice sessions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@practice_router.post(
+    "/recruiter/sessions/start",
+    response_model=StartRecruiterTwinResponse,
+    tags=["practice"],
+    summary="Start recruiter mirror interview with candidate twin",
+)
+async def start_recruiter_twin_session(
+    request: StartRecruiterTwinRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    try:
+        service = RecruiterTwinService(db, sqlite)
+        return await service.start_session(
+            request.recruiter_id,
+            request.user_id,
+            request.job_id,
+            request.nightmare_mode,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Failed to start recruiter twin session: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@practice_router.post(
+    "/recruiter/sessions/{session_id}/message",
+    response_model=RecruiterTwinTurnResponse,
+    tags=["practice"],
+    summary="Send recruiter message to candidate twin",
+)
+async def send_recruiter_twin_message(
+    session_id: str,
+    request: RecruiterTwinMessageRequest,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    try:
+        service = RecruiterTwinService(db, sqlite)
+        return await service.send_message(
+            session_id,
+            request.recruiter_id,
+            request.content,
+            request.nightmare_mode,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Failed to process recruiter twin message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@practice_router.get(
+    "/recruiter/sessions/{session_id}/history",
+    response_model=RecruiterTwinHistoryResponse,
+    tags=["practice"],
+    summary="Get recruiter mirror chat history",
+)
+async def get_recruiter_twin_history(
+    session_id: str,
+    recruiter_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite_db),
+):
+    try:
+        service = RecruiterTwinService(db, sqlite)
+        return await service.get_history(session_id, recruiter_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Failed to get recruiter twin history: {e}")
         raise HTTPException(status_code=500, detail=str(e))

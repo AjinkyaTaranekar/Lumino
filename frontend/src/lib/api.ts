@@ -3,6 +3,7 @@ import type {
   BatchCandidateResponse,
   BatchMatchResponse,
   ClarificationsResponse,
+  DigitalTwinProfileResponse,
   EditSessionMessage,
   EditSessionResponse,
   GraphMutation,
@@ -16,10 +17,15 @@ import type {
   MatchInsightsResponse,
   PracticeHistoryResponse,
   PracticeScorecard,
+  RecruiterTwinHistoryResponse,
+  RecruiterTwinTurnResponse,
   ResolveFlagResponse,
   RichJobProfile,
   RollbackResponse,
+  SemanticSearchResponse,
+  SkillIntelligenceResponse,
   StartPracticeResponse,
+  StartRecruiterTwinResponse,
   UserApplicationsResponse,
   UserDescribeResponse,
   UserListItem,
@@ -167,6 +173,15 @@ export const api = {
   removeInterest: (userId: string, tag: string) =>
     del<{ status: string }>(`/users/${userId}/interests/${encodeURIComponent(tag)}`),
 
+  getSkillIntelligence: (userId: string) =>
+    get<SkillIntelligenceResponse>(`/users/${userId}/skill-intelligence`),
+
+  getDigitalTwinProfile: (userId: string) =>
+    get<DigitalTwinProfileResponse>(`/users/${userId}/digital-twin`),
+
+  searchJobs: (userId: string, query: string, limit = 30) =>
+    post<SemanticSearchResponse>(`/users/${userId}/search`, { query, limit }),
+
   getApplications: (userId: string) =>
     get<UserApplicationsResponse>(`/users/${userId}/applications`),
 
@@ -255,5 +270,24 @@ export const api = {
 
     getUserSessions: (userId: string) =>
       get<UserPracticeSessionsResponse>(`/practice/users/${userId}/sessions`),
+
+    recruiter: {
+      startSession: (body: {
+        recruiter_id: string;
+        user_id: string;
+        job_id: string;
+        nightmare_mode?: boolean;
+      }) => post<StartRecruiterTwinResponse>('/practice/recruiter/sessions/start', body),
+
+      sendMessage: (
+        sessionId: string,
+        body: { recruiter_id: string; content: string; nightmare_mode?: boolean }
+      ) => post<RecruiterTwinTurnResponse>(`/practice/recruiter/sessions/${sessionId}/message`, body),
+
+      getHistory: (sessionId: string, recruiterId: string) =>
+        get<RecruiterTwinHistoryResponse>(
+          `/practice/recruiter/sessions/${sessionId}/history?recruiter_id=${encodeURIComponent(recruiterId)}`
+        ),
+    },
   },
 };
