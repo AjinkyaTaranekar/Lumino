@@ -608,6 +608,8 @@ export interface StartRecruiterTwinResponse {
   confidence: number;
   evidence: RecruiterTwinEvidence[];
   follow_up_question: string;
+  culture_follow_up_question: string;
+  next_best_followups: string[];
   nightmare_questions: string[];
 }
 
@@ -616,6 +618,8 @@ export interface RecruiterTwinTurnResponse {
   confidence: number;
   evidence: RecruiterTwinEvidence[];
   follow_up_question: string;
+  culture_follow_up_question: string;
+  next_best_followups: string[];
   nightmare_questions: string[];
 }
 
@@ -625,6 +629,8 @@ export interface RecruiterTwinHistoryMessage {
   confidence?: number | null;
   evidence: RecruiterTwinEvidence[];
   follow_up_question?: string | null;
+  culture_follow_up_question?: string | null;
+  next_best_followups: string[];
   nightmare_questions: string[];
   created_at: string;
 }

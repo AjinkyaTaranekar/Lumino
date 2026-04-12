@@ -12,7 +12,19 @@ type TwinChatMessage = {
     confidence?: number;
     evidence?: RecruiterTwinEvidence[];
     followUpQuestion?: string;
+    cultureFollowUpQuestion?: string;
+    nextBestFollowups?: string[];
     nightmareQuestions?: string[];
+};
+
+type SessionSetup = {
+    openingMessage: string;
+    confidence: number;
+    evidence: RecruiterTwinEvidence[];
+    followUpQuestion: string;
+    cultureFollowUpQuestion: string;
+    nextBestFollowups: string[];
+    nightmareQuestions: string[];
 };
 
 function confidenceBadge(confidence: number | undefined): string {
@@ -32,6 +44,7 @@ export default function MirrorInterview() {
     const [company, setCompany] = useState<string>('');
     const [candidateSnapshot, setCandidateSnapshot] = useState<string>('');
     const [nightmareMode, setNightmareMode] = useState<boolean>(false);
+    const [sessionSetup, setSessionSetup] = useState<SessionSetup | null>(null);
 
     const [messages, setMessages] = useState<TwinChatMessage[]>([]);
     const [input, setInput] = useState('');
@@ -46,6 +59,20 @@ export default function MirrorInterview() {
         () => [...messages].reverse().find((msg) => msg.role === 'twin'),
         [messages]
     );
+
+    const activeInsight = useMemo(() => {
+        if (lastTwinMessage) {
+            return {
+                confidence: lastTwinMessage.confidence ?? 0,
+                evidence: lastTwinMessage.evidence ?? [],
+                followUpQuestion: lastTwinMessage.followUpQuestion ?? '',
+                cultureFollowUpQuestion: lastTwinMessage.cultureFollowUpQuestion ?? '',
+                nextBestFollowups: lastTwinMessage.nextBestFollowups ?? [],
+                nightmareQuestions: lastTwinMessage.nightmareQuestions ?? [],
+            };
+        }
+        return sessionSetup;
+    }, [lastTwinMessage, sessionSetup]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -69,16 +96,16 @@ export default function MirrorInterview() {
                 setJobTitle(res.job_title || 'Candidate Mirror');
                 setCompany(res.company || 'Unknown company');
                 setCandidateSnapshot(res.candidate_snapshot);
-                setMessages([
-                    {
-                        role: 'twin',
-                        content: res.opening_message,
-                        confidence: res.confidence,
-                        evidence: res.evidence,
-                        followUpQuestion: res.follow_up_question,
-                        nightmareQuestions: res.nightmare_questions,
-                    },
-                ]);
+                setSessionSetup({
+                    openingMessage: res.opening_message,
+                    confidence: res.confidence,
+                    evidence: res.evidence,
+                    followUpQuestion: res.follow_up_question,
+                    cultureFollowUpQuestion: res.culture_follow_up_question,
+                    nextBestFollowups: res.next_best_followups,
+                    nightmareQuestions: res.nightmare_questions,
+                });
+                setMessages([]);
             } catch (err) {
                 const message = err instanceof Error ? err.message : 'Failed to start mirror interview';
                 if (message.toLowerCase().includes('has not applied')) {
@@ -120,6 +147,8 @@ export default function MirrorInterview() {
                     confidence: turn.confidence,
                     evidence: turn.evidence,
                     followUpQuestion: turn.follow_up_question,
+                    cultureFollowUpQuestion: turn.culture_follow_up_question,
+                    nextBestFollowups: turn.next_best_followups,
                     nightmareQuestions: turn.nightmare_questions,
                 },
             ]);
@@ -194,6 +223,15 @@ export default function MirrorInterview() {
                                 </div>
                             )}
 
+                            {!loadingStart && messages.length === 0 && sessionSetup?.openingMessage && (
+                                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-700 mb-1">
+                                        Recruiter Leads The First Question
+                                    </p>
+                                    <p className="text-sm text-blue-900">{sessionSetup.openingMessage}</p>
+                                </div>
+                            )}
+
                             {messages.map((msg, idx) => (
                                 <motion.div
                                     key={`${msg.role}-${idx}`}
@@ -231,7 +269,7 @@ export default function MirrorInterview() {
                                 rows={3}
                                 disabled={!sessionId || sending || loadingStart}
                                 className="input resize-none"
-                                placeholder="Ask what you would ask in a live interview (Enter to send, Shift+Enter for new line)"
+                                placeholder="Introduce yourself, then ask your first interview question (Enter to send, Shift+Enter for new line)"
                             />
                             <button
                                 className="btn-primary"
@@ -248,8 +286,8 @@ export default function MirrorInterview() {
                         <div className="insight-callout">
                             <p className="text-xs font-semibold uppercase tracking-wide text-primary-700 mb-1">Latest Mirror Confidence</p>
                             <div className="flex items-center justify-between gap-3">
-                                <span className={confidenceBadge(lastTwinMessage?.confidence)}>
-                                    Confidence {Math.round((lastTwinMessage?.confidence ?? 0) * 100)}%
+                                <span className={confidenceBadge(activeInsight?.confidence)}>
+                                    Confidence {Math.round((activeInsight?.confidence ?? 0) * 100)}%
                                 </span>
                                 <Sparkles size={14} className="text-primary-500" />
                             </div>
@@ -258,10 +296,10 @@ export default function MirrorInterview() {
                         <div>
                             <p className="section-title mb-2">Evidence Snippets</p>
                             <div className="space-y-2">
-                                {(lastTwinMessage?.evidence ?? []).length === 0 ? (
+                                {(activeInsight?.evidence ?? []).length === 0 ? (
                                     <p className="text-sm text-slate-500">No evidence extracted yet. Send a recruiter question.</p>
                                 ) : (
-                                    (lastTwinMessage?.evidence ?? []).map((item, idx) => (
+                                    (activeInsight?.evidence ?? []).map((item, idx) => (
                                         <div key={`${item.source}-${idx}`} className="rounded-xl border border-slate-100 p-3 bg-white">
                                             <div className="flex items-center justify-between gap-2 mb-1">
                                                 <span className="badge badge-blue">{item.source.replace('_', ' ')}</span>
@@ -277,20 +315,57 @@ export default function MirrorInterview() {
                         <div>
                             <p className="section-title mb-2">Best Follow-up To Ask Candidate</p>
                             <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
-                                {lastTwinMessage?.followUpQuestion || 'No follow-up yet.'}
+                                {activeInsight?.followUpQuestion || 'No follow-up yet.'}
                             </div>
                         </div>
 
                         <div>
+                            <p className="section-title mb-2">Culture-Based Follow-up</p>
+                            {activeInsight?.cultureFollowUpQuestion ? (
+                                <button
+                                    onClick={() => setInput(activeInsight.cultureFollowUpQuestion || '')}
+                                    className="w-full text-left rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800 hover:bg-emerald-100 transition-colors"
+                                >
+                                    {activeInsight.cultureFollowUpQuestion}
+                                </button>
+                            ) : (
+                                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-500">
+                                    Culture-oriented follow-up will appear here.
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <p className="section-title mb-2">Next Best Follow-up Set</p>
+                            {(activeInsight?.nextBestFollowups ?? []).length === 0 ? (
+                                <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-500">
+                                    Follow-up suggestions appear here after each twin response.
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {(activeInsight?.nextBestFollowups ?? []).map((question, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setInput(question)}
+                                            className="w-full text-left rounded-xl border border-slate-100 bg-white p-3 text-sm text-slate-700 hover:border-blue-200 hover:bg-blue-50 transition-colors"
+                                        >
+                                            {question}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
                             <p className="section-title mb-2">Nightmare Question Deck</p>
-                            {(lastTwinMessage?.nightmareQuestions ?? []).length === 0 ? (
+                            {(activeInsight?.nightmareQuestions ?? []).length === 0 ? (
                                 <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-500 flex items-center gap-2">
                                     <ShieldAlert size={14} className="text-slate-400" />
                                     Turn on Nightmare Mode to generate pressure-test interview prompts.
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {(lastTwinMessage?.nightmareQuestions ?? []).map((question, idx) => (
+                                    {(activeInsight?.nightmareQuestions ?? []).map((question, idx) => (
                                         <div key={idx} className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-700">
                                             {question}
                                         </div>

@@ -108,6 +108,8 @@ class StartRecruiterTwinResponse(BaseModel):
     confidence: Annotated[float, Field(ge=0, le=1)]
     evidence: list[RecruiterTwinEvidence]
     follow_up_question: str
+    culture_follow_up_question: str
+    next_best_followups: list[str] = []
     nightmare_questions: list[str] = []
 
 
@@ -122,6 +124,8 @@ class RecruiterTwinTurnResponse(BaseModel):
     confidence: Annotated[float, Field(ge=0, le=1)]
     evidence: list[RecruiterTwinEvidence]
     follow_up_question: str
+    culture_follow_up_question: str
+    next_best_followups: list[str] = []
     nightmare_questions: list[str] = []
 
 
@@ -131,6 +135,8 @@ class RecruiterTwinHistoryMessage(BaseModel):
     confidence: Optional[float] = None
     evidence: list[RecruiterTwinEvidence] = []
     follow_up_question: Optional[str] = None
+    culture_follow_up_question: Optional[str] = None
+    next_best_followups: list[str] = []
     nightmare_questions: list[str] = []
     created_at: str
 

@@ -53,6 +53,11 @@ _TWIN_TURN_SCHEMA = json.dumps(
                 },
             },
             "follow_up_question": {"type": "string"},
+            "culture_follow_up_question": {"type": "string"},
+            "next_best_followups": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
             "nightmare_questions": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -63,6 +68,8 @@ _TWIN_TURN_SCHEMA = json.dumps(
             "confidence",
             "evidence",
             "follow_up_question",
+            "culture_follow_up_question",
+            "next_best_followups",
             "nightmare_questions",
         ],
     },
@@ -108,8 +115,7 @@ class RecruiterTwinService:
             ),
         )
 
-        opening = await self._generate_opening_turn(context, nightmare_mode)
-        await self._persist_twin_message(session_id, opening)
+        opening = self._build_opening_handshake(context, nightmare_mode)
 
         return StartRecruiterTwinResponse(
             session_id=session_id,
@@ -119,10 +125,12 @@ class RecruiterTwinService:
             job_title=context["job"]["title"],
             company=context["job"].get("company"),
             candidate_snapshot=context["candidate_snapshot"],
-            opening_message=opening["twin_response"],
+            opening_message=opening["opening_message"],
             confidence=opening["confidence"],
             evidence=opening["evidence"],
             follow_up_question=opening["follow_up_question"],
+            culture_follow_up_question=opening["culture_follow_up_question"],
+            next_best_followups=opening["next_best_followups"],
             nightmare_questions=opening["nightmare_questions"],
         )
 
@@ -189,6 +197,12 @@ class RecruiterTwinService:
                     confidence=row.get("confidence"),
                     evidence=[RecruiterTwinEvidence(**e) for e in evidence_items if isinstance(e, dict)],
                     follow_up_question=row.get("follow_up_question"),
+                    culture_follow_up_question=(
+                        row["follow_up_question"]
+                        if row.get("follow_up_question") and self._is_culture_question(row["follow_up_question"])
+                        else None
+                    ),
+                    next_best_followups=[row["follow_up_question"]] if row.get("follow_up_question") else [],
                     nightmare_questions=[q for q in nightmare_questions if isinstance(q, str)],
                     created_at=row["created_at"],
                 )
@@ -418,16 +432,26 @@ class RecruiterTwinService:
             ]
         )
 
-    async def _generate_opening_turn(self, context: dict, nightmare_mode: bool) -> dict:
-        prompt = (
-            "Open a recruiter mirror interview session in one short paragraph. "
-            "State what evidence you are using, how reliable the mirror is, and invite the first recruiter question."
-        )
-        messages = [
-            {"role": "system", "content": self._build_system_prompt(context, nightmare_mode)},
-            {"role": "user", "content": prompt},
-        ]
-        return await self._generate_turn(messages, context, nightmare_mode)
+    def _build_opening_handshake(self, context: dict, nightmare_mode: bool) -> dict:
+        followups = self._fallback_followups(context)
+        culture_question = self._derive_culture_followup(context)
+        if culture_question not in followups:
+            followups = [*followups[:2], culture_question]
+        nightmare_questions = self._fallback_nightmare_questions(context) if nightmare_mode else []
+
+        return {
+            "twin_response": "",
+            "opening_message": (
+                "You ask first. Introduce yourself as the recruiter and ask your opening question. "
+                "I will answer as an evidence-grounded mirror of the candidate."
+            ),
+            "confidence": 0.0,
+            "evidence": self._fallback_evidence(context),
+            "follow_up_question": followups[0],
+            "culture_follow_up_question": culture_question,
+            "next_best_followups": followups,
+            "nightmare_questions": nightmare_questions,
+        }
 
     def _build_conversation_messages(self, context: dict, rows: list[dict], nightmare_mode: bool) -> list[dict]:
         messages = [{"role": "system", "content": self._build_system_prompt(context, nightmare_mode)}]
@@ -459,12 +483,15 @@ class RecruiterTwinService:
             f"Motivations: {[m.get('name') for m in candidate.get('motivations', []) if m.get('name')][:6]}\n"
             f"Job signals: {[s.get('what_to_watch_for') for s in job_profile.get('interview_signals', []) if s.get('what_to_watch_for')][:6]}\n\n"
             "Rules:\n"
+            "0. The recruiter asks first. Never start by asking a question proactively.\n"
             "1. Speak as the candidate mirror, in first person.\n"
             "2. Never invent facts not supported by provided evidence.\n"
             "3. If evidence is weak, say so explicitly and lower confidence.\n"
             "4. Keep response concise and interview-ready.\n"
             f"5. {nightmare_instruction}\n"
-            "6. Use evidence snippets that are concrete and short.\n\n"
+            "6. Use evidence snippets that are concrete and short.\n"
+            "7. Return 3 next-best follow-up questions for the recruiter in next_best_followups.\n\n"
+            "8. Return one explicit culture-oriented follow-up in culture_follow_up_question.\n\n"
             "Return JSON only matching this schema:\n"
             f"{_TWIN_TURN_SCHEMA}"
         )
@@ -504,6 +531,29 @@ class RecruiterTwinService:
             or "Can you walk me through one measurable outcome you owned end-to-end?"
         ).strip()
 
+        culture_follow_up_question = str(data.get("culture_follow_up_question") or "").strip()
+        if not culture_follow_up_question or not self._is_culture_question(culture_follow_up_question):
+            culture_follow_up_question = self._derive_culture_followup(context)
+
+        next_best_followups_raw = (
+            data.get("next_best_followups") if isinstance(data.get("next_best_followups"), list) else []
+        )
+        next_best_followups = [str(q).strip() for q in next_best_followups_raw if str(q).strip()][:3]
+        if not next_best_followups:
+            next_best_followups = self._fallback_followups(context)
+        if follow_up_question and follow_up_question not in next_best_followups:
+            next_best_followups = [follow_up_question, *next_best_followups][:3]
+        if culture_follow_up_question not in next_best_followups:
+            if len(next_best_followups) >= 3:
+                next_best_followups = [
+                    next_best_followups[0],
+                    culture_follow_up_question,
+                    next_best_followups[1],
+                ]
+            else:
+                next_best_followups.append(culture_follow_up_question)
+        follow_up_question = next_best_followups[0]
+
         nightmare_questions = []
         if nightmare_mode:
             nightmare_raw = data.get("nightmare_questions") if isinstance(data.get("nightmare_questions"), list) else []
@@ -516,6 +566,8 @@ class RecruiterTwinService:
             "confidence": confidence,
             "evidence": evidence,
             "follow_up_question": follow_up_question,
+            "culture_follow_up_question": culture_follow_up_question,
+            "next_best_followups": next_best_followups,
             "nightmare_questions": nightmare_questions,
         }
 
@@ -566,6 +618,68 @@ class RecruiterTwinService:
             f"Walk me through a high-stakes production scenario where {required[0]} failed. What would you do in the first 15 minutes?",
             f"Give a concrete example where you used {required[1] if len(required) > 1 else required[0]} under severe ambiguity. What was the measurable result?",
             f"If I ask your former teammate about your {required[2] if len(required) > 2 else required[0]} depth, what specific proof would they cite?",
+        ]
+
+    @staticmethod
+    def _is_culture_question(question: str) -> bool:
+        q = question.strip().lower()
+        if not q:
+            return False
+        culture_keywords = [
+            "culture",
+            "team",
+            "collaboration",
+            "feedback",
+            "conflict",
+            "values",
+            "communication",
+            "stakeholder",
+            "ownership style",
+            "working style",
+        ]
+        return any(token in q for token in culture_keywords)
+
+    def _derive_culture_followup(self, context: dict) -> str:
+        soft_skills = context.get("job_profile", {}).get("soft_skills", [])
+        for item in soft_skills:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name")
+            expectation = item.get("expectation")
+            if name and expectation:
+                return (
+                    f"This team values {name.lower()}. Can you share a specific example of how you demonstrated it "
+                    f"in a team setting, especially around {expectation.lower()}?"
+                )
+            if name:
+                return (
+                    f"What does {name.lower()} look like in your day-to-day behavior with teammates and stakeholders?"
+                )
+
+        return (
+            "Describe a time you had to adapt to a team's working culture quickly. "
+            "What did you change in your communication or collaboration style?"
+        )
+
+    def _fallback_followups(self, context: dict) -> list[str]:
+        culture_question = self._derive_culture_followup(context)
+        required = [
+            item.get("name")
+            for item in context.get("job_profile", {}).get("required_skills", [])[:3]
+            if isinstance(item, dict) and item.get("name")
+        ]
+
+        if not required:
+            return [
+                "What was the most complex decision you made in your last role, and what tradeoff did you accept?",
+                "Can you walk me through one project end-to-end with measurable outcomes?",
+                culture_question,
+            ]
+
+        return [
+            f"Can you share one concrete example where you applied {required[0]} under production pressure?",
+            f"How did you measure success when using {required[1] if len(required) > 1 else required[0]}?",
+            culture_question,
         ]
 
     async def _persist_recruiter_message(self, session_id: str, content: str) -> None:
