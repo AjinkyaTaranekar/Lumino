@@ -268,6 +268,61 @@ class ExtractedPattern(BaseModel):
     )
 
 
+class ExtractedCultureIdentity(BaseModel):
+    """
+    Culture identity signals inferred from the profile text.
+    Only populate fields where there is actual textual evidence — do not guess.
+    """
+    team_size_preference: Optional[Literal["solo", "small_tight", "large_structured"]] = Field(
+        default=None,
+        description=(
+            "Infer from context: solo work mentioned, small startup teams, or large org mentions. "
+            "solo=prefers working alone, small_tight=startup/small team, large_structured=enterprise."
+        )
+    )
+    leadership_style: Optional[Literal["servant", "directive", "collaborative", "invisible"]] = Field(
+        default=None,
+        description=(
+            "servant=mentors/supports team, directive=sets direction and drives execution, "
+            "collaborative=shared decisions, invisible=prefers no management overhead."
+        )
+    )
+    conflict_style: Optional[Literal["direct", "diplomatic", "avoidant", "analytical"]] = Field(
+        default=None,
+        description="Only infer if there is clear evidence. Most profiles won't have this signal."
+    )
+    feedback_preference: Optional[Literal["frequent_small", "milestone_big", "self_directed"]] = Field(
+        default=None,
+        description=(
+            "frequent_small=mentions agile/daily standups/iterative culture, "
+            "milestone_big=mentions formal review cycles, "
+            "self_directed=mentions autonomy/independent work."
+        )
+    )
+    pace_preference: Optional[Literal["sprint", "steady", "deliberate"]] = Field(
+        default=None,
+        description=(
+            "sprint=fast-paced/startup/high urgency context, "
+            "steady=consistent delivery/agile cadence, "
+            "deliberate=research/architecture/long horizon work."
+        )
+    )
+    energy_sources: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "What energises them at work, inferred from what they describe with most enthusiasm: "
+            "e.g. ['solving hard problems', 'shipping to users', 'mentoring']"
+        )
+    )
+    energy_drains: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "What drains them, inferred from pain points or what they moved away from: "
+            "e.g. ['bureaucracy', 'unclear requirements', 'isolated work']"
+        )
+    )
+
+
 class CriticalAssessment(BaseModel):
     """
     Brutally honest assessment of the candidate from a recruiter/engineering manager lens.
@@ -461,6 +516,13 @@ class UserProfileExtraction(BaseModel):
     )
     preferences: List[ExtractedPreference] = Field(default_factory=list)
     patterns: List[ExtractedPattern] = Field(default_factory=list)
+    culture_identity: Optional[ExtractedCultureIdentity] = Field(
+        default=None,
+        description=(
+            "Culture identity signals inferred from the profile text. "
+            "Only populate fields with clear textual evidence. Leave null if not inferrable."
+        )
+    )
     assessment: Optional[CriticalAssessment] = Field(
         default=None,
         description="Critical recruiter/EM lens assessment of the entire profile"
@@ -649,6 +711,54 @@ class ExtractedHiringTeam(BaseModel):
     )
 
 
+class ExtractedTeamCulture(BaseModel):
+    """
+    Team culture signals inferred from a job posting.
+    Only populate fields with clear textual evidence.
+    """
+    pace: Optional[Literal["sprint", "steady", "deliberate"]] = Field(
+        default=None,
+        description=(
+            "sprint=fast-paced/startup/high urgency, "
+            "steady=consistent agile delivery, "
+            "deliberate=research/architecture/long-horizon."
+        )
+    )
+    management_style: Optional[Literal["hands_on", "hands_off", "coaching", "collaborative"]] = Field(
+        default=None,
+        description=(
+            "hands_on=manager is deeply involved day-to-day, "
+            "hands_off=high autonomy/results-oriented, "
+            "coaching=manager focuses on growth and unblocking, "
+            "collaborative=team-based decision-making."
+        )
+    )
+    feedback_culture: Optional[str] = Field(
+        default=None,
+        description="e.g. 'frequent', 'blunt', 'sparse', 'diplomatic'"
+    )
+    decision_making: Optional[str] = Field(
+        default=None,
+        description="e.g. 'top-down', 'collaborative', 'data-driven', 'consensus'"
+    )
+    communication_style: Optional[str] = Field(
+        default=None,
+        description="e.g. 'async-first', 'sync-heavy', 'written-first', 'meeting-heavy'"
+    )
+    work_life: Optional[str] = Field(
+        default=None,
+        description="e.g. 'startup_hours', 'sustainable', 'flexible'"
+    )
+    team_values: Optional[List[str]] = Field(
+        default=None,
+        description="Core values the team operates by, e.g. ['ownership', 'shipping fast', 'code quality']"
+    )
+    anti_patterns: Optional[List[str]] = Field(
+        default=None,
+        description="Behaviours or traits that would make someone fail here, e.g. ['needs constant direction', 'avoids ambiguity']"
+    )
+
+
 class ExtractedCompensationPackage(BaseModel):
     salary_min: Optional[int] = Field(
         default=None,
@@ -822,6 +932,14 @@ class JobPostingExtraction(BaseModel):
     soft_requirements: List[ExtractedJobSoftRequirement] = Field(
         default_factory=list,
         description="Soft skills, personality traits, and cultural fit requirements"
+    )
+    team_culture: Optional[ExtractedTeamCulture] = Field(
+        default=None,
+        description=(
+            "Team culture signals: pace, management style, feedback culture, decision-making. "
+            "Infer from job description language, values statements, and team descriptions. "
+            "Only populate fields with clear evidence."
+        )
     )
     # Synthesized enrichment fields (populated after two-pass extraction)
     scope_signals: List[str] = Field(
@@ -1444,14 +1562,14 @@ class DigitalTwinAnecdote(BaseModel):
     result: Optional[str] = None
     lesson_learned: Optional[str] = None
     emotion_valence: Optional[str] = None   # positive / negative / neutral
-    confidence_signal: Optional[float] = None  # 0–1
+    confidence_signal: Optional[str] = None   # high / medium / low
     spontaneous: Optional[bool] = None
 
 
 class DigitalTwinMotivation(BaseModel):
     name: str
     category: Optional[str] = None          # financial / growth / impact / autonomy / …
-    strength: Optional[str] = None          # low / medium / high
+    strength: Optional[float] = None          # low / medium / high
     evidence: Optional[str] = None
 
 
@@ -1471,13 +1589,22 @@ class DigitalTwinGoal(BaseModel):
 
 class DigitalTwinCultureIdentity(BaseModel):
     name: str
-    team_size_preference: Optional[str] = None  # solo / small / medium / large
-    leadership_style: Optional[str] = None
-    conflict_style: Optional[str] = None
-    feedback_preference: Optional[str] = None
-    pace_preference: Optional[str] = None       # steady / fast / flexible
+    # Explicit preferences (stated by user during interview)
+    team_size_preference: Optional[str] = None  # solo / small_tight / large_structured
+    leadership_style: Optional[str] = None      # servant / directive / collaborative / invisible
+    conflict_style: Optional[str] = None        # direct / diplomatic / avoidant / analytical
+    feedback_preference: Optional[str] = None   # frequent_small / milestone_big / self_directed
+    pace_preference: Optional[str] = None       # sprint / steady / deliberate
     energy_sources: Optional[List[str]] = None
     energy_drains: Optional[List[str]] = None
+    # Inferred signals (derived from how the user communicates, not what they say)
+    communication_style: Optional[str] = None           # direct / elaborate / reserved / expressive
+    self_reference_pattern: Optional[str] = None        # individual / team_first / balanced
+    story_framing: Optional[str] = None                 # outcome_led / context_led / process_led
+    uncertainty_response: Optional[str] = None          # seeks_clarity / embraces / deflects
+    depth_signal: Optional[str] = None                  # proactive / responsive / surface
+    conversation_signals_summary: Optional[str] = None  # text summary of observed patterns
+    conversation_signals_inferred_at: Optional[str] = None  # ISO timestamp of last inference
 
 
 class DigitalTwinBehavioralInsight(BaseModel):

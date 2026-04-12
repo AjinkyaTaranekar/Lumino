@@ -2575,14 +2575,21 @@ async def get_digital_twin_profile(
         """
         MATCH (u:User {id: $user_id})-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity)
         RETURN
-            c.name                  AS name,
-            c.team_size_preference  AS team_size_preference,
-            c.leadership_style      AS leadership_style,
-            c.conflict_style        AS conflict_style,
-            c.feedback_preference   AS feedback_preference,
-            c.pace_preference       AS pace_preference,
-            c.energy_sources        AS energy_sources,
-            c.energy_drains         AS energy_drains
+            c.name                              AS name,
+            c.team_size_preference              AS team_size_preference,
+            c.leadership_style                  AS leadership_style,
+            c.conflict_style                    AS conflict_style,
+            c.feedback_preference               AS feedback_preference,
+            c.pace_preference                   AS pace_preference,
+            c.energy_sources                    AS energy_sources,
+            c.energy_drains                     AS energy_drains,
+            c.communication_style               AS communication_style,
+            c.self_reference_pattern            AS self_reference_pattern,
+            c.story_framing                     AS story_framing,
+            c.uncertainty_response              AS uncertainty_response,
+            c.depth_signal                      AS depth_signal,
+            c.conversation_signals_summary      AS conversation_signals_summary,
+            c.conversation_signals_inferred_at  AS conversation_signals_inferred_at
         """,
         {"user_id": user_id},
     )
@@ -2602,10 +2609,31 @@ async def get_digital_twin_profile(
     )
 
     def _safe_list(val):
+        import json as _json
         if val is None:
             return None
         if isinstance(val, list):
-            return val
+            # Each element might itself be a JSON string — flatten if so
+            result = []
+            for item in val:
+                if isinstance(item, str):
+                    try:
+                        parsed = _json.loads(item)
+                        if isinstance(parsed, list):
+                            result.extend(parsed)
+                        else:
+                            result.append(item)
+                    except (ValueError, TypeError):
+                        result.append(item)
+                else:
+                    result.append(item)
+            return result or None
+        if isinstance(val, str):
+            try:
+                parsed = _json.loads(val)
+                return parsed if isinstance(parsed, list) else [val]
+            except (ValueError, TypeError):
+                return [val]
         return [val]
 
     return DigitalTwinProfileResponse(
@@ -2661,6 +2689,13 @@ async def get_digital_twin_profile(
                 pace_preference=r.get("pace_preference"),
                 energy_sources=_safe_list(r.get("energy_sources")),
                 energy_drains=_safe_list(r.get("energy_drains")),
+                communication_style=r.get("communication_style"),
+                self_reference_pattern=r.get("self_reference_pattern"),
+                story_framing=r.get("story_framing"),
+                uncertainty_response=r.get("uncertainty_response"),
+                depth_signal=r.get("depth_signal"),
+                conversation_signals_summary=r.get("conversation_signals_summary"),
+                conversation_signals_inferred_at=r.get("conversation_signals_inferred_at"),
             )
             for r in culture_rows
         ],
@@ -2729,3 +2764,158 @@ async def retag_all_untagged_jobs(
         "jobs_tagged": total_tagged,
         "results": results,
     }
+
+
+@router.post(
+    "/jobs/backfill-tag-categories",
+    tags=["tags"],
+    summary="Backfill missing categories on existing JobTag nodes",
+)
+async def backfill_tag_categories(
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    One-time migration: classify all JobTag nodes that have no category set.
+    Uses keyword-based classification. Safe to re-run — uses coalesce so
+    already-categorised tags are not overwritten.
+    """
+    from services.job_tag_extractor import _classify_tag
+
+    rows = await db.run_query(
+        "MATCH (t:JobTag) WHERE t.category IS NULL RETURN t.name AS name"
+    )
+    updated = 0
+    for row in rows:
+        name = row.get("name") or ""
+        if not name:
+            continue
+        category = _classify_tag(name)
+        await db.run_write(
+            "MATCH (t:JobTag {name: $name}) SET t.category = $category",
+            {"name": name, "category": category},
+        )
+        updated += 1
+    return {"tags_backfilled": updated}
+
+
+@router.post(
+    "/jobs/extract-team-culture",
+    tags=["jobs"],
+    summary="Backfill TeamCultureIdentity for one job at a time (call repeatedly)",
+)
+async def extract_team_culture_bulk(
+    db: Neo4jClient = Depends(get_neo4j),
+):
+    """
+    Processes ONE job per call to stay within LLM output token rate limits.
+    Re-run until jobs_remaining reaches 0. Already-processed jobs are skipped.
+    """
+    rows = await db.run_query(
+        """
+        MATCH (j:Job)
+        WHERE j.raw_text IS NOT NULL AND j.raw_text <> ''
+          AND NOT (j)-[:HAS_TEAM_CULTURE]->(:TeamCultureIdentity)
+          AND j.team_culture_attempted IS NULL
+        RETURN j.id AS job_id, j.raw_text AS raw_text
+        LIMIT 50
+        """
+    )
+    if not rows:
+        return {"jobs_processed": 0, "jobs_remaining": 0, "message": "All jobs already have TeamCultureIdentity"}
+
+    remaining_count = len(rows)
+    row = rows[0]
+    job_id = row.get("job_id")
+    raw_text = row.get("raw_text") or ""
+
+    if not job_id or not raw_text:
+        return {"jobs_processed": 0, "jobs_remaining": remaining_count - 1, "skipped": job_id}
+
+    ingestion = LLMIngestionService(db)
+    extraction_svc = LLMExtractionService()
+
+    try:
+        extraction = await extraction_svc.extract_job_posting(raw_text)
+        if extraction and extraction.team_culture:
+            await ingestion._ingest_job_team_culture(job_id, extraction.team_culture)
+            return {"jobs_processed": 1, "jobs_remaining": remaining_count - 1, "job_id": job_id}
+        else:
+            # Mark as attempted so we don't loop on jobs with no culture signal
+            await db.run_write(
+                "MATCH (j:Job {id: $id}) SET j.team_culture_attempted = true",
+                {"id": job_id},
+            )
+            return {"jobs_processed": 0, "jobs_remaining": remaining_count - 1, "job_id": job_id, "note": "no culture signal extracted"}
+    except Exception as e:
+        logger.warning(f"extract-team-culture: failed for job {job_id}: {e}")
+        return {"jobs_processed": 0, "jobs_remaining": remaining_count - 1, "job_id": job_id, "error": str(e)}
+
+
+@router.post(
+    "/users/{user_id}/infer-culture-from-stories",
+    tags=["users"],
+    summary="Infer culture identity from user's anecdotes, motivations, values, and goals",
+)
+async def infer_culture_from_stories(
+    user_id: str,
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite),
+):
+    """
+    Reads the user's stored stories (Anecdotes, Motivations, Values, Goals) from the graph
+    and infers culture preferences from their content. Fills pace_preference,
+    feedback_preference, leadership_style, team_size_preference, energy_sources/drains.
+    Uses coalesce — won't overwrite signals already captured via conversation.
+    """
+    from services.culture_inference import CultureInferenceService
+    svc = CultureInferenceService(db, sqlite)
+    performed = await svc.infer_from_stories(user_id)
+    return {"inferred": performed, "user_id": user_id}
+
+
+@router.post(
+    "/users/backfill-culture-from-stories",
+    tags=["users"],
+    summary="Bulk backfill culture identity from stories for all users",
+)
+async def backfill_culture_from_stories(
+    db: Neo4jClient = Depends(get_neo4j),
+    sqlite: SQLiteClient = Depends(get_sqlite),
+):
+    """
+    Runs story-based culture inference for all users who have anecdotes/stories
+    but no culture identity yet (or missing scoring fields).
+    Processes one user per call to avoid LLM rate limits — re-run until done.
+    """
+    from services.culture_inference import CultureInferenceService
+
+    rows = await db.run_query(
+        """
+        MATCH (u:User)-[:HAS_ANECDOTE|MOTIVATED_BY|HOLDS_VALUE|ASPIRES_TO]->()
+        WHERE NOT EXISTS {
+          MATCH (u)-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity)
+          WHERE c.pace_preference IS NOT NULL
+             OR c.feedback_preference IS NOT NULL
+             OR c.leadership_style IS NOT NULL
+             OR c.story_signals_inferred_at IS NOT NULL
+        }
+        RETURN DISTINCT u.id AS user_id
+        LIMIT 50
+        """
+    )
+
+    if not rows:
+        return {"users_processed": 0, "users_remaining": 0, "message": "All users already have story-inferred culture signals"}
+
+    remaining = len(rows)
+    user_id = rows[0].get("user_id")
+    if not user_id:
+        return {"users_processed": 0, "users_remaining": remaining - 1}
+
+    svc = CultureInferenceService(db, sqlite)
+    try:
+        performed = await svc.infer_from_stories(user_id)
+        return {"users_processed": 1 if performed else 0, "users_remaining": remaining - 1, "user_id": user_id}
+    except Exception as e:
+        logger.warning(f"backfill-culture-from-stories: failed for user {user_id}: {e}")
+        return {"users_processed": 0, "users_remaining": remaining - 1, "user_id": user_id, "error": str(e)}

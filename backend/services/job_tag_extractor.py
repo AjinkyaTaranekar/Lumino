@@ -21,20 +21,39 @@ _SYSTEM_PROMPT = """You are a job market analyst. Given a job posting, extract s
 describe the nature and context of the role. These tags help candidates understand what
 kind of job this is at a glance, beyond just the required skills.
 
-Tag categories to consider (generate your own tags — these are just examples):
-  work_style: remote-first, hybrid, on-site, async-culture, fast-paced, startup-pace
-  compensation: high-paying, equity, performance-bonus, competitive-salary
-  culture: mission-driven, flat-hierarchy, collaborative, diverse-team, growth-driven
-  tech: cutting-edge-stack, open-source, ml-heavy, data-driven, cloud-native
-  impact: social-impact, scale-product, greenfield, consumer-facing
+You MUST assign each tag to exactly one of these five categories:
+  work_style   — how/where the work happens: remote-first, hybrid, async-culture, fast-paced, startup-pace, flexible-hours
+  compensation — pay and financial signals: high-paying, equity, performance-bonus, competitive-salary, below-market
+  culture      — team and org signals: mission-driven, flat-hierarchy, collaborative, diverse-team, growth-driven, high-ownership
+  tech         — technical environment: cutting-edge-stack, open-source, ml-heavy, data-driven, cloud-native, legacy-systems
+  impact       — scope and reach of the work: social-impact, scale-product, greenfield, consumer-facing, b2b, research-focused
 
 Rules:
 - Only assign tags clearly supported by the job posting text.
 - Use lowercase, hyphen-separated slugs (e.g. "remote-first", not "Remote First").
 - Keep tags concise — 1 to 3 words max per tag.
 - A job can have 0 to 10 tags total.
-- Return ONLY a JSON object: {"tags": ["tag1", "tag2", ...]}
+- Return ONLY a JSON object with this exact shape:
+  {"tags": [{"tag": "remote-first", "category": "work_style"}, {"tag": "equity", "category": "compensation"}]}
 """
+
+# Keyword-based fallback classifier for tags that lack a category (e.g. existing data)
+_CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "work_style":   ["remote", "hybrid", "onsite", "async", "fast-paced", "startup", "flexible", "work-life", "pace"],
+    "compensation": ["pay", "salary", "equity", "bonus", "compensation", "stock", "high-paying", "competitive", "market"],
+    "tech":         ["ml", "ai", "cloud", "open-source", "data", "infra", "platform", "cutting-edge", "stack", "native", "legacy"],
+    "impact":       ["impact", "scale", "greenfield", "consumer", "social", "b2b", "research", "user-facing", "facing"],
+    "culture":      ["mission", "diversity", "collaborative", "flat", "growth", "inclusive", "team", "culture", "driven", "ownership"],
+}
+
+
+def _classify_tag(tag: str) -> str:
+    """Classify a tag slug into one of the 5 categories using keyword matching."""
+    lower = tag.lower()
+    for category, keywords in _CATEGORY_KEYWORDS.items():
+        if any(kw in lower for kw in keywords):
+            return category
+    return "culture"  # safe default
 
 
 class JobTagExtractor:
@@ -124,16 +143,21 @@ class JobTagExtractor:
     async def extract_and_store_tags(self, job_id: str, job_text: str) -> list[str]:
         """
         Extract semantic tags from job_text and write them to the Job node in Neo4j.
-        Returns the list of extracted tags.
+        Returns the list of extracted tag slugs.
         """
-        tags = await self._extract_tags(job_text)
-        if tags:
-            await self._store_tags(job_id, tags)
-        logger.info(f"Job {job_id}: extracted {len(tags)} tags: {tags}")
-        return tags
+        tagged = await self._extract_tags(job_text)
+        if tagged:
+            await self._store_tags(job_id, tagged)
+        slugs = [t["tag"] for t in tagged]
+        logger.info(f"Job {job_id}: extracted {len(tagged)} tags: {slugs}")
+        return slugs
 
-    async def _extract_tags(self, job_text: str) -> list[str]:
-        """Call the LLM to extract tags. Returns cleaned, dynamic tags."""
+    async def _extract_tags(self, job_text: str) -> list[dict]:
+        """
+        Call the LLM to extract tags with categories.
+        Returns list of {"tag": slug, "category": category} dicts.
+        """
+        VALID_CATEGORIES = {"work_style", "compensation", "culture", "tech", "impact"}
         try:
             response = await acompletion(
                 model=self.model,
@@ -149,7 +173,6 @@ class JobTagExtractor:
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
                     raw = raw[4:]
-            # Extract JSON object boundaries
             start = raw.find("{")
             end = raw.rfind("}") + 1
             if start != -1 and end > start:
@@ -158,38 +181,55 @@ class JobTagExtractor:
             raw_tags: list = data.get("tags", [])
             if not isinstance(raw_tags, list):
                 raw_tags = []
-            # Normalize: lowercase, slugify spaces → hyphens, keep only valid slug chars
-            tags = []
-            for t in raw_tags:
-                if not isinstance(t, str):
+
+            result = []
+            for entry in raw_tags:
+                # Accept both new {"tag": ..., "category": ...} and old plain string formats
+                if isinstance(entry, dict):
+                    raw_slug = entry.get("tag") or ""
+                    category = entry.get("category") or ""
+                elif isinstance(entry, str):
+                    raw_slug = entry
+                    category = ""
+                else:
                     continue
-                slug = re.sub(r"[^a-z0-9-]", "", t.lower().replace(" ", "-").replace("_", "-"))
+
+                slug = re.sub(r"[^a-z0-9-]", "", raw_slug.lower().replace(" ", "-").replace("_", "-"))
                 slug = re.sub(r"-+", "-", slug).strip("-")
-                if slug:
-                    tags.append(slug)
-            return tags[:10]  # cap at 10 tags
+                if not slug:
+                    continue
+
+                # Validate / fallback category
+                if category not in VALID_CATEGORIES:
+                    category = _classify_tag(slug)
+
+                result.append({"tag": slug, "category": category})
+
+            return result[:10]
         except Exception as e:
             logger.warning(f"Tag extraction failed, skipping: {e}")
             return []
 
-    async def _store_tags(self, job_id: str, tags: list[str]) -> None:
+    async def _store_tags(self, job_id: str, tagged: list[dict]) -> None:
         """
         Write tags to Neo4j:
         - Set j.tags as a list property on the Job node (fast lookup)
-        - Create JobTag nodes + HAS_TAG edges (graph traversal + interest matching)
+        - Create/update JobTag nodes with category + HAS_TAG edges
         """
+        slugs = [t["tag"] for t in tagged]
         await self.client.run_write(
             "MATCH (j:Job {id: $job_id}) SET j.tags = $tags",
-            {"job_id": job_id, "tags": tags},
+            {"job_id": job_id, "tags": slugs},
         )
 
-        for tag in tags:
+        for entry in tagged:
             await self.client.run_write(
                 """
                 MERGE (t:JobTag {name: $tag})
+                SET t.category = $category
                 WITH t
                 MATCH (j:Job {id: $job_id})
                 MERGE (j)-[:HAS_TAG]->(t)
                 """,
-                {"job_id": job_id, "tag": tag},
+                {"job_id": job_id, "tag": entry["tag"], "category": entry["category"]},
             )

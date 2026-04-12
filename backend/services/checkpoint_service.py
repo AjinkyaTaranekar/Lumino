@@ -198,17 +198,17 @@ class CheckpointService:
     ) -> None:
         """Re-run match linking and regenerate the visualization after rollback."""
         # Deferred imports to avoid circular dependencies
-        from services.llm_ingestion import LLMIngestionService
+        from services.vector_embedding import VectorEmbeddingService
         from services.visualization import VisualizationService
 
-        ingestion = LLMIngestionService(self.neo4j)
+        embedder = VectorEmbeddingService(self.neo4j)
         viz = VisualizationService(self.neo4j, self.output_dir)
 
         if entity_type == "user":
-            await ingestion.link_skill_matches(entity_id)
-            await ingestion.link_domain_matches(entity_id)
+            await embedder.embed_user_skills(entity_id)
+            await embedder.embed_user_domains(entity_id)
             await viz.generate_user_graph(entity_id)
         else:
-            await ingestion.link_job_skill_matches(entity_id)
-            await ingestion.link_job_domain_matches(entity_id)
+            await embedder.embed_job_skill_reqs(entity_id)
+            await embedder.embed_job_domain_reqs(entity_id)
             await viz.generate_job_graph(entity_id)

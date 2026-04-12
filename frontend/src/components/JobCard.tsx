@@ -128,7 +128,7 @@ export default function JobCard({ result, rank, userIdOrJobId, mode = 'seeker' }
       <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-4">
         <ScoreBar label="Skills" score={result.skill_score} />
         <ScoreBar label="Domain" score={result.domain_score} />
-        {result.culture_fit_score != null && (
+        {result.culture_fit_score != null && result.culture_fit_score > 0 && (
           <ScoreBar label="Culture" score={result.culture_fit_score} />
         )}
         {result.soft_skill_score != null && result.soft_skill_score > 0 && (

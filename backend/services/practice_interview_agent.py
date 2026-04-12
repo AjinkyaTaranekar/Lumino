@@ -466,13 +466,8 @@ class PracticeInterviewAgent:
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
-                resp = await acompletion(
-                    model=self._model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                    temperature=1.0,
-                )
-                return self._unwrap_json(resp.choices[0].message.content)
+                from services.llm_utils import acompletion_json
+                return await acompletion_json(self._model, messages, temperature=1.0)
             except Exception as e:
                 if attempt == max_attempts - 1:
                     raise

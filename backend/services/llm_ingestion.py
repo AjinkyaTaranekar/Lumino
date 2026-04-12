@@ -70,6 +70,8 @@ class LLMIngestionService:
         await self._ingest_patterns(user_id, extraction.patterns)
         if extraction.assessment:
             await self._ingest_assessment(user_id, extraction.assessment)
+        if getattr(extraction, "culture_identity", None):
+            await self._ingest_culture_identity(user_id, extraction.culture_identity)
         await recompute_weights(user_id, self.client)
         logger.info(f"LLM hierarchy written for user {user_id}")
 
@@ -525,6 +527,41 @@ class LLMIngestionService:
             },
         )
 
+    async def _ingest_culture_identity(self, user_id: str, culture) -> None:
+        """
+        Merge culture identity signals extracted from profile text into the graph.
+        Uses coalesce so conversation-captured values are never overwritten by
+        the lower-confidence extraction pass.
+        """
+        import json as _json
+        energy_sources = getattr(culture, "energy_sources", None)
+        energy_drains  = getattr(culture, "energy_drains", None)
+        await self.client.run_write(
+            """
+            MATCH (u:User {id: $user_id})
+            MERGE (c:CultureIdentity {name: 'culture_profile', user_id: $user_id})
+            SET c.team_size_preference = coalesce(c.team_size_preference, $team_size),
+                c.leadership_style     = coalesce(c.leadership_style, $leadership),
+                c.conflict_style       = coalesce(c.conflict_style, $conflict),
+                c.feedback_preference  = coalesce(c.feedback_preference, $feedback),
+                c.pace_preference      = coalesce(c.pace_preference, $pace),
+                c.energy_sources       = coalesce(c.energy_sources, $energy_sources),
+                c.energy_drains        = coalesce(c.energy_drains, $energy_drains),
+                c.source               = coalesce(c.source, 'llm_extraction')
+            MERGE (u)-[:HAS_CULTURE_IDENTITY]->(c)
+            """,
+            {
+                "user_id": user_id,
+                "team_size": getattr(culture, "team_size_preference", None),
+                "leadership": getattr(culture, "leadership_style", None),
+                "conflict": getattr(culture, "conflict_style", None),
+                "feedback": getattr(culture, "feedback_preference", None),
+                "pace": getattr(culture, "pace_preference", None),
+                "energy_sources": _json.dumps(energy_sources) if energy_sources else None,
+                "energy_drains": _json.dumps(energy_drains) if energy_drains else None,
+            },
+        )
+
     async def _ingest_patterns(self, user_id: str, patterns: list) -> None:
         for pattern in patterns:
             await self.client.run_write(
@@ -570,7 +607,42 @@ class LLMIngestionService:
         if extraction.role_expectations:
             await self._ingest_job_role_expectations(job_id, extraction.role_expectations)
         await self._ingest_job_soft_requirements(job_id, extraction.soft_requirements)
+        if getattr(extraction, "team_culture", None):
+            await self._ingest_job_team_culture(job_id, extraction.team_culture)
         logger.info(f"LLM hierarchy written for job {job_id}")
+
+    async def _ingest_job_team_culture(self, job_id: str, culture) -> None:
+        """Merge TeamCultureIdentity node from LLM-extracted team culture signals."""
+        import json as _json
+        team_values = getattr(culture, "team_values", None)
+        anti_patterns = getattr(culture, "anti_patterns", None)
+        await self.client.run_write(
+            """
+            MATCH (j:Job {id: $job_id})
+            MERGE (tc:TeamCultureIdentity {name: 'team_culture', job_id: $job_id})
+            SET tc.pace               = coalesce($pace, tc.pace),
+                tc.management_style   = coalesce($management_style, tc.management_style),
+                tc.feedback_culture   = coalesce($feedback_culture, tc.feedback_culture),
+                tc.decision_making    = coalesce($decision_making, tc.decision_making),
+                tc.communication_style = coalesce($communication_style, tc.communication_style),
+                tc.work_life          = coalesce($work_life, tc.work_life),
+                tc.team_values        = coalesce($team_values, tc.team_values),
+                tc.anti_patterns      = coalesce($anti_patterns, tc.anti_patterns),
+                tc.source             = 'llm_extraction'
+            MERGE (j)-[:HAS_TEAM_CULTURE]->(tc)
+            """,
+            {
+                "job_id":             job_id,
+                "pace":               getattr(culture, "pace", None),
+                "management_style":   getattr(culture, "management_style", None),
+                "feedback_culture":   getattr(culture, "feedback_culture", None),
+                "decision_making":    getattr(culture, "decision_making", None),
+                "communication_style": getattr(culture, "communication_style", None),
+                "work_life":          getattr(culture, "work_life", None),
+                "team_values":        _json.dumps(team_values) if team_values else None,
+                "anti_patterns":      _json.dumps(anti_patterns) if anti_patterns else None,
+            },
+        )
 
     async def _create_job_node(
         self, job_id: str, extraction: JobPostingExtraction,

@@ -689,6 +689,7 @@ export interface DigitalTwinGoal {
 
 export interface DigitalTwinCultureIdentity {
   name: string;
+  // Explicit preferences (stated during interview)
   team_size_preference?: string | null;
   leadership_style?: string | null;
   conflict_style?: string | null;
@@ -696,6 +697,14 @@ export interface DigitalTwinCultureIdentity {
   pace_preference?: string | null;
   energy_sources?: string[] | null;
   energy_drains?: string[] | null;
+  // Inferred from how the user communicates
+  communication_style?: string | null;
+  self_reference_pattern?: string | null;
+  story_framing?: string | null;
+  uncertainty_response?: string | null;
+  depth_signal?: string | null;
+  conversation_signals_summary?: string | null;
+  conversation_signals_inferred_at?: string | null;
 }
 
 export interface DigitalTwinBehavioralInsight {

@@ -10,6 +10,7 @@ Edit session lifecycle:
   get_history    → returns full conversation from SQLite
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -84,12 +85,46 @@ class GraphEditService:
         self, session_id: str, message: str
     ) -> GraphMutationProposal:
         """Append user message to history, call LLM, return next proposal."""
+        import asyncio
         session = await self._get_session(session_id)
         await self._touch_session(session_id)
         proposal = await self.agent.get_next_question(
             session_id, session["entity_type"], session["entity_id"], message
         )
+        # Background: infer culture signals from conversation style every 5 user messages
+        if session["entity_type"] == "user":
+            asyncio.create_task(
+                self._maybe_infer_culture(session_id, session["entity_id"])
+            )
         return proposal
+
+    async def _maybe_infer_culture(self, session_id: str, user_id: str) -> None:
+        """Trigger culture inference if message count crosses a threshold."""
+        from services.culture_inference import (
+            CultureInferenceService,
+            INFERENCE_INTERVAL,
+            MIN_USER_MESSAGES,
+        )
+        try:
+            row = await self.sqlite.fetchone(
+                "SELECT COUNT(*) AS cnt FROM session_messages WHERE session_id = ? AND role = 'user'",
+                (session_id,),
+            )
+            count = row["cnt"] if row else 0
+            if count >= MIN_USER_MESSAGES and count % INFERENCE_INTERVAL == 0:
+                svc = CultureInferenceService(self.neo4j, self.sqlite)
+                await svc.infer_from_conversation(user_id, session_id)
+        except Exception as e:
+            logger.warning(f"Culture inference failed silently for session {session_id}: {e}")
+
+    async def _infer_culture_from_stories(self, user_id: str) -> None:
+        """Background task: infer culture signals from user's story content."""
+        try:
+            from services.culture_inference import CultureInferenceService
+            svc = CultureInferenceService(self.neo4j, self.sqlite)
+            await svc.infer_from_stories(user_id)
+        except Exception as e:
+            logger.warning(f"Story-based culture inference failed for user {user_id}: {e}")
 
     async def apply_mutations(
         self, session_id: str, mutations: GraphMutation
@@ -128,22 +163,27 @@ class GraphEditService:
             await self._add_edge(entity_type, entity_id, edge_spec)
             edges_added += 1
 
-        # Re-link MATCHES edges and recompute weights
-        from services.llm_ingestion import LLMIngestionService
+        # Re-embed nodes and recompute weights
+        from services.vector_embedding import VectorEmbeddingService
         from services.weights import recompute_weights
         from services.visualization import VisualizationService
 
-        ingestor = LLMIngestionService(self.neo4j)
+        embedder = VectorEmbeddingService(self.neo4j)
         viz = VisualizationService(self.neo4j, self.output_dir)
 
         if entity_type == "user":
-            await ingestor.link_skill_matches(entity_id)
-            await ingestor.link_domain_matches(entity_id)
+            await embedder.embed_user_skills(entity_id)
+            await embedder.embed_user_domains(entity_id)
             await recompute_weights(entity_id, self.neo4j)
             await viz.generate_user_graph(entity_id)
+            # If story nodes were mutated, re-infer culture from stories in the background
+            story_labels = {"Anecdote", "Motivation", "Value", "Goal"}
+            mutated_labels = {n.get("label") for n in mutations.add_nodes} | {n.get("label") for n in mutations.update_nodes}
+            if story_labels & mutated_labels:
+                asyncio.create_task(self._infer_culture_from_stories(entity_id))
         else:
-            await ingestor.link_job_skill_matches(entity_id)
-            await ingestor.link_job_domain_matches(entity_id)
+            await embedder.embed_job_skill_reqs(entity_id)
+            await embedder.embed_job_domain_reqs(entity_id)
             await viz.generate_job_graph(entity_id)
 
         await self._touch_session(session_id)

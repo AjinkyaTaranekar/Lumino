@@ -185,7 +185,7 @@ function MatchCard({
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
         <ScoreBar label="Skills" score={result.skill_score} />
         <ScoreBar label="Domain" score={result.domain_score} />
-        {result.culture_fit_score != null && (
+        {result.culture_fit_score != null && result.culture_fit_score > 0 && (
           <ScoreBar label="Culture" score={result.culture_fit_score} />
         )}
         {result.soft_skill_score != null && result.soft_skill_score > 0 && (

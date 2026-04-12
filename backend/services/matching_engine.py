@@ -792,8 +792,9 @@ class MatchingEngine:
     # Inferred = semantic-only, no shared keywords — we trust it less.
     _INFERRED_CONFIDENCE: float = 0.75
 
-    @staticmethod
+    @classmethod
     def _decide_match(
+        cls,
         req_name: str,
         skill_name: str,
         sem_score: float,
@@ -806,29 +807,46 @@ class MatchingEngine:
     ) -> tuple[bool, str | None, float]:
         """
         Two-gate hybrid decision:
-          • lex >= 0.20  → hybrid gate: sem*w + lex*(1-w) >= hybrid_threshold
-          • lex <  0.20  → semantic-only gate: sem >= effective_threshold
-                           Base threshold: sem_only_threshold (default 0.88)
-                           Cross-family penalty: raised to 0.93 when skill families
-                           differ (e.g. "Go"/Programming ↔ "Algorithms"/CS Theory).
-                           This prevents generic short-name embeddings from
-                           matching conceptually unrelated skills.
+          • Exact name match           → always match regardless of lex/sem
+          • lex >= 0.20 (effective)   → hybrid gate: sem*w + lex*(1-w) >= hybrid_threshold
+          • lex <  0.20 (effective)   → semantic-only gate: sem >= effective_threshold
+                                        Base threshold: sem_only_threshold (default 0.88)
+                                        Cross-family penalty: raised to 0.92 when skill
+                                        families differ (prevents short-name false matches)
+
+        lex_score is the full-text lex (name+family+context).
+        We also compute a name-only lex and use whichever is higher — this ensures
+        that context text can only help matching, never hurt it.
 
         Returns (matched, method, hybrid_score).
         method: "exact" | "strong" | "inferred" | None
         """
-        hybrid = round(sem_weight * sem_score + (1.0 - sem_weight) * lex_score, 4)
+        # ── Name-only lex boost ────────────────────────────────────────────────
+        # Context/family text can dilute the lex score for identical skill names.
+        # Compute lex on names alone and take the max so context only helps.
+        name_only_lex = cls._lexical_score(req_name, skill_name)
+        effective_lex = max(lex_score, name_only_lex)
 
-        if lex_score >= 0.20:
+        hybrid = round(sem_weight * sem_score + (1.0 - sem_weight) * effective_lex, 4)
+
+        # ── Exact name shortcut ────────────────────────────────────────────────
+        # Identical normalised names always match regardless of context noise.
+        req_norm   = req_name.lower().strip()
+        skill_norm = skill_name.lower().strip()
+        if req_norm == skill_norm and req_norm:
+            return True, "exact", 1.0
+
+        if effective_lex >= 0.20:
             matched = hybrid >= hybrid_threshold
-            method  = ("exact" if lex_score >= 0.90 else "strong") if matched else None
+            method  = ("exact" if effective_lex >= 0.90 else "strong") if matched else None
         else:
-            # Tighten when families are known and differ
+            # Tighten when families are known and differ — but less aggressively
+            # than before (0.92 not 0.93) since we already require lex < 0.20
             families_differ = (
                 req_family and skill_family and
                 req_family.lower().strip() != skill_family.lower().strip()
             )
-            effective_threshold = 0.93 if families_differ else sem_only_threshold
+            effective_threshold = 0.92 if families_differ else sem_only_threshold
             matched = sem_score >= effective_threshold
             method  = "inferred" if matched else None
 
@@ -1292,13 +1310,16 @@ class MatchingEngine:
             {"job_id": job_id},
         )
 
-        if not user_culture or not user_culture[0].get("pace_preference"):
-            return {"score": None}
-        if not job_culture or not job_culture[0].get("pace"):
-            return {"score": None}
+        uc = user_culture[0] if user_culture else {}
+        jc = job_culture[0] if job_culture else {}
 
-        uc = user_culture[0]
-        jc = job_culture[0]
+        # Require at least one matchable field on each side — allows partial culture data
+        _user_fields = ["pace_preference", "feedback_preference", "leadership_style"]
+        _job_fields  = ["pace", "feedback_culture", "management_style"]
+        if not any(uc.get(f) for f in _user_fields):
+            return {"score": None}
+        if not any(jc.get(f) for f in _job_fields):
+            return {"score": None}
 
         checks = 0
         hits   = 0.0

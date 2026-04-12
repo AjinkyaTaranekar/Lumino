@@ -46,6 +46,14 @@ import { useEffect } from 'react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Maps confidence_signal string to a 0–1 float for bar/percentage display. */
+function confToFloat(c?: string | null): number | null {
+  if (c === 'high')   return 1.0
+  if (c === 'medium') return 0.6
+  if (c === 'low')    return 0.3
+  return null
+}
+
 function emotionStyle(v?: string | null): { bg: string; text: string; label: string } {
   if (v === 'positive') return { bg: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', label: 'Positive' }
   if (v === 'negative') return { bg: 'bg-red-50 border-red-200', text: 'text-red-600', label: 'Challenging' }
@@ -131,7 +139,7 @@ function Section({
 function AnecdoteCard({ a }: { a: DigitalTwinAnecdote }) {
   const [open, setOpen] = useState(false)
   const em = emotionStyle(a.emotion_valence)
-  const conf = a.confidence_signal ?? null
+  const conf = confToFloat(a.confidence_signal)
 
   return (
     <div className={`rounded-2xl border p-4 ${em.bg} transition-all`}>
@@ -148,15 +156,15 @@ function AnecdoteCard({ a }: { a: DigitalTwinAnecdote }) {
           </div>
           <div className="flex items-center gap-2 mt-1.5 flex-wrap">
             <span className={`text-[11px] font-semibold ${em.text}`}>{em.label}</span>
-            {conf !== null && (
-              <div className="flex items-center gap-1.5" title={`Confidence: ${Math.round(conf * 100)}%`}>
+            {conf !== null && a.confidence_signal && (
+              <div className="flex items-center gap-1.5" title={`Confidence: ${a.confidence_signal}`}>
                 <div className="w-16 h-1.5 bg-white/60 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full bg-indigo-400"
                     style={{ width: `${Math.round(conf * 100)}%` }}
                   />
                 </div>
-                <span className="text-[10px] text-slate-400">{Math.round(conf * 100)}% confidence</span>
+                <span className="text-[10px] text-slate-400 capitalize">{a.confidence_signal} confidence</span>
               </div>
             )}
           </div>
@@ -207,8 +215,10 @@ function StoryFingerprint({ anecdotes }: { anecdotes: DigitalTwinAnecdote[] }) {
   const neg = anecdotes.filter(a => a.emotion_valence === 'negative').length
   const neu = anecdotes.length - pos - neg
   const spontaneous = anecdotes.filter(a => a.spontaneous).length
-  const avgConf = anecdotes.filter(a => a.confidence_signal != null).reduce((s, a) => s + (a.confidence_signal ?? 0), 0)
-    / Math.max(1, anecdotes.filter(a => a.confidence_signal != null).length)
+  const confAnecdotes = anecdotes.map(a => confToFloat(a.confidence_signal)).filter((v): v is number => v !== null)
+  const avgConf = confAnecdotes.length > 0
+    ? confAnecdotes.reduce((s, v) => s + v, 0) / confAnecdotes.length
+    : 0
 
   const total = anecdotes.length
 
@@ -260,7 +270,9 @@ function StoryFingerprint({ anecdotes }: { anecdotes: DigitalTwinAnecdote[] }) {
           <p className="text-[10px] text-indigo-300 mt-0.5">Spontaneous</p>
         </div>
         <div className="bg-white/10 rounded-xl p-3 text-center">
-          <p className="text-lg font-extrabold text-white tabular-nums">{Math.round(avgConf * 100)}%</p>
+          <p className="text-lg font-extrabold text-white tabular-nums">
+            {confAnecdotes.length > 0 ? `${Math.round(avgConf * 100)}%` : '—'}
+          </p>
           <p className="text-[10px] text-indigo-300 mt-0.5">Avg confidence</p>
         </div>
         <div className="bg-white/10 rounded-xl p-3 text-center">
@@ -564,6 +576,33 @@ export default function HumanStory() {
                               ))}
                             </div>
                           </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Inferred from conversation style */}
+                    {(c.communication_style || c.self_reference_pattern || c.story_framing || c.uncertainty_response || c.depth_signal) && (
+                      <div className="pt-3 border-t border-slate-100 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <MessageSquare size={12} className="text-sky-500" />
+                          <p className="text-[10px] font-bold text-sky-600 uppercase tracking-widest">Inferred from how you talk</p>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {[
+                            { label: 'Communication', value: c.communication_style },
+                            { label: 'Story Opening', value: c.story_framing?.replace(/_/g, ' ') },
+                            { label: 'Self-Reference', value: c.self_reference_pattern?.replace(/_/g, ' ') },
+                            { label: 'Ambiguity', value: c.uncertainty_response?.replace(/_/g, ' ') },
+                            { label: 'Depth', value: c.depth_signal },
+                          ].filter(d => d.value).map(d => (
+                            <div key={d.label} className="bg-sky-50 rounded-xl p-3">
+                              <p className="text-[10px] font-semibold text-sky-400 uppercase tracking-widest">{d.label}</p>
+                              <p className="text-sm font-semibold text-indigo-950 mt-0.5 capitalize">{d.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                        {c.conversation_signals_summary && (
+                          <p className="text-xs text-slate-500 leading-relaxed italic">{c.conversation_signals_summary}</p>
                         )}
                       </div>
                     )}

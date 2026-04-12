@@ -17,7 +17,7 @@ import logging
 import os
 import re
 
-from litellm import acompletion
+
 
 from database.neo4j_client import Neo4jClient
 from database.sqlite_client import SQLiteClient
@@ -169,6 +169,40 @@ class LLMEditAgent:
                 """,
                 {"id": entity_id},
             )
+            # Human-layer nodes — used to avoid re-asking captured topics
+            motivations = await self.neo4j.run_query(
+                "MATCH (u:User {id: $id})-[:MOTIVATED_BY]->(m:Motivation) "
+                "RETURN m.name AS name, m.category AS category, m.strength AS strength",
+                {"id": entity_id},
+            )
+            values = await self.neo4j.run_query(
+                "MATCH (u:User {id: $id})-[:HOLDS_VALUE]->(v:Value) "
+                "RETURN v.name AS name, v.priority_rank AS priority_rank",
+                {"id": entity_id},
+            )
+            goals = await self.neo4j.run_query(
+                "MATCH (u:User {id: $id})-[:ASPIRES_TO]->(g:Goal) "
+                "RETURN g.name AS name, g.type AS type, g.clarity_level AS clarity_level",
+                {"id": entity_id},
+            )
+            anecdotes = await self.neo4j.run_query(
+                "MATCH (u:User {id: $id})-[:HAS_SKILL_CATEGORY|HAS_PROJECT_CATEGORY*..3]->(n) "
+                "-[:GROUNDED_IN]->(a:Anecdote) RETURN DISTINCT a.name AS name "
+                "UNION "
+                "MATCH (a:Anecdote {user_id: $id}) RETURN a.name AS name",
+                {"id": entity_id},
+            )
+            culture = await self.neo4j.run_query(
+                "MATCH (u:User {id: $id})-[:HAS_CULTURE_IDENTITY]->(c:CultureIdentity) "
+                "RETURN c.team_size_preference AS team_size_preference, "
+                "       c.leadership_style AS leadership_style, "
+                "       c.conflict_style AS conflict_style, "
+                "       c.feedback_preference AS feedback_preference, "
+                "       c.pace_preference AS pace_preference, "
+                "       c.energy_sources AS energy_sources, "
+                "       c.energy_drains AS energy_drains",
+                {"id": entity_id},
+            )
             return {
                 "entity_type": "user",
                 "entity_id": entity_id,
@@ -177,6 +211,11 @@ class LLMEditAgent:
                 "projects": projects,
                 "experiences": experiences,
                 "assessment": assessment[0] if assessment else None,
+                "motivations": motivations,
+                "values": values,
+                "goals": goals,
+                "anecdotes": [a["name"] for a in anecdotes if a.get("name")],
+                "culture": culture[0] if culture else {},
             }
         else:
             job_meta = await self.neo4j.run_query(
@@ -317,6 +356,60 @@ class LLMEditAgent:
             for s in probe_targets[:5]
         )
 
+        # Build "already captured" summary for human-layer nodes
+        motivations = graph_summary.get("motivations", [])
+        values_list = graph_summary.get("values", [])
+        goals_list  = graph_summary.get("goals", [])
+        anecdotes   = graph_summary.get("anecdotes", [])
+        culture     = graph_summary.get("culture", {})
+
+        already_captured_lines = []
+        if motivations:
+            already_captured_lines.append(
+                f"  Motivations: {', '.join(m['name'] for m in motivations)}"
+            )
+        if values_list:
+            already_captured_lines.append(
+                f"  Values: {', '.join(v['name'] for v in values_list)}"
+            )
+        if goals_list:
+            already_captured_lines.append(
+                f"  Goals: {', '.join(g['name'] for g in goals_list)}"
+            )
+        if anecdotes:
+            already_captured_lines.append(
+                f"  Anecdotes: {', '.join(anecdotes[:8])}"
+            )
+
+        _CULTURE_FIELDS = [
+            "team_size_preference", "leadership_style", "conflict_style",
+            "feedback_preference", "pace_preference", "energy_sources", "energy_drains",
+        ]
+        captured_culture = {k: v for k, v in culture.items() if v}
+        missing_culture  = [f for f in _CULTURE_FIELDS if not culture.get(f)]
+
+        if captured_culture:
+            already_captured_lines.append(
+                f"  Culture Identity: {', '.join(f'{k}={v}' for k, v in captured_culture.items())}"
+            )
+
+        already_captured_block = (
+            "ALREADY CAPTURED IN THIS PROFILE (DO NOT RE-ASK):\n"
+            + ("\n".join(already_captured_lines) if already_captured_lines else "  (nothing captured yet — start fresh)")
+        )
+
+        # Culture gaps nudge
+        if missing_culture:
+            culture_gap_note = (
+                "\nCULTURE IDENTITY GAPS — these fields are missing and should be asked about "
+                "when a natural opportunity arises:\n"
+                + "\n".join(f"  - {f.replace('_', ' ')}" for f in missing_culture)
+                + "\n  Ask ONE culture question per turn, not all at once. "
+                "Weave them into the flow of the conversation.\n"
+            )
+        else:
+            culture_gap_note = "\n[Culture Identity fully built — no culture questions needed]\n"
+
         return (
             "You are building a complete digital twin of a person - not just a skill list, but a living "
             "portrait of who they are: what drives them, how they think, what they have been through, "
@@ -336,10 +429,17 @@ class LLMEditAgent:
             f"PRIORITY AREAS TO EXPLORE: {interview_focus_areas}\n"
             f"{weakest_note}\n"
             + (f"\nSKILLS WITH LOW EVIDENCE VS CLAIMED LEVEL:\n{probe_list}\n" if probe_list else "")
+            + f"\n{already_captured_block}\n"
+            + culture_gap_note
             + "\n"
             "═══════════════════════════════════════════════════════\n"
             "INTERVIEW RULES - READ CAREFULLY\n"
             "═══════════════════════════════════════════════════════\n\n"
+            "RULE 0 - NO REPETITION: Before asking ANY question, check ALREADY CAPTURED above.\n"
+            "  If a topic (motivation, value, goal, anecdote, culture field) is already in the graph,\n"
+            "  DO NOT ask about it again. Move to what is still missing.\n"
+            "  Also check the conversation history - if you asked something in a previous turn\n"
+            "  and got an answer, that topic is covered. Ask something new.\n\n"
             "RULE 1 - THE WHY-LADDER: Never accept the first answer. Always go one level deeper.\n"
             "  When they add a skill, ask WHY before adding it.\n"
             "  'I use Kubernetes' → 'What brought Kubernetes into your world specifically?'\n"
@@ -712,31 +812,15 @@ class LLMEditAgent:
             (session_id, role, content, proposal_json, datetime.now(timezone.utc).isoformat()),
         )
 
-    @staticmethod
-    def _unwrap_json(raw: str) -> str:
-        """Some models (e.g. Gemini) return a JSON array instead of an object.
-        If the top-level value is a list, unwrap the first element."""
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, list) and parsed:
-                return json.dumps(parsed[0])
-        except (json.JSONDecodeError, IndexError):
-            pass
-        return raw
-
     async def _call_with_retry(self, messages: list) -> str:
         """Call LLM with retry logic. Rate limit errors wait the suggested time from
         the error message + a 2s buffer. Other errors use exponential backoff."""
+        from services.llm_utils import acompletion_json
+
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
-                resp = await acompletion(
-                    model=self._model,
-                    messages=messages,
-                    response_format={"type": "json_object"},
-                    temperature=1.0,
-                )
-                return self._unwrap_json(resp.choices[0].message.content)
+                return await acompletion_json(self._model, messages, temperature=1.0)
             except Exception as e:
                 if attempt == max_attempts - 1:
                     raise

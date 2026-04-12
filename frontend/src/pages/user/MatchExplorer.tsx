@@ -342,7 +342,7 @@ export default function MatchExplorer() {
                 <ScoreBar label="Overall Match" score={detail.total_score} large />
                 <ScoreBar label="Skill Score" score={detail.skill_score} />
                 <ScoreBar label="Domain Score" score={detail.domain_score} />
-                {detail.culture_fit_score != null && (
+                {detail.culture_fit_score != null && detail.culture_fit_score > 0 && (
                   <ScoreBar label="Culture Fit" score={detail.culture_fit_score} />
                 )}
                 {detail.optional_skill_score != null && detail.optional_skill_score > 0 && (

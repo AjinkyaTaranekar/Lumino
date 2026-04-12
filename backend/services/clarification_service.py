@@ -252,17 +252,15 @@ class ClarificationService:
             "a specific follow-up question that will get a concrete answer."
         )
 
-        resp = await acompletion(
+        from services.llm_utils import acompletion_json
+        raw = await acompletion_json(
             model=model,
             messages=[
                 {"role": "system", "content": system_msg},
                 {"role": "user", "content": user_msg},
             ],
-            response_format={"type": "json_object"},
             temperature=1.0,
         )
-        raw = resp.choices[0].message.content
-        # Unwrap array → object (some models return [{...}] instead of {...})
         try:
             _parsed = json.loads(raw)
             if isinstance(_parsed, list) and _parsed:

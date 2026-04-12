@@ -58,7 +58,7 @@ function RadarChart({ scores }: RadarChartProps) {
 
   // Polygon for user scores
   const points = CATEGORIES.map((cat, i) => {
-    const score = scores[cat] ?? 0.5
+    const score = scores[cat] ?? 0
     const p = polarToXY(angles[i], score * R)
     return `${p.x},${p.y}`
   }).join(' ')
@@ -104,7 +104,7 @@ function RadarChart({ scores }: RadarChartProps) {
 
       {/* Score dots */}
       {CATEGORIES.map((cat, i) => {
-        const score = scores[cat] ?? 0.5
+        const score = scores[cat] ?? 0
         const p = polarToXY(angles[i], score * R)
         const color = CATEGORY_COLORS[cat] || '#6366f1'
         return <circle key={cat} cx={p.x} cy={p.y} r={3} fill={color} />
@@ -280,7 +280,7 @@ export default function InterestProfilePanel({ userId }: InterestProfilePanelPro
   for (const cat of CATEGORIES) {
     radarScores[cat] = categoryCounts[cat]
       ? categoryScores[cat] / categoryCounts[cat]
-      : 0.5
+      : 0
   }
 
   const filteredTags = activeCategory

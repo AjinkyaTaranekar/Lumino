@@ -169,6 +169,8 @@ class AnalyticsService:
             {"user_id": user_id, "tag_names": list(scores.keys())},
         )
 
+        from services.job_tag_extractor import _classify_tag
+
         for tag, score in scores.items():
             count = interaction_counts.get(tag, 0)
             confidence = (
@@ -180,6 +182,9 @@ class AnalyticsService:
                 """
                 MATCH (u:User {id: $user_id})
                 MERGE (t:JobTag {name: $tag})
+                // Backfill category on existing tags that lack one
+                SET t.category = coalesce(t.category, $category)
+                WITH t
                 MERGE (u)-[r:HAS_INTEREST]->(t)
                 // Only update if not a manual override
                 WITH r WHERE NOT coalesce(r.manual_override, false)
@@ -189,12 +194,13 @@ class AnalyticsService:
                     r.last_updated      = $now
                 """,
                 {
-                    "user_id": user_id,
-                    "tag":     tag,
-                    "score":   score,
-                    "count":   count,
+                    "user_id":  user_id,
+                    "tag":      tag,
+                    "category": _classify_tag(tag),
+                    "score":    score,
+                    "count":    count,
                     "confidence": confidence,
-                    "now":     now_iso,
+                    "now":      now_iso,
                 },
             )
 
@@ -231,23 +237,27 @@ class AnalyticsService:
         Manually set the interest score for a tag, overriding analytics derivation.
         Marks the override so it won't be erased by next recomputation.
         """
+        from services.job_tag_extractor import _classify_tag
         now_iso = datetime.now(timezone.utc).isoformat()
         await self.neo4j.run_write(
             """
             MATCH (u:User {id: $user_id})
             MERGE (t:JobTag {name: $tag})
+            SET t.category = coalesce(t.category, $category)
+            WITH t
             MERGE (u)-[r:HAS_INTEREST]->(t)
-            SET r.score          = $score,
+            SET r.score           = $score,
                 r.manual_override = true,
-                r.last_updated   = $now,
-                r.confidence     = $confidence
+                r.last_updated    = $now,
+                r.confidence      = $confidence
             """,
             {
-                "user_id": user_id,
-                "tag":     tag,
-                "score":   round(score, 4),
-                "confidence": "high",  # manual override = user is certain
-                "now":     now_iso,
+                "user_id":  user_id,
+                "tag":      tag,
+                "category": _classify_tag(tag),
+                "score":    round(score, 4),
+                "confidence": "high",
+                "now":      now_iso,
             },
         )
         logger.info(f"Manual interest override: {user_id} {tag} → {score}")
