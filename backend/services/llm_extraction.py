@@ -17,7 +17,7 @@ from typing import Optional
 
 from litellm import acompletion
 
-from models.schemas import UserProfileExtraction, JobPostingExtraction, SkillUsage
+from models.schemas import UserProfileExtraction, JobPostingExtraction, JobImplicitSignals, SkillUsage
 from models.taxonomies import SKILL_TAXONOMY, DOMAIN_TAXONOMY
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # so the model knows exactly what structure to return.
 _USER_SCHEMA = json.dumps(UserProfileExtraction.model_json_schema(), indent=2)
 _JOB_SCHEMA = json.dumps(JobPostingExtraction.model_json_schema(), indent=2)
+_JOB_IMPLICIT_SCHEMA = json.dumps(JobImplicitSignals.model_json_schema(), indent=2)
 
 
 def _build_skill_taxonomy_hint() -> str:
@@ -1222,55 +1223,96 @@ class LLMExtractionService:
 
     async def extract_job_posting(self, job_text: str) -> JobPostingExtraction:
         """
-        Extract structured job requirements from raw job posting text.
+        Extract structured job requirements from raw job posting text using a two-pass approach.
+
+        Pass 1: Deep extraction of all explicit AND implied requirements with mandatory context.
+        Pass 2: Focused gap-filling — skills implied by responsibilities, scope/seniority signals,
+                culture signals buried in narrative, enriched WHY context for existing skills.
+        Synthesis: Merges both passes, deduplicates by skill name (richer entry wins).
 
         Returns a validated JobPostingExtraction with skill requirements,
-        domain requirements, work styles, company metadata, AND deep profile
-        sections (education requirements, compensation, hiring team, etc.).
+        domain requirements, work styles, company metadata, deep profile sections,
+        plus scope_signals and seniority_signals from the second pass.
+        """
+        pass1, pass2 = await asyncio.gather(
+            self._extract_job_pass1(job_text),
+            self._extract_job_pass2_implicit(job_text),
+        )
+        return self._synthesize_job_extraction(pass1, pass2)
+
+    async def _extract_job_pass1(self, job_text: str) -> JobPostingExtraction:
+        """
+        First pass: deep exhaustive extraction of the job posting.
+        Processes every section including responsibilities, requirements, company/team narrative.
         """
         system_msg = (
-            "You are an expert HR data extractor. Extract ALL available information "
-            "from the job posting and return ONLY valid JSON matching this exact schema:\n\n"
-            f"{_JOB_SCHEMA}\n\n"
-            "Constraints for basic fields:\n"
+            "You are a senior technical recruiter conducting an exhaustive, evidence-based analysis "
+            "of a job posting. Your task is NOT just to copy the requirements section — it is to "
+            "read EVERY part of the posting and extract ALL signals about what this role truly needs.\n\n"
+            "═══ WHAT TO EXTRACT — SCAN THE ENTIRE POSTING FOR ALL OF THESE ═══\n\n"
+            "SKILLS — Read EVERY section: requirements, responsibilities, about-the-team, company-tech-stack.\n"
+            "  • Extract every skill/tool/framework mentioned ANYWHERE in the posting.\n"
+            "  • For each skill, fill 'context': WHY does this role need it? What will the candidate "
+            "actually DO with it? e.g. 'Builds the real-time event pipeline ingesting 2M events/sec' "
+            "or 'Core to the GraphQL API layer the candidate will own'. Never leave context null "
+            "if there is ANY hint in the posting about how the skill is used.\n"
+            "  • signal_type: 'explicit' if the skill is directly listed in a requirements/qualifications "
+            "section. 'implied_from_responsibility' if you inferred it from a 'What you'll do' or "
+            "'Responsibilities' bullet. 'implied_from_context' if inferred from product/tech description.\n"
+            "  • source_text: for non-explicit skills, quote the exact sentence that implies it.\n"
+            "  • importance: 'must_have' for required/mandatory. 'optional' for nice-to-have/bonus.\n\n"
+            "RESPONSIBILITIES → SKILL INFERENCE (critical step — most commonly missed):\n"
+            "  • After listing explicit skills, go back through EVERY responsibility bullet.\n"
+            "  • For each bullet, ask: what technical skills are REQUIRED to do this task?\n"
+            "  • e.g. 'Design and maintain our distributed job scheduler' → even if not in requirements, "
+            "this implies distributed systems design, job scheduling patterns, fault tolerance.\n"
+            "  • e.g. 'Lead architecture reviews with 3 other teams' → implies system design, "
+            "cross-team collaboration, technical leadership.\n"
+            "  • Add these as skill_requirements with signal_type='implied_from_responsibility'.\n\n"
+            "DOMAINS — Extract every industry/domain area required, including implied ones.\n"
+            "  • e.g. 'Our platform processes $2B in annual payment volume' → FinTech / Payment Systems.\n"
+            "  • Set depth based on how central the domain is to the role (deep/moderate/shallow).\n\n"
+            "WORK STYLES & CULTURE — Extract from ALL sections:\n"
+            "  • Look in 'About us', 'Our culture', team descriptions, not just requirements.\n"
+            "  • Examples: async-first, high-autonomy, fast-paced, data-driven, customer-obsessed.\n\n"
+            "DEEP PROFILE SECTIONS:\n"
+            "  • education_requirements: degree + is_required. 'phd'/'master'/'bachelor'/'associate'/'any'.\n"
+            "  • preferred_qualifications: ALL nice-to-have items: certifications, domain exp, tools, soft skills.\n"
+            "    importance: 'strongly_preferred', 'preferred', 'nice_to_have'.\n"
+            "  • company_profile: mission, values, product description, stage, industry, notable_tech.\n"
+            "    stage: 'startup'/'growth'/'enterprise'/'nonprofit'.\n"
+            "  • hiring_team: team name, what they build, size, tech focus, team_type.\n"
+            "    team_type: 'product'/'platform'/'infra'/'ml'/'data'/'design'/'other'.\n"
+            "  • compensation: salary as integers (no symbols), equity, benefits list, is_disclosed=true "
+            "only if salary was explicitly stated.\n"
+            "  • role_expectations: top 5-8 responsibilities as action statements, success metrics, "
+            "30/90-day ramp. autonomy_level: 'low'/'moderate'/'high'.\n"
+            "  • soft_requirements: personality traits, cultural fit. is_dealbreaker=true for "
+            "'must be', 'required to', 'non-negotiable'.\n\n"
+            "═══ SCHEMA CONSTRAINTS ═══\n"
             "- skill.family must be one of: Programming Languages, Web Frameworks, "
             "Databases, Cloud & DevOps, ML & AI, Data Engineering, Mobile Development, "
             "Testing & QA, Analytics & Visualization, Other\n"
             "- domain.family must be one of: FinTech, Healthcare, E-commerce, SaaS, "
             "Enterprise, Gaming, Education, Other\n"
-            "- remote_policy must be one of: 'remote', 'hybrid', 'onsite'\n"
-            "- company_size must be one of: 'startup', 'mid-size', 'enterprise'\n"
-            "- importance must be one of: 'must_have' (required/mandatory skills) or 'optional' (nice-to-have/bonus skills)\n"
-            "- Return an empty list [] for any list section with no data; null for optional object fields.\n\n"
-            "Deep profile extraction guidelines:\n"
-            "- education_requirements: Extract degree requirements. Set is_required=true for hard requirements "
-            "(\"required\", \"must have\") and false for preferred. degree_level must be one of: "
-            "'phd', 'master', 'bachelor', 'associate', 'any'. Include alternatives if mentioned.\n"
-            "- preferred_qualifications: Extract ALL nice-to-have items beyond core skills: "
-            "certifications (type='certification'), bonus domain experience (type='domain_exp'), "
-            "soft skills explicitly called out (type='soft_skill'), tools/platforms (type='tool'). "
-            "importance: 'strongly_preferred' (\"highly desirable\"), 'preferred' (\"plus\"), "
-            "'nice_to_have' (\"bonus\", \"good to have\").\n"
-            "- company_profile: Extract mission, vision, company values, funding stage, "
-            "product description, industry vertical, and notable technologies. "
-            "stage: 'startup', 'growth', 'enterprise', 'nonprofit'.\n"
-            "- hiring_team: Extract team name, what the team builds, estimated size, "
-            "tech focus areas, reporting structure, and team type. "
-            "team_type: 'product', 'platform', 'infra', 'ml', 'data', 'design', 'other'.\n"
-            "- compensation: Extract salary range as integers (no currency symbols), equity details, "
-            "benefits list, and bonus structure. Set is_disclosed=true only if salary was explicitly stated.\n"
-            "- role_expectations: Extract the top 5-8 key responsibilities as action statements, "
-            "success metrics, and any 30/90-day ramp expectations. "
-            "autonomy_level: 'low' (micromanaged), 'moderate', 'high' (self-directed).\n"
-            "- soft_requirements: Extract explicitly mentioned personality traits, work styles, "
-            "and cultural fit requirements as individual items. Set is_dealbreaker=true for "
-            "phrases like 'must be', 'required to', 'non-negotiable'."
+            "- remote_policy: 'remote' | 'hybrid' | 'onsite'\n"
+            "- company_size: 'startup' | 'mid-size' | 'enterprise'\n"
+            "- Return [] for any list with no data; null for optional object fields.\n"
+            "- Return ONLY valid JSON matching this exact schema:\n\n"
+            f"{_JOB_SCHEMA}"
         )
 
         user_msg = (
-            "Extract all job requirements from the following job posting. "
-            "Be thorough — extract every section including company context, team details, "
-            "compensation, and soft requirements.\n\n"
+            "Analyze this job posting EXHAUSTIVELY. Extract structured data from EVERY section — "
+            "not just the requirements list. Scan responsibilities, about-the-team, about-the-company, "
+            "and product descriptions for implied skill requirements, domain signals, and culture cues.\n\n"
+            "CRITICAL — RESPONSIBILITY-TO-SKILL INFERENCE (most commonly missed):\n"
+            "  • After extracting explicit skills, go back through EVERY responsibility bullet.\n"
+            "  • For each responsibility, identify what technical skills are actually required to do that work.\n"
+            "  • Add them to skill_requirements with signal_type='implied_from_responsibility' and "
+            "source_text=the exact responsibility sentence.\n\n"
+            "For each skill: fill 'context' with WHY this role needs it (not just what it is).\n"
+            "For each domain: fill depth based on how central it is to the work.\n\n"
             "Skill family reference:\n"
             f"{self._skill_hint}\n\n"
             "Domain family reference:\n"
@@ -1287,16 +1329,160 @@ class LLMExtractionService:
             response_format={"type": "json_object"},
             temperature=self._temperature,
         )
-        extracted = JobPostingExtraction.model_validate_json(raw_json)
-        logger.info(
-            f"Extracted job: {extracted.title} at {extracted.company} - "
-            f"{len(extracted.skill_requirements)} skills, "
-            f"{len(extracted.education_requirements)} edu reqs, "
-            f"{len(extracted.preferred_qualifications)} preferred quals, "
-            f"company_profile={'yes' if extracted.company_profile else 'no'}, "
-            f"compensation={'yes' if extracted.compensation else 'no'}"
+        return JobPostingExtraction.model_validate_json(raw_json)
+
+    async def _extract_job_pass2_implicit(self, job_text: str) -> JobImplicitSignals:
+        """
+        Second pass: focused gap-filling on the raw job text.
+        Runs in parallel with pass 1 — finds implicit signals independently.
+        The synthesis step handles deduplication.
+        """
+        system_msg = (
+            "You are an expert at reading between the lines of job postings. "
+            "Your task is to find the signals that a standard extraction MISSES — "
+            "the implied requirements, scope indicators, and cultural signals buried in narrative text.\n\n"
+            "WHAT TO FIND:\n\n"
+            "1. IMPLIED SKILLS FROM RESPONSIBILITIES\n"
+            "   • Read every 'What you'll do' or responsibility bullet.\n"
+            "   • For each, identify what technical skills are REQUIRED to perform that work — "
+            "even if not listed in 'Requirements'.\n"
+            "   • signal_type MUST be 'implied_from_responsibility'. source_text MUST be the exact "
+            "bullet or sentence that implies the skill.\n"
+            "   • Examples:\n"
+            "     'Own the reliability of our payments service (99.99% uptime)' "
+            "→ implies: SRE practices, incident management, SLA monitoring, alerting\n"
+            "     'Partner with product managers to define technical roadmap' "
+            "→ implies: technical communication, product thinking, roadmap planning\n"
+            "     'Lead code reviews and set engineering standards' "
+            "→ implies: code review practices, mentorship, technical documentation\n\n"
+            "2. SCOPE AND SCALE SIGNALS\n"
+            "   • Look for numbers, volume, scale, complexity indicators ANYWHERE in the posting.\n"
+            "   • e.g. 'serves 50M daily active users', 'processes $1B in transactions', "
+            "'team of 25 engineers', 'operates in 40 countries', '100ms p99 latency SLA'\n"
+            "   • These tell us the complexity level the candidate must be prepared for.\n\n"
+            "3. SENIORITY AND LEADERSHIP SIGNALS\n"
+            "   • Find phrases that indicate the expected seniority beyond just the title.\n"
+            "   • e.g. 'own the technical roadmap', 'mentor junior engineers', "
+            "'drive architecture decisions', 'set engineering standards', 'lead cross-team initiatives'\n\n"
+            "4. CULTURE AND WORK STYLE SIGNALS (buried in narrative)\n"
+            "   • Look in 'About us', 'Our values', 'How we work', company story sections.\n"
+            "   • e.g. async-first, high-autonomy, ownership culture, move-fast, data-driven decisions\n\n"
+            "5. DOMAIN SIGNALS FROM PRODUCT/COMPANY CONTEXT\n"
+            "   • Product description often implies domain requirements not stated explicitly.\n"
+            "   • e.g. 'We process medical insurance claims' → Healthcare + Insurance domain experience implied\n\n"
+            "Return ONLY valid JSON matching this exact schema:\n\n"
+            f"{_JOB_IMPLICIT_SCHEMA}"
         )
-        return extracted
+
+        user_msg = (
+            "Read this job posting and extract ONLY the implicit signals — "
+            "things a keyword-based extraction would miss:\n\n"
+            "1. Skills REQUIRED to perform the listed responsibilities (not in requirements section)\n"
+            "2. Scale/scope signals (numbers, volume, complexity indicators)\n"
+            "3. Seniority signals (ownership, mentorship, roadmap, architecture language)\n"
+            "4. Culture/work style signals from narrative text\n"
+            "5. Domain signals from product/company description\n\n"
+            "Do NOT repeat skills that are already explicitly listed in a requirements/qualifications "
+            "section — only capture what a standard extraction would miss.\n\n"
+            "Skill family reference:\n"
+            f"{self._skill_hint}\n\n"
+            "Domain family reference:\n"
+            f"{self._domain_hint}\n\n"
+            f"JOB POSTING:\n{job_text}"
+        )
+
+        raw_json = await self._call_with_retry(
+            model=self._model_name,
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            response_format={"type": "json_object"},
+            temperature=self._temperature,
+        )
+        return JobImplicitSignals.model_validate_json(raw_json)
+
+    @staticmethod
+    def _synthesize_job_extraction(
+        pass1: JobPostingExtraction,
+        pass2: JobImplicitSignals,
+    ) -> JobPostingExtraction:
+        """
+        Merge pass1 (explicit + inferred) with pass2 (gap-filling implicit signals).
+
+        Deduplication: if the same skill name appears in both, keep the one with
+        richer context (non-null > null, longer > shorter). Implied skills from pass2
+        that weren't in pass1 are appended.
+        """
+        # Index pass1 skills by normalized name for O(1) lookup
+        existing_skills: dict[str, int] = {
+            s.name.lower(): i for i, s in enumerate(pass1.skill_requirements)
+        }
+
+        # Apply context enrichments first (before adding implied skills)
+        for enrichment in pass2.enriched_contexts:
+            idx = existing_skills.get(enrichment.skill_name.lower())
+            if idx is not None:
+                skill = pass1.skill_requirements[idx]
+                # Only overwrite if enriched context is meaningfully longer
+                if not skill.context or len(enrichment.enriched_context) > len(skill.context or ""):
+                    pass1.skill_requirements[idx] = skill.model_copy(
+                        update={"context": enrichment.enriched_context}
+                    )
+
+        # Merge implied skills from pass2 — skip if already present in pass1
+        for implied in pass2.implied_skills:
+            key = implied.name.lower()
+            if key not in existing_skills:
+                pass1.skill_requirements.append(implied)
+                existing_skills[key] = len(pass1.skill_requirements) - 1
+            else:
+                # Skill exists — enrich context if pass2 has better context
+                idx = existing_skills[key]
+                existing = pass1.skill_requirements[idx]
+                if implied.context and (not existing.context or len(implied.context) > len(existing.context)):
+                    pass1.skill_requirements[idx] = existing.model_copy(
+                        update={"context": implied.context}
+                    )
+
+        # Merge additional domains (deduplicated by name)
+        existing_domains = {d.name.lower() for d in pass1.domain_requirements}
+        for domain in pass2.additional_domains:
+            if domain.name.lower() not in existing_domains:
+                pass1.domain_requirements.append(domain)
+                existing_domains.add(domain.name.lower())
+
+        # Merge additional work styles (deduplicated by style name)
+        existing_styles = {w.style.lower() for w in pass1.work_styles}
+        for ws in pass2.additional_work_styles:
+            if ws.style.lower() not in existing_styles:
+                pass1.work_styles.append(ws)
+                existing_styles.add(ws.style.lower())
+
+        # Merge additional soft requirements (deduplicated by trait)
+        existing_traits = {s.trait.lower() for s in pass1.soft_requirements}
+        for soft in pass2.additional_soft_requirements:
+            if soft.trait.lower() not in existing_traits:
+                pass1.soft_requirements.append(soft)
+                existing_traits.add(soft.trait.lower())
+
+        # Attach scope and seniority signals
+        pass1.scope_signals = pass2.scope_signals
+        pass1.seniority_signals = pass2.seniority_signals
+
+        skill_count_explicit = sum(
+            1 for s in pass1.skill_requirements if s.signal_type == "explicit"
+        )
+        skill_count_implied = len(pass1.skill_requirements) - skill_count_explicit
+        label = f"{pass1.title} at {pass1.company}" if pass1.company else pass1.title
+        logger.info(
+            f"Job extraction synthesized: {label} — "
+            f"{skill_count_explicit} explicit skills, {skill_count_implied} implied skills, "
+            f"{len(pass1.domain_requirements)} domains, "
+            f"{len(pass1.scope_signals)} scope signals, "
+            f"{len(pass1.seniority_signals)} seniority signals"
+        )
+        return pass1
 
     async def describe_job_from_graph(self, job_id: str, neo4j_client) -> dict:
         """

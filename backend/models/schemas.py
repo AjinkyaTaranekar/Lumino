@@ -502,6 +502,22 @@ class ExtractedJobSkillRequirement(BaseModel):
             "backpressure and retry semantics.' Leave null if the JD gives no context."
         ),
     )
+    signal_type: str = Field(
+        default="explicit",
+        description=(
+            "How this skill requirement was identified: "
+            "'explicit' (directly stated in requirements), "
+            "'implied_from_responsibility' (inferred from what they will do), "
+            "'implied_from_context' (inferred from product/team/company description)"
+        )
+    )
+    source_text: Optional[str] = Field(
+        default=None,
+        description=(
+            "The exact sentence or phrase that implies this skill, for non-explicit requirements. "
+            "e.g. 'You will design distributed systems serving 50M+ daily users' implies distributed systems expertise."
+        )
+    )
 
 
 class ExtractedJobDomainRequirement(BaseModel):
@@ -701,6 +717,65 @@ class ExtractedJobSoftRequirement(BaseModel):
     )
 
 
+class SkillContextEnrichment(BaseModel):
+    """Used in second-pass extraction to enrich the WHY context of existing skills."""
+    skill_name: str = Field(description="Exact skill name as it appears in the first-pass extraction")
+    enriched_context: str = Field(
+        description=(
+            "A richer WHY context for this skill, derived from reading responsibilities and product context. "
+            "e.g. 'Used to build the real-time bidding engine processing 200K auctions/sec — "
+            "candidate needs deep knowledge of memory layout and lock-free data structures.'"
+        )
+    )
+
+
+class JobImplicitSignals(BaseModel):
+    """
+    Second-pass extraction schema: signals missed or underspecified in the first pass.
+    Focuses exclusively on what was NOT captured — no duplication of pass 1 results.
+    """
+    implied_skills: List[ExtractedJobSkillRequirement] = Field(
+        default_factory=list,
+        description=(
+            "Skills implied by responsibilities but NOT explicitly listed in the requirements section. "
+            "signal_type must be 'implied_from_responsibility' or 'implied_from_context'. "
+            "source_text must be the exact sentence from the posting that implies this skill."
+        )
+    )
+    additional_domains: List[ExtractedJobDomainRequirement] = Field(
+        default_factory=list,
+        description="Domain experience signals not captured in first pass (e.g. inferred from product scale or company industry)"
+    )
+    enriched_contexts: List[SkillContextEnrichment] = Field(
+        default_factory=list,
+        description="Better WHY context for skills already in the first pass that had null or vague context"
+    )
+    scope_signals: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Scale, complexity, and scope signals from the posting. "
+            "e.g. 'serves 50M daily active users', 'team of 25 engineers', "
+            "'processes $1B in annual transactions', 'operates in 40 countries'"
+        )
+    )
+    seniority_signals: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Seniority and leadership signals inferred from responsibilities. "
+            "e.g. 'owns the technical roadmap', 'mentors a team of 4 engineers', "
+            "'drives architecture decisions across 3 teams'"
+        )
+    )
+    additional_soft_requirements: List[ExtractedJobSoftRequirement] = Field(
+        default_factory=list,
+        description="Soft requirements or culture signals buried in company/team narrative that first pass missed"
+    )
+    additional_work_styles: List[ExtractedWorkStyle] = Field(
+        default_factory=list,
+        description="Work style signals (e.g. async-first, high-autonomy) buried in narrative text that first pass missed"
+    )
+
+
 class JobPostingExtraction(BaseModel):
     """Top-level schema for LLM job posting extraction."""
     title: str = Field(description="Job title")
@@ -747,6 +822,21 @@ class JobPostingExtraction(BaseModel):
     soft_requirements: List[ExtractedJobSoftRequirement] = Field(
         default_factory=list,
         description="Soft skills, personality traits, and cultural fit requirements"
+    )
+    # Synthesized enrichment fields (populated after two-pass extraction)
+    scope_signals: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Scale, complexity, and scope signals from the posting. "
+            "e.g. 'serves 50M daily active users', 'team of 25 engineers'"
+        )
+    )
+    seniority_signals: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Seniority and leadership signals inferred from responsibilities. "
+            "e.g. 'owns the technical roadmap', 'mentors a team of 4 engineers'"
+        )
     )
 
 

@@ -23,6 +23,7 @@ export const USERS: Credential[] = [
   { userId: 'james.park', name: 'James Park', email: 'james.park@meta.com', password: 'meta123', role: 'RECRUITER' },
   { userId: 'priya.nair', name: 'Priya Nair', email: 'priya.nair@amazon.com', password: 'amazon123', role: 'RECRUITER' },
   { userId: 'marcus.wu', name: 'Marcus Wu', email: 'marcus.wu@apple.com', password: 'apple123', role: 'RECRUITER' },
+  { userId: 'emily.davis', name: 'Emily Davis', email: 'emily.davis@apple.com', password: 'apple123', role: 'RECRUITER' },
   { userId: 'elena.ross', name: 'Elena Ross', email: 'elena.ross@netflix.com', password: 'netflix123', role: 'RECRUITER' },
   { userId: 'admin', name: 'Admin', email: 'admin@lumino.ai', password: 'admin123', role: 'ADMIN' },
 ];

@@ -585,6 +585,8 @@ class LLMIngestionService:
                 j.company_size         = $company_size,
                 j.experience_years_min = $exp_years_min,
                 j.recruiter_id         = $recruiter_id,
+                j.scope_signals        = $scope_signals,
+                j.seniority_signals    = $seniority_signals,
                 j.source               = 'llm',
                 j.updated_at           = timestamp()
             """,
@@ -596,6 +598,8 @@ class LLMIngestionService:
                 "company_size": extraction.company_size,
                 "exp_years_min": extraction.experience_years_min,
                 "recruiter_id": recruiter_id,
+                "scope_signals": extraction.scope_signals,
+                "seniority_signals": extraction.seniority_signals,
             },
         )
         # Store raw text for future retag operations (truncated to 8k chars)
@@ -619,11 +623,13 @@ class LLMIngestionService:
                 SET jsf.source = 'llm'
                 MERGE (jsr)-[:HAS_SKILL_FAMILY_REQ]->(jsf)
                 MERGE (r:JobSkillRequirement {name: $name, job_id: $job_id})
-                SET r.required   = $required,
-                    r.importance = $importance,
-                    r.min_years  = $min_years,
-                    r.context    = $context,
-                    r.source     = 'llm'
+                SET r.required     = $required,
+                    r.importance   = $importance,
+                    r.min_years    = $min_years,
+                    r.context      = $context,
+                    r.signal_type  = $signal_type,
+                    r.source_text  = $source_text,
+                    r.source       = 'llm'
                 MERGE (jsf)-[:REQUIRES_SKILL]->(r)
                 """,
                 {
@@ -634,6 +640,8 @@ class LLMIngestionService:
                     "importance": req.importance,
                     "min_years": req.min_years,
                     "context": getattr(req, "context", None),
+                    "signal_type": getattr(req, "signal_type", "explicit"),
+                    "source_text": getattr(req, "source_text", None),
                 },
             )
 

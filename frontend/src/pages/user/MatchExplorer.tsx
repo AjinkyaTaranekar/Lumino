@@ -458,11 +458,6 @@ export default function MatchExplorer() {
               )}
 
               {/* AI Analysis card */}
-              <div className="mb-5">
-                <MatchInsightsPanel insights={insights} loading={insightsLoading} error={insightsErr} />
-              </div>
-
-              {/* AI Analysis card */}
               <div className="mb-5 p-4 rounded-xl bg-slate-50 border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-xs font-semibold text-blue-600 flex items-center gap-1.5">
