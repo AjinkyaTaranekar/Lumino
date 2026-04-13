@@ -16,6 +16,7 @@ export const USERS: Credential[] = [
   { userId: 'Owais', name: 'Owais', email: 'owais@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'Lara', name: 'Lara', email: 'lara@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'Ajinkya', name: 'Ajinkya', email: 'ajinkya@lumino.ai', password: 'demo123', role: 'USER' },
+  { userId: 'Ajinkya2', name: 'Ajinkya (new)', email: 'ajinkya@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'Xichen', name: 'Xichen', email: 'xichen@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'Shreshtha', name: 'Shreshtha', email: 'shreshtha@lumino.ai', password: 'demo123', role: 'USER' },
   { userId: 'recruiter1', name: 'Owen', email: 'owen@lumino.ai', password: 'demo123', role: 'RECRUITER' },
